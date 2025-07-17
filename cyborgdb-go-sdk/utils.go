@@ -13,6 +13,7 @@ package cyborgdb
 import (
 	"bytes"
 	"encoding/json"
+	"crypto/rand"
 	"fmt"
 	"reflect"
 	"time"
@@ -358,4 +359,15 @@ func newStrictDecoder(data []byte) *json.Decoder {
 // Prevent trying to import "fmt"
 func reportError(format string, a ...interface{}) error {
 	return fmt.Errorf(format, a...)
+}
+
+
+// GenerateKey generates a secure random 32-byte key for CyborgDB encrypted indexes.
+func GenerateKey() ([]byte, error) {
+	key := make([]byte, 32)
+	_, err := rand.Read(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate key: %w", err)
+	}
+	return key, nil
 }
