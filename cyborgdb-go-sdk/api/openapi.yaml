@@ -1,0 +1,304 @@
+openapi: 3.0.3
+info:
+  description: |
+    CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks.
+  title: CyborgDB API
+  version: 1.0.0
+servers:
+- url: https://api.cyborgdb.co
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthResponse"
+          description: Health status returned
+      summary: Check service health
+  /indexes:
+    get:
+      operationId: listIndexes
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  type: string
+                type: array
+          description: List of index names
+      summary: List all indexes
+    post:
+      operationId: createIndex
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateIndexRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EncryptedIndex"
+          description: Encrypted index created
+      summary: Create a new encrypted index
+  /vectors/query:
+    post:
+      operationId: queryVectors
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QueryRequest"
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QueryResponse"
+          description: Query results
+      summary: Query vectors in the encrypted index
+components:
+  schemas:
+    HealthResponse:
+      example:
+        status: status
+      properties:
+        status:
+          type: string
+      type: object
+    IndexConfig:
+      example:
+        pq_bits: 5
+        metric: l2
+        n_lists: 6
+        pq_dim: 1
+        dimension: 0
+        index_type: ivf
+      properties:
+        dimension:
+          type: integer
+        metric:
+          enum:
+          - l2
+          - ip
+          - cosine
+          type: string
+        index_type:
+          enum:
+          - ivf
+          - ivf_flat
+          - ivf_pq
+          type: string
+        n_lists:
+          type: integer
+        pq_dim:
+          type: integer
+        pq_bits:
+          type: integer
+      required:
+      - dimension
+      - index_type
+      - metric
+      - n_lists
+      type: object
+    VectorItem:
+      properties:
+        id:
+          type: string
+        vector:
+          items:
+            format: float
+            type: number
+          type: array
+        contents:
+          type: string
+        metadata:
+          additionalProperties: true
+          type: object
+      required:
+      - id
+      type: object
+    QueryRequest:
+      example:
+        query_vector:
+        - 0.8008282
+        - 0.8008282
+        index_key: index_key
+        query_contents: query_contents
+        include:
+        - distance
+        - distance
+        query_vectors:
+        - - 6.0274563
+          - 6.0274563
+        - - 6.0274563
+          - 6.0274563
+        top_k: 1
+        greedy: true
+        filters: "{}"
+        index_name: index_name
+        n_probes: 5
+      properties:
+        index_name:
+          type: string
+        index_key:
+          type: string
+        query_vector:
+          items:
+            format: float
+            type: number
+          type: array
+        query_vectors:
+          items:
+            items:
+              format: float
+              type: number
+            type: array
+          type: array
+        query_contents:
+          type: string
+        top_k:
+          type: integer
+        n_probes:
+          type: integer
+        greedy:
+          type: boolean
+        filters:
+          type: object
+        include:
+          items:
+            enum:
+            - distance
+            - metadata
+            - vector
+            - contents
+            type: string
+          type: array
+      required:
+      - include
+      - index_key
+      - index_name
+      - n_probes
+      - top_k
+      type: object
+    QueryResult:
+      example:
+        metadata:
+          key: ""
+        distance: 0.8008282
+        contents: contents
+        vector:
+        - 6.0274563
+        - 6.0274563
+        id: id
+      properties:
+        id:
+          type: string
+        distance:
+          format: float
+          type: number
+        metadata:
+          additionalProperties: true
+          type: object
+        vector:
+          items:
+            format: float
+            type: number
+          type: array
+        contents:
+          type: string
+      required:
+      - id
+      type: object
+    QueryResponse:
+      example:
+        results:
+        - - metadata:
+              key: ""
+            distance: 0.8008282
+            contents: contents
+            vector:
+            - 6.0274563
+            - 6.0274563
+            id: id
+          - metadata:
+              key: ""
+            distance: 0.8008282
+            contents: contents
+            vector:
+            - 6.0274563
+            - 6.0274563
+            id: id
+        - - metadata:
+              key: ""
+            distance: 0.8008282
+            contents: contents
+            vector:
+            - 6.0274563
+            - 6.0274563
+            id: id
+          - metadata:
+              key: ""
+            distance: 0.8008282
+            contents: contents
+            vector:
+            - 6.0274563
+            - 6.0274563
+            id: id
+      properties:
+        results:
+          items:
+            items:
+              $ref: "#/components/schemas/QueryResult"
+            type: array
+          type: array
+      type: object
+    CreateIndexRequest:
+      example:
+        index_key: index_key
+        index_name: index_name
+        config:
+          pq_bits: 5
+          metric: l2
+          n_lists: 6
+          pq_dim: 1
+          dimension: 0
+          index_type: ivf
+      properties:
+        index_name:
+          type: string
+        index_key:
+          type: string
+        config:
+          $ref: "#/components/schemas/IndexConfig"
+      required:
+      - config
+      - index_key
+      - index_name
+      type: object
+    EncryptedIndex:
+      example:
+        index_name: index_name
+        config:
+          pq_bits: 5
+          metric: l2
+          n_lists: 6
+          pq_dim: 1
+          dimension: 0
+          index_type: ivf
+        index_type: index_type
+      properties:
+        index_name:
+          type: string
+        index_type:
+          type: string
+        config:
+          $ref: "#/components/schemas/IndexConfig"
+      type: object

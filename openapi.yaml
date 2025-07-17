@@ -1,0 +1,203 @@
+openapi: 3.0.3
+info:
+  title: CyborgDB API
+  version: 1.0.0
+  description: >
+    CyborgDB is a secure, encrypted vector database that allows you to
+    store and query high-dimensional vectors with end-to-end encryption.
+    This OpenAPI specification describes the REST interface used by the
+    Go SDK client to perform operations such as indexing, querying, and health checks.
+servers:
+  - url: https://api.cyborgdb.co
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Check service health
+      responses:
+        '200':
+          description: Health status returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /indexes:
+    get:
+      operationId: listIndexes
+      summary: List all indexes
+      responses:
+        '200':
+          description: List of index names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+    post:
+      operationId: createIndex
+      summary: Create a new encrypted index
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIndexRequest'
+      responses:
+        '200':
+          description: Encrypted index created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncryptedIndex'
+
+  /vectors/query:
+    post:
+      operationId: queryVectors
+      summary: Query vectors in the encrypted index
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+      responses:
+        '200':
+          description: Query results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+
+    IndexConfig:
+      type: object
+      required: [dimension, metric, index_type, n_lists]
+      properties:
+        dimension:
+          type: integer
+        metric:
+          type: string
+          enum: [l2, ip, cosine]
+        index_type:
+          type: string
+          enum: [ivf, ivf_flat, ivf_pq]
+        n_lists:
+          type: integer
+        pq_dim:
+          type: integer
+        pq_bits:
+          type: integer
+
+    VectorItem:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        vector:
+          type: array
+          items:
+            type: number
+            format: float
+        contents:
+          type: string
+        metadata:
+          type: object
+          additionalProperties: true
+
+    QueryRequest:
+      type: object
+      required: [index_name, index_key, top_k, n_probes, include]
+      properties:
+        index_name:
+          type: string
+        index_key:
+          type: string
+        query_vector:
+          type: array
+          items:
+            type: number
+            format: float
+        query_vectors:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+              format: float
+        query_contents:
+          type: string
+        top_k:
+          type: integer
+        n_probes:
+          type: integer
+        greedy:
+          type: boolean
+        filters:
+          type: object
+        include:
+          type: array
+          items:
+            type: string
+            enum: [distance, metadata, vector, contents]
+
+    QueryResult:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        distance:
+          type: number
+          format: float
+        metadata:
+          type: object
+          additionalProperties: true
+        vector:
+          type: array
+          items:
+            type: number
+            format: float
+        contents:
+          type: string
+
+    QueryResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/QueryResult'
+
+    CreateIndexRequest:
+      type: object
+      required: [index_name, index_key, config]
+      properties:
+        index_name:
+          type: string
+        index_key:
+          type: string
+        config:
+          $ref: '#/components/schemas/IndexConfig'
+
+    EncryptedIndex:
+      type: object
+      properties:
+        index_name:
+          type: string
+        index_type:
+          type: string
+        config:
+          $ref: '#/components/schemas/IndexConfig'
