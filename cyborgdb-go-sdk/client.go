@@ -3,7 +3,7 @@ package cyborgdb
 import (
 	"context"
 	"crypto/tls"
-	"encoding/json"
+	"encoding/hex"
 	"fmt"
 	"net/http"
 	"net/url"
@@ -72,32 +72,24 @@ func (c *Client) CreateIndex(
 	indexModel IndexModel,
 	embeddingModel *string,
 ) (*EncryptedIndex, error) {
-	// Validate index key length
 	if len(indexKey) != 32 {
 		return nil, fmt.Errorf("index key must be exactly 32 bytes, got %d", len(indexKey))
 	}
 
-	// Marshal the model to JSON
-	modelBytes, err := json.Marshal(indexModel)
+	keyHex := hex.EncodeToString(indexKey)
+
+	indexCfg, err := ConvertToIndexConfig(indexModel)
 	if err != nil {
-		return nil, fmt.Errorf("failed to marshal index model: %w", err)
+		return nil, fmt.Errorf("failed to convert index model: %w", err)
 	}
 
-	// Convert to generic map for the OpenAPI request
-	var configMap map[string]interface{}
-	if err := json.Unmarshal(modelBytes, &configMap); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal index model to map: %w", err)
-	}
-
-	// Build the request
 	createReq := CreateIndexRequest{
 		IndexName:      indexName,
 		IndexKey:       keyHex,
-		IndexConfig:    config,
+		IndexConfig:    indexCfg,        // this is now of type *IndexConfig
 		EmbeddingModel: embeddingModel,
 	}
 
-	// Make the API call and capture the response
 	apiResp, _, err := c.apiClient.DefaultAPI.CreateIndex(ctx).
 		CreateIndexRequest(createReq).
 		Execute()
@@ -105,9 +97,9 @@ func (c *Client) CreateIndex(
 		return nil, fmt.Errorf("failed to create index: %w", err)
 	}
 
-	// Return the EncryptedIndex directly
 	return apiResp, nil
 }
+
 
 // LoadIndex creates an IndexWrapper instance for an existing index
 func (c *Client) LoadIndex(indexName string, indexKey []byte) *IndexWrapper {
