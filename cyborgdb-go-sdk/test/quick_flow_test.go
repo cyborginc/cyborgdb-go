@@ -59,3 +59,21 @@ func TestCreateIndex_IVFPQ(t *testing.T) {
 	require.Equal(t, int32(16), cfg.GetPqDim())
 	require.Equal(t, int32(8), cfg.GetPqBits())
 }
+
+func TestHealth(t *testing.T) {
+	apiURL := "http://localhost:8000"
+	apiKey := "cyborg_e9n8t7e6r5p4r3i2s1e0987654321abc"
+
+	if apiURL == "" || apiKey == "" {
+		t.Skip("CYBORGDB_API_URL or CYBORGDB_API_KEY environment variable not set")
+	}
+
+	client, err := cyborgdb.NewClient(apiURL, apiKey, false)
+	require.NoError(t, err)
+
+	t.Log("testing")
+
+	resp, err := client.GetHealth(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+}
