@@ -2,8 +2,10 @@ package cyborgdb
 
 import (
 	"context"
-	"encoding/hex"
+	"crypto/tls"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"net/url"
 )
 
@@ -15,13 +17,17 @@ type Client struct {
 }
 
 // NewClient creates a new CyborgDB client
-func NewClient(baseURL, apiKey string) (*Client, error) {
+func NewClient(baseURL, apiKey string, verifySSL bool) (*Client, error) {
 	// Parse the baseURL to configure the APIClient
 	parsedURL, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("invalid base URL: %w", err)
 	}
 
+	// Auto-detect localhost SSL bypass
+	if !verifySSL && (parsedURL.Hostname() == "localhost" || parsedURL.Hostname() == "127.0.0.1") {
+		fmt.Println("SSL verification is disabled for localhost (development mode)")
+	}
 	// Create configuration
 	cfg := NewConfiguration()
 	cfg.Scheme = parsedURL.Scheme
@@ -31,7 +37,12 @@ func NewClient(baseURL, apiKey string) (*Client, error) {
 	if apiKey != "" {
 		cfg.AddDefaultHeader("X-API-Key", apiKey)
 	}
-
+	// Create custom HTTP client that respects verifySSL
+	cfg.HTTPClient = &http.Client{
+		Transport: &http.Transport{
+			TLSClientConfig: &tls.Config{InsecureSkipVerify: !verifySSL},
+		},
+	}
 	// Create the low-level API client
 	apiClient := NewAPIClient(cfg)
 
