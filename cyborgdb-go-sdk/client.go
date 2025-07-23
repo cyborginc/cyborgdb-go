@@ -32,7 +32,7 @@ func NewClient(baseURL, apiKey string, verifySSL bool) (*Client, error) {
 	cfg := NewConfiguration()
 	cfg.Scheme = parsedURL.Scheme
 	cfg.Host = parsedURL.Host
-	
+
 	// Set API key in default headers if provided
 	if apiKey != "" {
 		cfg.AddDefaultHeader("X-API-Key", apiKey)
@@ -86,18 +86,22 @@ func (c *Client) CreateIndex(
 	createReq := CreateIndexRequest{
 		IndexName:      indexName,
 		IndexKey:       keyHex,
-		IndexConfig:    indexCfg,        // this is now of type *IndexConfig
+		IndexConfig:    indexCfg, // this is now of type *IndexConfig
 		EmbeddingModel: embeddingModel,
 	}
 
-	apiResp, _, err := c.apiClient.DefaultAPI.CreateIndex(ctx).
+	_, _, err = c.apiClient.DefaultAPI.CreateIndex(ctx).
 		CreateIndexRequest(createReq).
 		Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create index: %w", err)
 	}
 
-	return apiResp, nil
+	return &EncryptedIndex{
+		IndexName: &indexName,
+		IndexType: &createReq.IndexConfig.IndexType,
+		Config:    &createReq.IndexConfig,
+	}, nil
 }
 
 // GetHealth checks the health status of the CyborgDB service

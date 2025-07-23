@@ -65,7 +65,7 @@ func (a *DefaultAPIService) CreateIndexExecute(r ApiCreateIndexRequest) (*Encryp
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/indexes"
+	localVarPath := localBasePath + "/v1/indexes/create"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}

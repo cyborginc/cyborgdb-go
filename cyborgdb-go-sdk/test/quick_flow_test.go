@@ -26,7 +26,7 @@ func generateTestIndexName() string {
 }
 
 func TestCreateIndex_IVFPQ(t *testing.T) {
-	apiURL := os.Getenv("CYBORGDB_API_URL")
+	apiURL := "http://localhost:8000"
 	apiKey := os.Getenv("CYBORGDB_API_KEY")
 
 	if apiURL == "" || apiKey == "" {
