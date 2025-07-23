@@ -100,17 +100,6 @@ func (c *Client) CreateIndex(
 	return apiResp, nil
 }
 
-
-// LoadIndex creates an IndexWrapper instance for an existing index
-func (c *Client) LoadIndex(indexName string, indexKey []byte) *IndexWrapper {
-	return &IndexWrapper{
-		client:    c,
-		indexName: indexName,
-		indexKey:  indexKey,
-		// config will be loaded lazily when needed
-	}
-}
-
 // GetHealth checks the health status of the CyborgDB service
 func (c *Client) GetHealth(ctx context.Context) (*HealthResponse, error) {
 	health, _, err := c.apiClient.DefaultAPI.GetHealth(ctx).Execute()
