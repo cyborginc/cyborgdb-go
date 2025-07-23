@@ -169,6 +169,7 @@ func (c *Client) CreateIndex(
 		IndexKey: keyHex,
 		IndexType: &createReq.IndexConfig.IndexType,
 		Config:    &createReq.IndexConfig,
+		client: c,
 	}, nil
 }
 

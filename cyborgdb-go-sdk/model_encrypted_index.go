@@ -23,6 +23,7 @@ type EncryptedIndex struct {
 	IndexKey    string
 	IndexType *string `json:"index_type,omitempty"`
 	Config *IndexConfig `json:"config,omitempty"`
+	client *Client
 }
 
 // NewEncryptedIndex instantiates a new EncryptedIndex object
