@@ -54,16 +54,31 @@ func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 }
 
 // CreateIndex creates a new encrypted vector index with the specified configuration
-func (c *Client) CreateIndex(ctx context.Context, indexName string, indexKey []byte, config IndexConfig, embeddingModel *string) (*IndexWrapper, error) {
-	// Validate index key
+func (c *Client) CreateIndex(
+	ctx context.Context,
+	indexName string,
+	indexKey []byte,
+	indexModel IndexModel,
+	embeddingModel *string,
+) (*EncryptedIndex, error) {
+	// Validate index key length
 	if len(indexKey) != 32 {
 		return nil, fmt.Errorf("index key must be exactly 32 bytes, got %d", len(indexKey))
 	}
 
-	// Convert key to hex string for API
-	keyHex := hex.EncodeToString(indexKey)
+	// Marshal the model to JSON
+	modelBytes, err := json.Marshal(indexModel)
+	if err != nil {
+		return nil, fmt.Errorf("failed to marshal index model: %w", err)
+	}
 
-	// Create the request - using correct field names from generated code
+	// Convert to generic map for the OpenAPI request
+	var configMap map[string]interface{}
+	if err := json.Unmarshal(modelBytes, &configMap); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal index model to map: %w", err)
+	}
+
+	// Build the request
 	createReq := CreateIndexRequest{
 		IndexName:      indexName,
 		IndexKey:       keyHex,
@@ -71,19 +86,16 @@ func (c *Client) CreateIndex(ctx context.Context, indexName string, indexKey []b
 		EmbeddingModel: embeddingModel,
 	}
 
-	// Call the API
-	_, _, err := c.apiClient.DefaultAPI.CreateIndex(ctx).CreateIndexRequest(createReq).Execute()
+	// Make the API call and capture the response
+	apiResp, _, err := c.apiClient.DefaultAPI.CreateIndex(ctx).
+		CreateIndexRequest(createReq).
+		Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to create index: %w", err)
 	}
 
-	// Return an IndexWrapper instance
-	return &IndexWrapper{
-		client:    c,
-		indexName: indexName,
-		indexKey:  indexKey,
-		config:    config,
-	}, nil
+	// Return the EncryptedIndex directly
+	return apiResp, nil
 }
 
 // LoadIndex creates an IndexWrapper instance for an existing index

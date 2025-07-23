@@ -371,3 +371,8 @@ func GenerateKey() ([]byte, error) {
 	}
 	return key, nil
 }
+
+type IndexModel interface {
+	isIndexModel()
+	json.Marshaler
+}
