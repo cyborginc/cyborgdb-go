@@ -20,6 +20,7 @@ var _ MappedNullable = &EncryptedIndex{}
 // EncryptedIndex struct for EncryptedIndex
 type EncryptedIndex struct {
 	IndexName *string `json:"index_name,omitempty"`
+	IndexKey    string
 	IndexType *string `json:"index_type,omitempty"`
 	Config *IndexConfig `json:"config,omitempty"`
 }
