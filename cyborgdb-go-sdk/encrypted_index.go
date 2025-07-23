@@ -6,55 +6,63 @@ import (
 	"fmt"
 )
 // Upsert adds or updates vectors in the index
-func (ei *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) (map[string]interface{}, error) {
+func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 
-	// Convert VectorItem slice to match API expectations
-	vectors := make([]VectorItem, len(items))
+	// Convert user-facing VectorItem to API VectorItem
+	// Note: The API VectorItem is the one from your generated code
+	apiItems := make([]VectorItem, len(items))
+	
 	for i, item := range items {
-		vector := VectorItem{
-			Id:       item.Id,
-			Vector:   item.Vector,
-			Metadata: item.Metadata,
+		// Create API VectorItem with proper field mapping
+		apiItem := VectorItem{
+			Id: item.Id, // Map ID to Id
 		}
-
-		// Handle contents encoding
+		
+		// Convert float64 to float32 for vector
+		if item.Vector != nil && len(item.Vector) > 0 {
+			apiItem.Vector = convertFloat64ToFloat32(item.Vector)
+		}
+		
+		// Handle contents - it's already *string in both types
 		if item.Contents != nil {
-			// If contents is already a string, use it directly
-			// Otherwise, encode as base64
-			if strContent, ok := (*item.Contents).(string); ok {
-				vector.Contents = &strContent
-			} else if byteContent, ok := (*item.Contents).([]byte); ok {
-				encoded := base64.StdEncoding.EncodeToString(byteContent)
-				vector.Contents = &encoded
-			} else {
-				// Convert to string if possible
-				str := fmt.Sprintf("%v", *item.Contents)
-				vector.Contents = &str
-			}
+			// Since Contents is *string in both types, we can encode it directly
+			encoded := base64.StdEncoding.EncodeToString([]byte(*item.Contents))
+			apiItem.Contents = &encoded
 		}
-
-		vectors[i] = vector
+		
+		// Metadata is the same type in both
+		if item.Metadata != nil {
+			apiItem.Metadata = item.Metadata
+		}
+		
+		apiItems[i] = apiItem
 	}
 
+	// Create the upsert request
 	upsertRequest := UpsertRequest{
-		IndexName: ei.IndexName,
-		IndexKey:  ei.IndexKey,
-		Items:     vectors,
+		IndexName: *e.IndexName,
+		IndexKey:  e.IndexKey,
+		Items:     apiItems,
 	}
 
-	resp, _, err := ei.apiClient.DefaultAPI.UpsertVectors(ctx).
+	_, _, err := e.client.apiClient.DefaultAPI.UpsertVectors(ctx).
 		UpsertRequest(upsertRequest).
 		Execute()
 	if err != nil {
-		return nil, fmt.Errorf("failed to upsert vectors: %w", err)
+		return fmt.Errorf("failed to upsert vectors: %w", err)
 	}
 
-	result := map[string]interface{}{
-		"status": resp.Status,
-	}
-	if resp.UpsertedCount != nil {
-		result["upserted_count"] = *resp.UpsertedCount
-	}
+	return nil
+}
 
-	return result, nil
+// Helper function for type conversion
+func convertFloat64ToFloat32(vec []float64) []float32 {
+	if vec == nil {
+		return nil
+	}
+	result := make([]float32, len(vec))
+	for i, v := range vec {
+		result[i] = float32(v)
+	}
+	return result
 }
