@@ -65,9 +65,9 @@ func (c *Client) CreateIndex(ctx context.Context, indexName string, indexKey []b
 
 	// Create the request - using correct field names from generated code
 	createReq := CreateIndexRequest{
-		IndexName:      PtrString(indexName),
-		IndexKey:       PtrString(keyHex),
-		IndexConfig:    &config,
+		IndexName:      indexName,
+		IndexKey:       keyHex,
+		IndexConfig:    config,
 		EmbeddingModel: embeddingModel,
 	}
 

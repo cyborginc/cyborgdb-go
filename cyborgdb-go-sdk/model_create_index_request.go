@@ -1,7 +1,7 @@
 /*
 CyborgDB API
 
-CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks. 
+CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks.
 
 API version: 1.0.0
 */
@@ -11,8 +11,8 @@ API version: 1.0.0
 package cyborgdb
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -23,7 +23,8 @@ var _ MappedNullable = &CreateIndexRequest{}
 type CreateIndexRequest struct {
 	IndexName string `json:"index_name"`
 	IndexKey string `json:"index_key"`
-	Config IndexConfig `json:"config"`
+	IndexConfig    IndexConfig  `json:"index_config"`
+	EmbeddingModel *string      `json:"embedding_model,omitempty"`
 }
 
 type _CreateIndexRequest CreateIndexRequest
@@ -32,11 +33,11 @@ type _CreateIndexRequest CreateIndexRequest
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewCreateIndexRequest(indexName string, indexKey string, config IndexConfig) *CreateIndexRequest {
+func NewCreateIndexRequest(indexName string, indexKey string, indexConfig IndexConfig) *CreateIndexRequest {
 	this := CreateIndexRequest{}
 	this.IndexName = indexName
 	this.IndexKey = indexKey
-	this.Config = config
+	this.IndexConfig = indexConfig
 	return &this
 }
 
@@ -96,29 +97,25 @@ func (o *CreateIndexRequest) SetIndexKey(v string) {
 	o.IndexKey = v
 }
 
-// GetConfig returns the Config field value
-func (o *CreateIndexRequest) GetConfig() IndexConfig {
+func (o *CreateIndexRequest) GetIndexConfig() IndexConfig {
 	if o == nil {
 		var ret IndexConfig
 		return ret
 	}
-
-	return o.Config
+	return o.IndexConfig
 }
 
-// GetConfigOk returns a tuple with the Config field value
-// and a boolean to check if the value has been set.
-func (o *CreateIndexRequest) GetConfigOk() (*IndexConfig, bool) {
+func (o *CreateIndexRequest) GetIndexConfigOk() (*IndexConfig, bool) {
 	if o == nil {
 		return nil, false
 	}
-	return &o.Config, true
+	return &o.IndexConfig, true
 }
 
-// SetConfig sets field value
-func (o *CreateIndexRequest) SetConfig(v IndexConfig) {
-	o.Config = v
+func (o *CreateIndexRequest) SetIndexConfig(v IndexConfig) {
+	o.IndexConfig = v
 }
+
 
 func (o CreateIndexRequest) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
@@ -132,7 +129,10 @@ func (o CreateIndexRequest) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["index_name"] = o.IndexName
 	toSerialize["index_key"] = o.IndexKey
-	toSerialize["config"] = o.Config
+	toSerialize["index_config"] = o.IndexConfig
+	if o.EmbeddingModel != nil {
+		toSerialize["embedding_model"] = o.EmbeddingModel
+	}
 	return toSerialize, nil
 }
 
@@ -143,7 +143,7 @@ func (o *CreateIndexRequest) UnmarshalJSON(data []byte) (err error) {
 	requiredProperties := []string{
 		"index_name",
 		"index_key",
-		"config",
+		"index_config",
 	}
 
 	allProperties := make(map[string]interface{})
