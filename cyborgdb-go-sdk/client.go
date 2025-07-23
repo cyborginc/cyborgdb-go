@@ -32,7 +32,12 @@ func NewClient(baseURL, apiKey string, verifySSL bool) (*Client, error) {
 	cfg := NewConfiguration()
 	cfg.Scheme = parsedURL.Scheme
 	cfg.Host = parsedURL.Host
-
+	cfg.Servers = []ServerConfiguration{
+		{
+			URL:         fmt.Sprintf("%s://%s/v1", parsedURL.Scheme, parsedURL.Host),
+			Description: "CyborgDB API with /v1",
+		},
+	}
 	// Set API key in default headers if provided
 	if apiKey != "" {
 		cfg.AddDefaultHeader("X-API-Key", apiKey)
