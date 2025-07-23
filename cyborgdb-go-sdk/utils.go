@@ -1,7 +1,7 @@
 /*
 CyborgDB API
 
-CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks. 
+CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks.
 
 API version: 1.0.0
 */
@@ -12,8 +12,8 @@ package cyborgdb
 
 import (
 	"bytes"
-	"encoding/json"
 	"crypto/rand"
+	"encoding/json"
 	"fmt"
 	"reflect"
 	"time"
@@ -361,7 +361,6 @@ func reportError(format string, a ...interface{}) error {
 	return fmt.Errorf(format, a...)
 }
 
-
 // GenerateKey generates a secure random 32-byte key for CyborgDB encrypted indexes.
 func GenerateKey() ([]byte, error) {
 	key := make([]byte, 32)
@@ -375,4 +374,52 @@ func GenerateKey() ([]byte, error) {
 type IndexModel interface {
 	isIndexModel()
 	json.Marshaler
+}
+
+func ConvertToIndexConfig(model IndexModel) (IndexConfig, error) {
+	switch cfg := model.(type) {
+	case *IndexIVFModel:
+		return IndexConfig{
+			Dimension: int32OrZero(cfg.Dimension),
+			Metric:    stringOrDefault(cfg.Metric, "euclidean"),
+			IndexType: "ivf",
+			NLists:    cfg.NLists,
+		}, nil
+
+	case *IndexIVFFlatModel:
+		return IndexConfig{
+			Dimension: int32OrZero(cfg.Dimension),
+			Metric:    stringOrDefault(cfg.Metric, "euclidean"),
+			IndexType: "ivfflat",
+			NLists:    cfg.NLists,
+		}, nil
+
+	case *IndexIVFPQModel:
+		return IndexConfig{
+			Dimension: int32OrZero(cfg.Dimension),
+			Metric:    stringOrDefault(cfg.Metric, "euclidean"),
+			IndexType: "ivfpq",
+			NLists:    cfg.NLists,
+			PqDim:     &cfg.PqDim,
+			PqBits:    &cfg.PqBits,
+		}, nil
+
+	default:
+		return IndexConfig{}, fmt.Errorf("unsupported index model type: %T", model)
+	}
+}
+
+// Helper functions for nullable fallback
+func int32OrZero(ptr *int32) int32 {
+	if ptr != nil {
+		return *ptr
+	}
+	return 0
+}
+
+func stringOrDefault(ptr *string, fallback string) string {
+	if ptr != nil {
+		return *ptr
+	}
+	return fallback
 }
