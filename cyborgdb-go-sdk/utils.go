@@ -380,24 +380,24 @@ func ConvertToIndexConfig(model IndexModel) (IndexConfig, error) {
 	switch cfg := model.(type) {
 	case *IndexIVFModel:
 		return IndexConfig{
-			Dimension: int32OrZero(cfg.Dimension),
-			Metric:    stringOrDefault(cfg.Metric, "euclidean"),
+			Dimension: cfg.Dimension,
+			Metric:    cfg.Metric,
 			IndexType: "ivf",
 			NLists:    cfg.NLists,
 		}, nil
 
 	case *IndexIVFFlatModel:
 		return IndexConfig{
-			Dimension: int32OrZero(cfg.Dimension),
-			Metric:    stringOrDefault(cfg.Metric, "euclidean"),
+			Dimension: cfg.Dimension,
+			Metric:    cfg.Metric,
 			IndexType: "ivfflat",
 			NLists:    cfg.NLists,
 		}, nil
 
 	case *IndexIVFPQModel:
 		return IndexConfig{
-			Dimension: int32OrZero(cfg.Dimension),
-			Metric:    stringOrDefault(cfg.Metric, "euclidean"),
+			Dimension: cfg.Dimension,
+			Metric:    cfg.Metric,
 			IndexType: "ivfpq",
 			NLists:    cfg.NLists,
 			PqDim:     &cfg.PqDim,
@@ -407,19 +407,4 @@ func ConvertToIndexConfig(model IndexModel) (IndexConfig, error) {
 	default:
 		return IndexConfig{}, fmt.Errorf("unsupported index model type: %T", model)
 	}
-}
-
-// Helper functions for nullable fallback
-func int32OrZero(ptr *int32) int32 {
-	if ptr != nil {
-		return *ptr
-	}
-	return 0
-}
-
-func stringOrDefault(ptr *string, fallback string) string {
-	if ptr != nil {
-		return *ptr
-	}
-	return fallback
 }
