@@ -232,9 +232,10 @@ type ApiListIndexesRequest struct {
 	ApiService *DefaultAPIService
 }
 
-func (r ApiListIndexesRequest) Execute() ([]string, *http.Response, error) {
+func (r ApiListIndexesRequest) Execute() (*ListIndexesResponse, *http.Response, error) {
 	return r.ApiService.ListIndexesExecute(r)
 }
+
 
 /*
 ListIndexes List all indexes
@@ -248,15 +249,14 @@ func (a *DefaultAPIService) ListIndexes(ctx context.Context) ApiListIndexesReque
 		ctx: ctx,
 	}
 }
-
 // Execute executes the request
 //  @return []string
-func (a *DefaultAPIService) ListIndexesExecute(r ApiListIndexesRequest) ([]string, *http.Response, error) {
+func (a *DefaultAPIService) ListIndexesExecute(r ApiListIndexesRequest) (*ListIndexesResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  []string
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *ListIndexesResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.ListIndexes")
@@ -264,30 +264,27 @@ func (a *DefaultAPIService) ListIndexesExecute(r ApiListIndexesRequest) ([]strin
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/indexes"
+	localVarPath := localBasePath + "/indexes/list"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
-	// to determine the Content-Type header
+	// No body or query params
 	localVarHTTPContentTypes := []string{}
-
-	// set Content-Type header
 	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
 	if localVarHTTPContentType != "" {
 		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
 	}
 
-	// to determine the Accept header
 	localVarHTTPHeaderAccepts := []string{"application/json"}
-
-	// set Accept header
 	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody,
+		localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
@@ -297,28 +294,26 @@ func (a *DefaultAPIService) ListIndexesExecute(r ApiListIndexesRequest) ([]strin
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
+	defer localVarHTTPResponse.Body.Close()
 	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
-	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
 		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		return nil, localVarHTTPResponse, &GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
-	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	localVarReturnValue = new(ListIndexesResponse)
+	err = a.client.decode(localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
 	if err != nil {
-		newErr := &GenericOpenAPIError{
+		return nil, localVarHTTPResponse, &GenericOpenAPIError{
 			body:  localVarBody,
 			error: err.Error(),
 		}
-		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
 	return localVarReturnValue, localVarHTTPResponse, nil
