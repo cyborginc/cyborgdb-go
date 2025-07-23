@@ -5,34 +5,26 @@ import (
 	"encoding/base64"
 	"fmt"
 )
+
+
 // Upsert adds or updates vectors in the index
 func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 
 	// Convert user-facing VectorItem to API VectorItem
 	// Note: The API VectorItem is the one from your generated code
-	apiItems := make([]VectorItem, len(items))
+	apiItems := make([]APIVectorItem, len(items))
 	
 	for i, item := range items {
 		// Create API VectorItem with proper field mapping
-		apiItem := VectorItem{
-			Id: item.Id, // Map ID to Id
+		apiItem:= APIVectorItem{
+			Id:       item.Id,
+			Vector:   item.Vector, // No conversion needed - already []float32
+			Metadata: item.Metadata,
 		}
 		
-		// Convert float64 to float32 for vector
-		if item.Vector != nil && len(item.Vector) > 0 {
-			apiItem.Vector = convertFloat64ToFloat32(item.Vector)
-		}
-		
-		// Handle contents - it's already *string in both types
 		if item.Contents != nil {
-			// Since Contents is *string in both types, we can encode it directly
 			encoded := base64.StdEncoding.EncodeToString([]byte(*item.Contents))
 			apiItem.Contents = &encoded
-		}
-		
-		// Metadata is the same type in both
-		if item.Metadata != nil {
-			apiItem.Metadata = item.Metadata
 		}
 		
 		apiItems[i] = apiItem
@@ -42,7 +34,7 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 	upsertRequest := UpsertRequest{
 		IndexName: *e.IndexName,
 		IndexKey:  e.IndexKey,
-		Items:     apiItems,
+		Items:     []APIVectorItem(apiItems),
 	}
 
 	_, _, err := e.client.apiClient.DefaultAPI.UpsertVectors(ctx).
