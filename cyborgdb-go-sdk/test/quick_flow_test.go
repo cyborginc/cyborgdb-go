@@ -25,6 +25,25 @@ func generateTestIndexName() string {
 	return "test_index_" + hex.EncodeToString(random)
 }
 
+func TestGetHealth(t *testing.T) {
+	apiURL := "http://localhost:8000"
+	apiKey := os.Getenv("CYBORGDB_API_KEY")
+
+	if apiURL == "" || apiKey == "" {
+		t.Skip("CYBORGDB_API_URL or CYBORGDB_API_KEY environment variable not set")
+	}
+
+	client, err := cyborgdb.NewClient(apiURL, apiKey, false)
+	require.NoError(t, err)
+
+	health, err := client.GetHealth(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, health)
+	require.NotNil(t, health.Status)
+	require.Greater(t, len(*health.Status), 0)
+	require.Contains(t, *health.Status, "healthy") // or "ok" or whatever your service returns
+}
+
 func TestCreateIndex_IVFPQ(t *testing.T) {
 	apiURL := "http://localhost:8000"
 	apiKey := os.Getenv("CYBORGDB_API_KEY")
