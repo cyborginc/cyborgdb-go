@@ -10,21 +10,22 @@ import (
 
 // IndexIVFFlatModel struct for configuring an IVFFlat (Inverted File with Flat quantization) index.
 type IndexIVFFlatModel struct {
-	Dimension *int32  `json:"dimension,omitempty"`
+	Dimension int32  `json:"dimension,omitempty"`
 	NLists    int32   `json:"n_lists"`
-	Metric    *string `json:"metric,omitempty"`
+	Metric    string `json:"metric,omitempty"`
 	Type      string  `json:"type"` // default: "ivfflat"
 }
 
 type _IndexIVFFlatModel IndexIVFFlatModel
 
 // NewIndexIVFFlatModel creates a new IVFFlat index model with required fields.
-func NewIndexIVFFlatModel(nLists int32) *IndexIVFFlatModel {
-	model := IndexIVFFlatModel{
-		NLists: nLists,
-		Type:   "ivfflat",
+func NewIndexIVFFlatModel(dimension int32, metric string, nLists int32) *IndexIVFFlatModel {
+	return &IndexIVFFlatModel{
+		Dimension: dimension,
+		Metric:    metric,
+		NLists:    nLists,
+		Type:      "ivfflat",
 	}
-	return &model
 }
 
 // NewIndexIVFFlatModelWithDefaults creates a new IVFFlat index model with default type set.
@@ -43,30 +44,21 @@ func (o IndexIVFFlatModel) MarshalJSON() ([]byte, error) {
 }
 
 func (o IndexIVFFlatModel) ToMap() (map[string]interface{}, error) {
-	toSerialize := map[string]interface{}{
-		"n_lists": o.NLists,
-		"type":    o.Type,
-	}
-
-	if o.Dimension != nil {
-		toSerialize["dimension"] = o.Dimension
-	}
-
-	if o.Metric != nil {
-		toSerialize["metric"] = o.Metric
-	}
-
-	return toSerialize, nil
+	return map[string]interface{}{
+		"dimension": o.Dimension,
+		"n_lists":   o.NLists,
+		"metric":    o.Metric,
+		"type":      o.Type,
+	}, nil
 }
 
 func (o *IndexIVFFlatModel) UnmarshalJSON(data []byte) error {
-	requiredProps := []string{"n_lists"}
+	requiredProps := []string{"dimension", "metric", "n_lists"}
 	var allProps map[string]interface{}
 	err := json.Unmarshal(data, &allProps)
 	if err != nil {
 		return err
 	}
-
 	for _, prop := range requiredProps {
 		if _, found := allProps[prop]; !found {
 			return fmt.Errorf("required field %s is missing", prop)
@@ -83,11 +75,9 @@ func (o *IndexIVFFlatModel) UnmarshalJSON(data []byte) error {
 
 	*o = IndexIVFFlatModel(temp)
 
-	// Ensure type defaults to "ivfflat" if not explicitly provided
 	if o.Type == "" {
 		o.Type = "ivfflat"
 	}
-
 	return nil
 }
 

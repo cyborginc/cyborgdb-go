@@ -10,9 +10,9 @@ import (
 
 // IndexIVFPQModel configures an IVFPQ (Inverted File with Product Quantization) index.
 type IndexIVFPQModel struct {
-	Dimension *int32  `json:"dimension,omitempty"`
+	Dimension int32  `json:"dimension,omitempty"`
 	NLists    int32   `json:"n_lists"`
-	Metric    *string `json:"metric,omitempty"`
+	Metric    string `json:"metric,omitempty"`
 	Type      string  `json:"type"`      // default: "ivfpq"
 	PqDim     int32   `json:"pq_dim"`    // required
 	PqBits    int32   `json:"pq_bits"`   // required
@@ -47,22 +47,14 @@ func (o IndexIVFPQModel) MarshalJSON() ([]byte, error) {
 }
 
 func (o IndexIVFPQModel) ToMap() (map[string]interface{}, error) {
-	toSerialize := map[string]interface{}{
-		"n_lists": o.NLists,
-		"type":    o.Type,
-		"pq_dim":  o.PqDim,
-		"pq_bits": o.PqBits,
-	}
-
-	if o.Dimension != nil {
-		toSerialize["dimension"] = o.Dimension
-	}
-
-	if o.Metric != nil {
-		toSerialize["metric"] = o.Metric
-	}
-
-	return toSerialize, nil
+	return map[string]interface{}{
+		"dimension": o.Dimension,
+		"n_lists":   o.NLists,
+		"metric":    o.Metric,
+		"type":      o.Type,
+		"pq_dim":    o.PqDim,
+		"pq_bits":   o.PqBits,
+	}, nil
 }
 
 func (o *IndexIVFPQModel) UnmarshalJSON(data []byte) error {
