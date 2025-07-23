@@ -58,16 +58,15 @@ func NewClient(baseURL, apiKey string, verifySSL bool) (*Client, error) {
 	}, nil
 }
 
-// GenerateKey is available from utils.go (OpenAPI generated)
-
 // ListIndexes retrieves a list of all available encrypted indexes
 func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
-	indexes, _, err := c.apiClient.DefaultAPI.ListIndexes(ctx).Execute()
+	resp, _, err := c.apiClient.DefaultAPI.ListIndexes(ctx).Execute()
 	if err != nil {
 		return nil, fmt.Errorf("failed to list indexes: %w", err)
 	}
-	return indexes, nil
+	return resp.Indexes, nil
 }
+
 
 // CreateIndex creates a new encrypted vector index with the specified configuration
 func (c *Client) CreateIndex(

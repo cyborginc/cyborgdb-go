@@ -79,9 +79,9 @@ func TestCreateIndex_IVFPQ(t *testing.T) {
 	require.Equal(t, int32(8), cfg.GetPqBits())
 }
 
-func TestHealth(t *testing.T) {
+func TestListIndexes(t *testing.T) {
 	apiURL := "http://localhost:8000"
-	apiKey := "cyborg_e9n8t7e6r5p4r3i2s1e0987654321abc"
+	apiKey := os.Getenv("CYBORGDB_API_KEY")
 
 	if apiURL == "" || apiKey == "" {
 		t.Skip("CYBORGDB_API_URL or CYBORGDB_API_KEY environment variable not set")
@@ -90,9 +90,37 @@ func TestHealth(t *testing.T) {
 	client, err := cyborgdb.NewClient(apiURL, apiKey, false)
 	require.NoError(t, err)
 
-	t.Log("testing")
+	// Create a test index first to ensure at least one known index exists
+	indexName := generateTestIndexName()
+	indexKey := generateRandomKey(t)
+	dim := int32(64)
 
-	resp, err := client.GetHealth(context.Background())
+	model := &cyborgdb.IndexIVFPQModel{
+		Dimension: dim,
+		Metric:    "cosine",
+		NLists:    16,
+		PqDim:     8,
+		PqBits:    8,
+	}
+
+	createdIndex, err := client.CreateIndex(context.Background(), indexName, indexKey, model, nil)
 	require.NoError(t, err)
-	require.NotNil(t, resp)
+	require.NotNil(t, createdIndex)
+
+	// Now test ListIndexes
+	indexes, err := client.ListIndexes(context.Background())
+	require.NoError(t, err)
+	require.NotNil(t, indexes)
+	require.GreaterOrEqual(t, len(indexes), 1)
+
+	// Confirm the test index is present
+	found := false
+	for _, idx := range indexes {
+		if idx == indexName {
+			found = true
+			break
+		}
+	}
+	require.True(t, found, "expected index %s not found in list: %v", indexName, indexes)
 }
+
