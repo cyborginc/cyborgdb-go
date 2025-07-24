@@ -463,6 +463,35 @@ func TestQuery(t *testing.T) {
 		}
 	})
 
+	// Test 2: Batch query with multiple vectors
+	t.Run("BatchVectorQuery", func(t *testing.T) {
+		queryVectors := [][]float32{
+			make([]float32, dim),
+			make([]float32, dim),
+		}
+		
+		result, err := index.Query(
+			context.Background(),
+			queryVectors,     // batch of vectors
+			int32(3),         // topK
+			int32(2),         // nProbes
+			true,             // greedy
+			nil,              // no filters
+			[]string{"distance", "metadata", "contents"},
+		)
+		
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.NotNil(t, result.Results)
+		require.Len(t, result.Results, 2, "batch query should return 2 result sets")
+		
+		for i, resultSet := range result.Results {
+			require.LessOrEqual(t, len(resultSet), 3, "should return at most topK results")
+			t.Logf("Query %d returned %d results", i, len(resultSet))
+			
+		}
+	})
+
 	// Clean up
 	err = index.DeleteIndex(context.Background())
 	require.NoError(t, err)
