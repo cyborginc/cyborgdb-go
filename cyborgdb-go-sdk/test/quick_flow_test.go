@@ -4,8 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"testing"
+	mathrand "math/rand"
 	"os"
+	"testing"
 
 	"github.com/stretchr/testify/require"
 
@@ -164,3 +165,81 @@ func TestDeleteIndex(t *testing.T) {
 }
 
 
+
+
+func TestUpsert(t *testing.T) {
+	apiURL := "http://localhost:8000"
+	apiKey := os.Getenv("CYBORGDB_API_KEY")
+
+	if apiURL == "" || apiKey == "" {
+		t.Skip("CYBORGDB_API_URL or CYBORGDB_API_KEY environment variable not set")
+	}
+
+	client, err := cyborgdb.NewClient(apiURL, apiKey, false)
+	require.NoError(t, err)
+
+	indexName := generateTestIndexName()
+	indexKey := generateRandomKey(t)
+	dim := int32(128)
+
+	// Create index
+	model := &cyborgdb.IndexIVFPQModel{
+		Dimension: dim,
+		Metric:    "euclidean",
+		NLists:    32,
+		PqDim:     16,
+		PqBits:    8,
+	}
+
+	index, err := client.CreateIndex(context.Background(), indexName, indexKey, model, nil)
+	require.NoError(t, err)
+	require.NotNil(t, index)
+
+	// Prepare test vectors
+	items := []cyborgdb.VectorItem{
+		{
+			Id:     "vec1",
+			Vector: generateRandomVector(int(dim)),
+			Metadata: map[string]interface{}{
+				"category": "test",
+				"score":    0.95,
+			},
+			Contents: stringPtr("This is the first test vector"),
+		},
+		{
+			Id:     "vec2",
+			Vector: generateRandomVector(int(dim)),
+			Metadata: map[string]interface{}{
+				"category": "test",
+				"score":    0.87,
+			},
+			Contents: stringPtr("This is the second test vector"),
+		},
+		{
+			Id:     "vec3",
+			Vector: generateRandomVector(int(dim)),
+			// No metadata or contents for this one
+		},
+	}
+
+	// Test Upsert
+	err = index.Upsert(context.Background(), items)
+	require.NoError(t, err)
+
+	// Clean up
+	err = index.DeleteIndex(context.Background())
+	require.NoError(t, err)
+}
+
+func generateRandomVector(dim int) []float32 {
+	vec := make([]float32, dim)
+	for i := range vec {
+		// Generate random float between -1 and 1
+		vec[i] = float32((mathrand.Float64() * 2) - 1)
+	}
+	return vec
+}
+
+func stringPtr(s string) *string {
+	return &s
+}
