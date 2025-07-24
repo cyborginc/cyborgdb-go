@@ -479,7 +479,7 @@ func (a *DefaultAPIService) GetVectors(ctx context.Context, indexName string) Ap
 //  @return []VectorItem
 func (a *DefaultAPIService) GetVectorsExecute(r ApiGetVectorsRequest) ([]VectorItem, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
+		localVarHTTPMethod   = http.MethodPost
 		localVarPostBody     interface{}
 		formFiles            []formFile
 		localVarReturnValue  []VectorItem
@@ -490,7 +490,7 @@ func (a *DefaultAPIService) GetVectorsExecute(r ApiGetVectorsRequest) ([]VectorI
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/indexes/{indexName}/vectors"
+	localVarPath := localBasePath + "/vectors/get"
 	localVarPath = strings.Replace(localVarPath, "{"+"indexName"+"}", url.PathEscape(parameterValueToString(r.indexName, "indexName")), -1)
 
 	localVarHeaderParams := make(map[string]string)
