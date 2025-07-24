@@ -65,7 +65,7 @@ func (a *DefaultAPIService) CreateIndexExecute(r ApiCreateIndexRequest) (*Encryp
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/indexes"
+	localVarPath := localBasePath + "/indexes/create"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -574,7 +574,7 @@ type ApiListIndexesRequest struct {
 	ApiService *DefaultAPIService
 }
 
-func (r ApiListIndexesRequest) Execute() ([]string, *http.Response, error) {
+func (r ApiListIndexesRequest) Execute() (*IndexListResponseModel, *http.Response, error) {
 	return r.ApiService.ListIndexesExecute(r)
 }
 
@@ -593,12 +593,12 @@ func (a *DefaultAPIService) ListIndexes(ctx context.Context) ApiListIndexesReque
 
 // Execute executes the request
 //  @return []string
-func (a *DefaultAPIService) ListIndexesExecute(r ApiListIndexesRequest) ([]string, *http.Response, error) {
+func (a *DefaultAPIService) ListIndexesExecute(r ApiListIndexesRequest) (*IndexListResponseModel, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodGet
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  []string
+		localVarReturnValue  *IndexListResponseModel
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.ListIndexes")
@@ -606,30 +606,26 @@ func (a *DefaultAPIService) ListIndexesExecute(r ApiListIndexesRequest) ([]strin
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/indexes"
+	localVarPath := localBasePath + "/indexes/list"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
 
-	// to determine the Content-Type header
 	localVarHTTPContentTypes := []string{}
-
-	// set Content-Type header
 	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
 	if localVarHTTPContentType != "" {
 		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
 	}
 
-	// to determine the Accept header
 	localVarHTTPHeaderAccepts := []string{"application/json"}
-
-	// set Accept header
 	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody,
+		localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}
