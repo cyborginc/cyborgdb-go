@@ -6,7 +6,7 @@ import (
 	"fmt"
 )
 
-Upsert adds or updates vectors in the index
+// Upsert adds or updates vectors in the index
 func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 
 	// Convert user-facing VectorItem to API VectorItem
