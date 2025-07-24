@@ -264,7 +264,7 @@ func (a *DefaultAPIService) DeleteVectors(ctx context.Context, indexName string)
 // Execute executes the request
 func (a *DefaultAPIService) DeleteVectorsExecute(r ApiDeleteVectorsRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
+		localVarHTTPMethod   = http.MethodPost
 		localVarPostBody     interface{}
 		formFiles            []formFile
 	)
@@ -274,7 +274,7 @@ func (a *DefaultAPIService) DeleteVectorsExecute(r ApiDeleteVectorsRequest) (*ht
 		return nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/indexes/{indexName}/vectors"
+	localVarPath := localBasePath + "/vectors/delete"
 	localVarPath = strings.Replace(localVarPath, "{"+"indexName"+"}", url.PathEscape(parameterValueToString(r.indexName, "indexName")), -1)
 
 	localVarHeaderParams := make(map[string]string)

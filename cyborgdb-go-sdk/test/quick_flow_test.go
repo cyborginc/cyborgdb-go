@@ -294,6 +294,61 @@ func TestTrainIndex(t *testing.T) {
 	t.Logf("Training completed for index: %s", indexName)
 }
 
+func TestDeleteVectors(t *testing.T) {
+	apiURL := "http://localhost:8000"
+	apiKey := os.Getenv("CYBORGDB_API_KEY")
+
+	if apiURL == "" || apiKey == "" {
+		t.Skip("CYBORGDB_API_URL or CYBORGDB_API_KEY environment variable not set")
+	}
+
+	client, err := cyborgdb.NewClient(apiURL, apiKey, false)
+	require.NoError(t, err)
+
+	indexName := generateTestIndexName()
+	indexKey := generateRandomKey(t)
+	dim := int32(64)
+
+	model := &cyborgdb.IndexIVFPQModel{
+		Dimension: dim,
+		Metric:    "cosine",
+		NLists:    8,
+		PqDim:     8,
+		PqBits:    8,
+	}
+
+	index, err := client.CreateIndex(context.Background(), indexName, indexKey, model, nil)
+	require.NoError(t, err)
+
+	// Upsert two vectors
+	vectors := []cyborgdb.VectorItem{
+		{
+			Id:       "vec_delete_1",
+			Vector:   make([]float32, dim),
+			Contents: strPtr("to be deleted"),
+		},
+		{
+			Id:       "vec_keep_2",
+			Vector:   make([]float32, dim),
+			Contents: strPtr("to be kept"),
+		},
+	}
+
+	for i := range vectors {
+		for j := range vectors[i].Vector {
+			vectors[i].Vector[j] = float32(j + i)
+		}
+	}
+
+	err = index.Upsert(context.Background(), vectors)
+	require.NoError(t, err, "Upsert failed before delete")
+
+	// Delete vec_delete_1
+	err = index.Delete(context.Background(), []string{"vec_delete_1"})
+	require.NoError(t, err, "Delete failed")
+
+	t.Log("Delete succeeded")
+}
 
 func strPtr(s string) *string {
 	return &s

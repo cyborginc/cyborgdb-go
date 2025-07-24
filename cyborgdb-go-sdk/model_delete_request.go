@@ -21,8 +21,11 @@ var _ MappedNullable = &DeleteRequest{}
 
 // DeleteRequest struct for DeleteRequest
 type DeleteRequest struct {
-	Ids []string `json:"ids"`
+	IndexName string   `json:"index_name"`
+	IndexKey  string   `json:"index_key"`
+	Ids       []string `json:"ids"`
 }
+
 
 type _DeleteRequest DeleteRequest
 
@@ -30,10 +33,12 @@ type _DeleteRequest DeleteRequest
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewDeleteRequest(ids []string) *DeleteRequest {
-	this := DeleteRequest{}
-	this.Ids = ids
-	return &this
+func NewDeleteRequest(indexName string, indexKey string, ids []string) *DeleteRequest {
+	return &DeleteRequest{
+		IndexName: indexName,
+		IndexKey:  indexKey,
+		Ids:       ids,
+	}
 }
 
 // NewDeleteRequestWithDefaults instantiates a new DeleteRequest object
@@ -78,6 +83,8 @@ func (o DeleteRequest) MarshalJSON() ([]byte, error) {
 
 func (o DeleteRequest) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
+	toSerialize["index_name"] = o.IndexName
+	toSerialize["index_key"] = o.IndexKey
 	toSerialize["ids"] = o.Ids
 	return toSerialize, nil
 }
