@@ -165,7 +165,7 @@ func (a *DefaultAPIService) DeleteIndex(ctx context.Context, indexName string) A
 // Execute executes the request
 func (a *DefaultAPIService) DeleteIndexExecute(r ApiDeleteIndexRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodDelete
+		localVarHTTPMethod   = http.MethodPost
 		localVarPostBody     interface{}
 		formFiles            []formFile
 	)
@@ -175,60 +175,53 @@ func (a *DefaultAPIService) DeleteIndexExecute(r ApiDeleteIndexRequest) (*http.R
 		return nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/indexes/{indexName}"
-	localVarPath = strings.Replace(localVarPath, "{"+"indexName"+"}", url.PathEscape(parameterValueToString(r.indexName, "indexName")), -1)
+	localVarPath := localBasePath + "/indexes/delete"
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
-	if r.xIndexKey == nil {
-		return nil, reportError("xIndexKey is required and must be specified")
+
+	// Body
+	postBody := IndexOperationRequest{
+		IndexName: r.indexName,
+		IndexKey:  *r.xIndexKey,
 	}
+	localVarPostBody = postBody
 
-	// to determine the Content-Type header
-	localVarHTTPContentTypes := []string{}
-
-	// set Content-Type header
+	// Content-Type
+	localVarHTTPContentTypes := []string{"application/json"}
 	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
 	if localVarHTTPContentType != "" {
 		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
 	}
 
-	// to determine the Accept header
-	localVarHTTPHeaderAccepts := []string{}
-
-	// set Accept header
+	// Accept
+	localVarHTTPHeaderAccepts := []string{"application/json"}
 	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	parameterAddToHeaderOrQuery(localVarHeaderParams, "X-Index-Key", r.xIndexKey, "simple", "")
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+
+	req, err := a.client.prepareRequest(
+		r.ctx, localVarPath, localVarHTTPMethod,
+		localVarPostBody, localVarHeaderParams,
+		localVarQueryParams, localVarFormParams, formFiles,
+	)
 	if err != nil {
 		return nil, err
 	}
 
-	localVarHTTPResponse, err := a.client.callAPI(req)
-	if err != nil || localVarHTTPResponse == nil {
-		return localVarHTTPResponse, err
+	resp, err := a.client.callAPI(req)
+	if err != nil || resp == nil {
+		return resp, err
 	}
 
-	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
-	localVarHTTPResponse.Body.Close()
-	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
-	if err != nil {
-		return localVarHTTPResponse, err
+	if resp.StatusCode >= 300 {
+		body, _ := io.ReadAll(resp.Body)
+		return resp, &GenericOpenAPIError{body: body, error: resp.Status}
 	}
 
-	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
-			body:  localVarBody,
-			error: localVarHTTPResponse.Status,
-		}
-		return localVarHTTPResponse, newErr
-	}
-
-	return localVarHTTPResponse, nil
+	return resp, nil
 }
 
 type ApiDeleteVectorsRequest struct {
