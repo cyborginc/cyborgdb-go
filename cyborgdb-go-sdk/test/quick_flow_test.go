@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"testing"
+	"os"
 
 	"github.com/stretchr/testify/require"
 
@@ -26,7 +27,7 @@ func generateTestIndexName() string {
 
 func TestGetHealth(t *testing.T) {
 	apiURL := "http://localhost:8000"
-	apiKey := "cyborg_e9n8t7e6r5p4r3i2s1e0987654321abc"
+	apiKey := os.Getenv("CYBORGDB_API_KEY")
 
 	if apiURL == "" || apiKey == "" {
 		t.Skip("CYBORGDB_API_URL or CYBORGDB_API_KEY environment variable not set")
@@ -45,7 +46,7 @@ func TestGetHealth(t *testing.T) {
 
 func TestCreateIndex_IVFPQ(t *testing.T) {
 	apiURL := "http://localhost:8000"
-	apiKey := "cyborg_e9n8t7e6r5p4r3i2s1e0987654321abc"
+	apiKey := os.Getenv("CYBORGDB_API_KEY")
 
 	if apiURL == "" || apiKey == "" {
 		t.Skip("CYBORGDB_API_URL or CYBORGDB_API_KEY environment variable not set")
@@ -80,7 +81,7 @@ func TestCreateIndex_IVFPQ(t *testing.T) {
 
 func TestListIndexes(t *testing.T) {
 	apiURL := "http://localhost:8000"
-	apiKey := "cyborg_e9n8t7e6r5p4r3i2s1e0987654321abc"
+	apiKey := os.Getenv("CYBORGDB_API_KEY")
 
 	if apiURL == "" || apiKey == "" {
 		t.Skip("CYBORGDB_API_URL or CYBORGDB_API_KEY environment variable not set")
@@ -111,7 +112,6 @@ func TestListIndexes(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, indexes)
 	require.GreaterOrEqual(t, len(indexes), 1)
-
 	// Confirm the test index is present
 	found := false
 	for _, idx := range indexes {

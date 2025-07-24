@@ -376,10 +376,6 @@ type IndexModel interface {
 	json.Marshaler
 }
 
-type ListIndexesResponse struct {
-	Indexes []string `json:"indexes"`
-}
-
 func ConvertToIndexConfig(model IndexModel) (IndexConfig, error) {
 	switch cfg := model.(type) {
 	case *IndexIVFModel:

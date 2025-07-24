@@ -97,16 +97,14 @@ func NewClient(baseURL, apiKey string, verifySSL bool) (*Client, error) {
 //     which is an array of strings.
 //   - Automatically unmarshals the response into a ListIndexesResponse struct.
 func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
-	// Invoke the low-level API client's ListIndexes request
-	// and automatically decode the response into ListIndexesResponse.
+	// Call the OpenAPI-generated method
 	resp, _, err := c.apiClient.DefaultAPI.ListIndexes(ctx).Execute()
 	if err != nil {
-		// Wrap and return the error if the API call or decoding fails.
 		return nil, fmt.Errorf("failed to list indexes: %w", err)
 	}
 
-	// On success, return the list of index names from the response.
-	return resp, nil
+	// Return the actual list of strings from the response
+	return resp.Indexes, nil
 }
 
 // CreateIndex creates a new encrypted vector index in CyborgDB.
