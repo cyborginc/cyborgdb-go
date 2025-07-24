@@ -2,60 +2,55 @@ package cyborgdb
 
 import (
 	"context"
-	"encoding/base64"
 	"fmt"
 )
 
 // Upsert adds or updates vectors in the index
 func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
+    if e.client == nil {
+        return fmt.Errorf("cannot upsert vectors: client reference is nil")
+    }
+    if e.IndexName == nil || *e.IndexName == "" {
+        return fmt.Errorf("index name is required")
+    }
+    if e.IndexKey == "" {
+        return fmt.Errorf("index key is required")
+    }
 
-    // Convert user-facing VectorItem to API VectorItem
-    // Note: The API VectorItem is the one from your generated code
+	
+
+    // Map user-facing VectorItems to API VectorItems
     apiItems := make([]VectorItem, len(items))
-    
     for i, item := range items {
-        // Create API VectorItem with proper field mapping
-        apiItem:= VectorItem{
+        apiItem := VectorItem{
             Id:       item.Id,
-            Vector:   item.Vector, // No conversion needed - already []float32
+            Vector:   item.Vector,
             Metadata: item.Metadata,
         }
-        
         if item.Contents != nil {
-            encoded := base64.StdEncoding.EncodeToString([]byte(*item.Contents))
-            apiItem.Contents = &encoded
+            apiItem.Contents = item.Contents
         }
-        
         apiItems[i] = apiItem
     }
 
-    // Create the upsert request
+    // Construct request with ALL required fields
     upsertRequest := UpsertRequest{
-        Items:     []VectorItem(apiItems),
+        IndexKey:  e.IndexKey,
+        IndexName: *e.IndexName,
+        Items:     apiItems,
     }
 
+    // Call without XIndexKey header since it's now in the body
     _, err := e.client.apiClient.DefaultAPI.
-        UpsertVectors(ctx,*e.IndexName).
-        XIndexKey(*e.IndexName).                // Set the encryption key header
+        UpsertVectors(ctx, *e.IndexName).
+		XIndexKey(e.IndexKey).
         UpsertRequest(upsertRequest).
         Execute()
+
     if err != nil {
         return fmt.Errorf("failed to upsert vectors: %w", err)
     }
-
     return nil
-}
-
-// Helper function for type conversion
-func convertFloat64ToFloat32(vec []float64) []float32 {
-	if vec == nil {
-		return nil
-	}
-	result := make([]float32, len(vec))
-	for i, v := range vec {
-		result[i] = float32(v)
-	}
-	return result
 }
 
 // DeleteIndex deletes the current encrypted index from the CyborgDB service.
@@ -88,4 +83,3 @@ func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 
 	return nil
 }
-
