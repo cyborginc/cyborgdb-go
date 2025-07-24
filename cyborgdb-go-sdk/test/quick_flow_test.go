@@ -123,3 +123,44 @@ func TestListIndexes(t *testing.T) {
 	require.True(t, found, "expected index %s not found in list: %v", indexName, indexes)
 }
 
+func TestDeleteIndex(t *testing.T) {
+	apiURL := "http://localhost:8000"
+	apiKey := os.Getenv("CYBORGDB_API_KEY")
+
+	if apiURL == "" || apiKey == "" {
+		t.Skip("CYBORGDB_API_URL or CYBORGDB_API_KEY environment variable not set")
+	}
+
+	client, err := cyborgdb.NewClient(apiURL, apiKey, false)
+	require.NoError(t, err)
+
+	indexName := generateTestIndexName()
+	indexKey := generateRandomKey(t)
+
+	model := &cyborgdb.IndexIVFPQModel{
+		Dimension: 128,
+		Metric:    "cosine",
+		NLists:    16,
+		PqDim:     8,
+		PqBits:    8,
+	}
+
+	// Create the index first
+	index, err := client.CreateIndex(context.Background(), indexName, indexKey, model, nil)
+	require.NoError(t, err)
+	require.NotNil(t, index)
+
+	// Now attempt to delete it
+	err = index.DeleteIndex(context.Background())
+	require.NoError(t, err)
+
+	// Optionally verify it's no longer in the list
+	indexes, err := client.ListIndexes(context.Background())
+	require.NoError(t, err)
+
+	for _, name := range indexes {
+		require.NotEqual(t, indexName, name, "deleted index %s should not appear in ListIndexes", indexName)
+	}
+}
+
+
