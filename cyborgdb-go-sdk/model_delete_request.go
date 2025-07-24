@@ -16,59 +16,59 @@ import (
 	"fmt"
 )
 
-// checks if the UpsertRequest type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &UpsertRequest{}
+// checks if the DeleteRequest type satisfies the MappedNullable interface at compile time
+var _ MappedNullable = &DeleteRequest{}
 
-// UpsertRequest struct for UpsertRequest
-type UpsertRequest struct {
-	Items []VectorItem `json:"items"`
+// DeleteRequest struct for DeleteRequest
+type DeleteRequest struct {
+	Ids []string `json:"ids"`
 }
 
-type _UpsertRequest UpsertRequest
+type _DeleteRequest DeleteRequest
 
-// NewUpsertRequest instantiates a new UpsertRequest object
+// NewDeleteRequest instantiates a new DeleteRequest object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewUpsertRequest(items []VectorItem) *UpsertRequest {
-	this := UpsertRequest{}
-	this.Items = items
+func NewDeleteRequest(ids []string) *DeleteRequest {
+	this := DeleteRequest{}
+	this.Ids = ids
 	return &this
 }
 
-// NewUpsertRequestWithDefaults instantiates a new UpsertRequest object
+// NewDeleteRequestWithDefaults instantiates a new DeleteRequest object
 // This constructor will only assign default values to properties that have it defined,
 // but it doesn't guarantee that properties required by API are set
-func NewUpsertRequestWithDefaults() *UpsertRequest {
-	this := UpsertRequest{}
+func NewDeleteRequestWithDefaults() *DeleteRequest {
+	this := DeleteRequest{}
 	return &this
 }
 
-// GetItems returns the Items field value
-func (o *UpsertRequest) GetItems() []VectorItem {
+// GetIds returns the Ids field value
+func (o *DeleteRequest) GetIds() []string {
 	if o == nil {
-		var ret []VectorItem
+		var ret []string
 		return ret
 	}
 
-	return o.Items
+	return o.Ids
 }
 
-// GetItemsOk returns a tuple with the Items field value
+// GetIdsOk returns a tuple with the Ids field value
 // and a boolean to check if the value has been set.
-func (o *UpsertRequest) GetItemsOk() ([]VectorItem, bool) {
+func (o *DeleteRequest) GetIdsOk() ([]string, bool) {
 	if o == nil {
 		return nil, false
 	}
-	return o.Items, true
+	return o.Ids, true
 }
 
-// SetItems sets field value
-func (o *UpsertRequest) SetItems(v []VectorItem) {
-	o.Items = v
+// SetIds sets field value
+func (o *DeleteRequest) SetIds(v []string) {
+	o.Ids = v
 }
 
-func (o UpsertRequest) MarshalJSON() ([]byte, error) {
+func (o DeleteRequest) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
@@ -76,18 +76,18 @@ func (o UpsertRequest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(toSerialize)
 }
 
-func (o UpsertRequest) ToMap() (map[string]interface{}, error) {
+func (o DeleteRequest) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	toSerialize["items"] = o.Items
+	toSerialize["ids"] = o.Ids
 	return toSerialize, nil
 }
 
-func (o *UpsertRequest) UnmarshalJSON(data []byte) (err error) {
+func (o *DeleteRequest) UnmarshalJSON(data []byte) (err error) {
 	// This validates that all required properties are included in the JSON object
 	// by unmarshalling the object into a generic map with string keys and checking
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
-		"items",
+		"ids",
 	}
 
 	allProperties := make(map[string]interface{})
@@ -104,53 +104,53 @@ func (o *UpsertRequest) UnmarshalJSON(data []byte) (err error) {
 		}
 	}
 
-	varUpsertRequest := _UpsertRequest{}
+	varDeleteRequest := _DeleteRequest{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&varUpsertRequest)
+	err = decoder.Decode(&varDeleteRequest)
 
 	if err != nil {
 		return err
 	}
 
-	*o = UpsertRequest(varUpsertRequest)
+	*o = DeleteRequest(varDeleteRequest)
 
 	return err
 }
 
-type NullableUpsertRequest struct {
-	value *UpsertRequest
+type NullableDeleteRequest struct {
+	value *DeleteRequest
 	isSet bool
 }
 
-func (v NullableUpsertRequest) Get() *UpsertRequest {
+func (v NullableDeleteRequest) Get() *DeleteRequest {
 	return v.value
 }
 
-func (v *NullableUpsertRequest) Set(val *UpsertRequest) {
+func (v *NullableDeleteRequest) Set(val *DeleteRequest) {
 	v.value = val
 	v.isSet = true
 }
 
-func (v NullableUpsertRequest) IsSet() bool {
+func (v NullableDeleteRequest) IsSet() bool {
 	return v.isSet
 }
 
-func (v *NullableUpsertRequest) Unset() {
+func (v *NullableDeleteRequest) Unset() {
 	v.value = nil
 	v.isSet = false
 }
 
-func NewNullableUpsertRequest(val *UpsertRequest) *NullableUpsertRequest {
-	return &NullableUpsertRequest{value: val, isSet: true}
+func NewNullableDeleteRequest(val *DeleteRequest) *NullableDeleteRequest {
+	return &NullableDeleteRequest{value: val, isSet: true}
 }
 
-func (v NullableUpsertRequest) MarshalJSON() ([]byte, error) {
+func (v NullableDeleteRequest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.value)
 }
 
-func (v *NullableUpsertRequest) UnmarshalJSON(src []byte) error {
+func (v *NullableDeleteRequest) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
