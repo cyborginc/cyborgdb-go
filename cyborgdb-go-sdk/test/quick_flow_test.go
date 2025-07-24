@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,7 +26,7 @@ func generateTestIndexName() string {
 
 func TestGetHealth(t *testing.T) {
 	apiURL := "http://localhost:8000"
-	apiKey := os.Getenv("CYBORGDB_API_KEY")
+	apiKey := ""
 
 	if apiURL == "" || apiKey == "" {
 		t.Skip("CYBORGDB_API_URL or CYBORGDB_API_KEY environment variable not set")
@@ -46,7 +45,7 @@ func TestGetHealth(t *testing.T) {
 
 func TestCreateIndex_IVFPQ(t *testing.T) {
 	apiURL := "http://localhost:8000"
-	apiKey := os.Getenv("CYBORGDB_API_KEY")
+	apiKey := ""
 
 	if apiURL == "" || apiKey == "" {
 		t.Skip("CYBORGDB_API_URL or CYBORGDB_API_KEY environment variable not set")
@@ -81,7 +80,7 @@ func TestCreateIndex_IVFPQ(t *testing.T) {
 
 func TestListIndexes(t *testing.T) {
 	apiURL := "http://localhost:8000"
-	apiKey := os.Getenv("CYBORGDB_API_KEY")
+	apiKey := ""
 
 	if apiURL == "" || apiKey == "" {
 		t.Skip("CYBORGDB_API_URL or CYBORGDB_API_KEY environment variable not set")

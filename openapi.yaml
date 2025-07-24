@@ -46,17 +46,164 @@ paths:
             schema:
               $ref: '#/components/schemas/CreateIndexRequest'
       responses:
-        '200':
+        '201':
           description: Encrypted index created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/EncryptedIndex'
+                $ref: '#/components/schemas/EncryptedIndexResponse'
 
-  /vectors/query:
+  /indexes/{indexName}:
+    delete:
+      operationId: deleteIndex
+      summary: Delete an encrypted index
+      parameters:
+        - name: indexName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-Index-Key
+          in: header
+          required: true
+          description: Hex-encoded encryption key for the index
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Index deleted successfully
+        '404':
+          description: Index not found
+
+  /indexes/{indexName}/train:
+    post:
+      operationId: trainIndex
+      summary: Train the index for efficient search
+      parameters:
+        - name: indexName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-Index-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrainRequest'
+      responses:
+        '200':
+          description: Training completed successfully
+        '400':
+          description: Not enough vectors for training
+
+  /indexes/{indexName}/vectors:
+    post:
+      operationId: upsertVectors
+      summary: Add or update vectors in the index
+      parameters:
+        - name: indexName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-Index-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertRequest'
+      responses:
+        '200':
+          description: Vectors upserted successfully
+
+    get:
+      operationId: getVectors
+      summary: Retrieve vectors by IDs
+      parameters:
+        - name: indexName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-Index-Key
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: ids
+          in: query
+          required: true
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: include
+          in: query
+          required: false
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [vector, metadata, contents]
+      responses:
+        '200':
+          description: Vectors retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VectorItem'
+
+    delete:
+      operationId: deleteVectors
+      summary: Delete vectors by IDs
+      parameters:
+        - name: indexName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-Index-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteRequest'
+      responses:
+        '204':
+          description: Vectors deleted successfully
+
+  /indexes/{indexName}/query:
     post:
       operationId: queryVectors
       summary: Query vectors in the encrypted index
+      parameters:
+        - name: indexName
+          in: path
+          required: true
+          schema:
+            type: string
       requestBody:
         required: true
         content:
@@ -95,8 +242,10 @@ components:
           type: integer
         pq_dim:
           type: integer
+          nullable: true
         pq_bits:
           type: integer
+          nullable: true
 
     VectorItem:
       type: object
@@ -108,43 +257,46 @@ components:
           type: array
           items:
             type: number
-            format: float
+            format: double
         contents:
           type: string
+          nullable: true
         metadata:
           type: object
           additionalProperties: true
 
     QueryRequest:
       type: object
-      required: [index_name, index_key, top_k, n_probes, include]
+      required: [index_key, top_k, n_probes, include]
       properties:
-        index_name:
-          type: string
         index_key:
           type: string
+          description: Hex-encoded encryption key
         query_vector:
           type: array
           items:
             type: number
-            format: float
+            format: double
         query_vectors:
           type: array
           items:
             type: array
             items:
               type: number
-              format: float
+              format: double
         query_contents:
           type: string
+          nullable: true
         top_k:
           type: integer
         n_probes:
           type: integer
         greedy:
           type: boolean
+          default: false
         filters:
           type: object
+          additionalProperties: true
         include:
           type: array
           items:
@@ -159,7 +311,8 @@ components:
           type: string
         distance:
           type: number
-          format: float
+          format: double
+          nullable: true
         metadata:
           type: object
           additionalProperties: true
@@ -167,9 +320,10 @@ components:
           type: array
           items:
             type: number
-            format: float
+            format: double
         contents:
           type: string
+          nullable: true
 
     QueryResponse:
       type: object
@@ -189,10 +343,14 @@ components:
           type: string
         index_key:
           type: string
+          description: Hex-encoded 32-byte encryption key
         config:
           $ref: '#/components/schemas/IndexConfig'
+        embedding_model:
+          type: string
+          nullable: true
 
-    EncryptedIndex:
+    EncryptedIndexResponse:
       type: object
       properties:
         index_name:
@@ -201,3 +359,52 @@ components:
           type: string
         config:
           $ref: '#/components/schemas/IndexConfig'
+
+    TrainRequest:
+      type: object
+      required: [batch_size, max_iterations, tolerance]
+      properties:
+        batch_size:
+          type: integer
+          minimum: 1
+        max_iterations:
+          type: integer
+          minimum: 1
+        tolerance:
+          type: number
+          format: double
+
+    UpsertRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/VectorItem'
+
+    DeleteRequest:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+
+    # For the UpsertVectors method (Structure of Arrays pattern)
+    UpsertVectorsRequest:
+      type: object
+      required: [ids, vectors]
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+        vectors:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+              format: double

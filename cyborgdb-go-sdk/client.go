@@ -106,7 +106,7 @@ func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 	}
 
 	// On success, return the list of index names from the response.
-	return resp.Indexes, nil
+	return resp, nil
 }
 
 // CreateIndex creates a new encrypted vector index in CyborgDB.
