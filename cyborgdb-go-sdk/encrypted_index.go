@@ -83,3 +83,47 @@ func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 
 	return nil
 }
+
+// Train trains the encrypted index using the specified parameters.
+//
+// It performs a training pass over existing data to enable efficient querying.
+// Parameters are optional and default to commonly used values:
+//   - batchSize: 2048
+//   - maxIters: 100
+//   - tolerance: 1e-6
+func (e *EncryptedIndex) Train(ctx context.Context, batchSize int32, maxIters int32, tolerance float64) error {
+	if e.client == nil {
+		return fmt.Errorf("cannot train index: client reference is nil")
+	}
+	if e.IndexName == nil || *e.IndexName == "" {
+		return fmt.Errorf("index name is required")
+	}
+	if e.IndexKey == "" {
+		return fmt.Errorf("index key is required")
+	}
+	if len(e.IndexKey) != 64 {
+		return fmt.Errorf("index key must be 64-character hex string (32 bytes), got %d", len(e.IndexKey))
+	}
+
+	// Prepare the train request
+	trainReq := TrainRequest{
+		IndexName: *e.IndexName,
+		IndexKey:  e.IndexKey,
+		BatchSize: &batchSize,
+		MaxIters:  &maxIters,
+		Tolerance: &tolerance,
+	}
+
+	// Call the low-level API
+	_, err := e.client.apiClient.DefaultAPI.
+		TrainIndex(ctx, *e.IndexName).
+		XIndexKey(e.IndexKey).
+		TrainRequest(trainReq).
+		Execute()
+
+	if err != nil {
+		return fmt.Errorf("failed to train index '%s': %w", *e.IndexName, err)
+	}
+
+	return nil
+}

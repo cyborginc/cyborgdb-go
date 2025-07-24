@@ -817,7 +817,7 @@ func (a *DefaultAPIService) TrainIndexExecute(r ApiTrainIndexRequest) (*http.Res
 		return nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/indexes/{indexName}/train"
+	localVarPath := localBasePath + "/indexes/train"
 	localVarPath = strings.Replace(localVarPath, "{"+"indexName"+"}", url.PathEscape(parameterValueToString(r.indexName, "indexName")), -1)
 
 	localVarHeaderParams := make(map[string]string)

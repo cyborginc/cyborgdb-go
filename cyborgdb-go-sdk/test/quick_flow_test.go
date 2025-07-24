@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"os"
 	"testing"
+	"fmt"
 
 	"github.com/stretchr/testify/require"
 
@@ -237,6 +238,62 @@ func TestUpsertVectors(t *testing.T) {
 
 	t.Log("Upsert successful")
 }
+
+func TestTrainIndex(t *testing.T) {
+	apiURL := "http://localhost:8000"
+	apiKey := os.Getenv("CYBORGDB_API_KEY")
+
+	if apiURL == "" || apiKey == "" {
+		t.Skip("CYBORGDB_API_URL or CYBORGDB_API_KEY environment variable not set")
+	}
+
+	client, err := cyborgdb.NewClient(apiURL, apiKey, false)
+	require.NoError(t, err)
+
+	// Create a new index
+	indexName := generateTestIndexName()
+	indexKey := generateRandomKey(t)
+	dim := int32(64)
+
+	model := &cyborgdb.IndexIVFPQModel{
+		Dimension: dim,
+		Metric:    "cosine",
+		NLists:    8,
+		PqDim:     8,
+		PqBits:    8,
+	}
+
+	index, err := client.CreateIndex(context.Background(), indexName, indexKey, model, nil)
+	require.NoError(t, err)
+	require.NotNil(t, index)
+
+	// Insert a few vectors first (training requires data)
+	vectors := []cyborgdb.VectorItem{}
+	for i := 0; i < 10; i++ {
+		vec := make([]float32, dim)
+		for j := range vec {
+			vec[j] = float32(j + i)
+		}
+		vectors = append(vectors, cyborgdb.VectorItem{
+			Id:       fmt.Sprintf("vec_%d", i),
+			Vector:   vec,
+			Contents: strPtr(fmt.Sprintf("example %d", i)),
+		})
+	}
+	err = index.Upsert(context.Background(), vectors)
+	require.NoError(t, err, "upsert before training should succeed")
+
+	// Call Train with explicit values
+	batchSize := int32(2048)
+	maxIters := int32(100)
+	tolerance := 1e-6
+
+	err = index.Train(context.Background(), batchSize, maxIters, tolerance)
+	require.NoError(t, err, "training should complete without error")
+
+	t.Logf("Training completed for index: %s", indexName)
+}
+
 
 func strPtr(s string) *string {
 	return &s
