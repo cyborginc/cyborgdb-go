@@ -41,7 +41,7 @@ func TestCreateIndex_IVFPQ(t *testing.T) {
 	client, err := cyborgdb.NewClient(apiURL, apiKey, false)
 	require.NoError(t, err)
 
-	indexName := generateTestIndexName()
+	indexName := generateTestIndexName("ivfpq")
 	indexKey := generateRandomKey(t)
 	dim := int32(128)
 
@@ -77,7 +77,7 @@ func TestListIndexes(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a test index first to ensure at least one known index exists
-	indexName := generateTestIndexName()
+	indexName := generateTestIndexName("ivfpq")
 	indexKey := generateRandomKey(t)
 	dim := int32(64)
 
@@ -120,7 +120,7 @@ func TestDeleteIndex(t *testing.T) {
 	client, err := cyborgdb.NewClient(apiURL, apiKey, false)
 	require.NoError(t, err)
 
-	indexName := generateTestIndexName()
+	indexName := generateTestIndexName("ivfpq")
 	indexKey := generateRandomKey(t)
 
 	model := &cyborgdb.IndexIVFPQModel{
@@ -161,7 +161,7 @@ func TestUpsertVectors(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a test index
-	indexName := generateTestIndexName()
+	indexName := generateTestIndexName("ivfpq")
 	indexKey := generateRandomKey(t)
 	dim := int32(64)
 
@@ -236,7 +236,7 @@ func TestTrainIndex(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a new index
-	indexName := generateTestIndexName()
+	indexName := generateTestIndexName("ivfpq")
 	indexKey := generateRandomKey(t)
 	dim := int32(64)
 
@@ -290,7 +290,7 @@ func TestDeleteVectors(t *testing.T) {
 	client, err := cyborgdb.NewClient(apiURL, apiKey, false)
 	require.NoError(t, err)
 
-	indexName := generateTestIndexName()
+	indexName := generateTestIndexName("ivfpq")
 	indexKey := generateRandomKey(t)
 	dim := int32(64)
 
@@ -347,7 +347,7 @@ func TestQuery(t *testing.T) {
 	require.NoError(t, err)
 
 	// Create a test index
-	indexName := generateTestIndexName()
+	indexName := generateTestIndexName("ivfpq")
 	indexKey := generateRandomKey(t)
 	dim := int32(64)
 
@@ -488,7 +488,7 @@ func TestGetVectors(t *testing.T) {
 	client, err := cyborgdb.NewClient(apiURL, apiKey, false)
 	require.NoError(t, err)
 
-	indexName := generateTestIndexName()
+	indexName := generateTestIndexName("ivfpq")
 	indexKey := generateRandomKey(t)
 	dim := int32(32)
 
