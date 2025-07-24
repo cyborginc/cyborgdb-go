@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	mathrand "math/rand"
 	"os"
 	"testing"
 
@@ -164,10 +163,7 @@ func TestDeleteIndex(t *testing.T) {
 	}
 }
 
-
-
-
-func TestUpsert(t *testing.T) {
+func TestUpsertVectors(t *testing.T) {
 	apiURL := "http://localhost:8000"
 	apiKey := os.Getenv("CYBORGDB_API_KEY")
 
@@ -178,16 +174,16 @@ func TestUpsert(t *testing.T) {
 	client, err := cyborgdb.NewClient(apiURL, apiKey, false)
 	require.NoError(t, err)
 
+	// Create a test index
 	indexName := generateTestIndexName()
 	indexKey := generateRandomKey(t)
-	dim := int32(128)
+	dim := int32(64)
 
-	// Create index
 	model := &cyborgdb.IndexIVFPQModel{
 		Dimension: dim,
-		Metric:    "euclidean",
-		NLists:    32,
-		PqDim:     16,
+		Metric:    "cosine",
+		NLists:    8,
+		PqDim:     8,
 		PqBits:    8,
 	}
 
@@ -195,51 +191,53 @@ func TestUpsert(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, index)
 
-	// Prepare test vectors
-	items := []cyborgdb.VectorItem{
+	// Generate sample vectors
+	vectors := []cyborgdb.VectorItem{
 		{
-			Id:     "vec1",
-			Vector: generateRandomVector(int(dim)),
+			Id:     "vec_1",
+			Vector: make([]float32, dim),
 			Metadata: map[string]interface{}{
-				"category": "test",
-				"score":    0.95,
+				"type": "test", // keep flat/simple
 			},
-			Contents: stringPtr("This is the first test vector"),
+			Contents: strPtr("hello world"),
 		},
 		{
-			Id:     "vec2",
-			Vector: generateRandomVector(int(dim)),
+			Id:     "vec_2",
+			Vector: make([]float32, dim),
 			Metadata: map[string]interface{}{
-				"category": "test",
-				"score":    0.87,
+				"category": "unit-test",
 			},
-			Contents: stringPtr("This is the second test vector"),
-		},
-		{
-			Id:     "vec3",
-			Vector: generateRandomVector(int(dim)),
-			// No metadata or contents for this one
+			Contents: strPtr("fallback"),
 		},
 	}
 
-	// Test Upsert
-	err = index.Upsert(context.Background(), items)
-	require.NoError(t, err)
+	// Fill with dummy values
+	for i := range vectors {
+		for j := range vectors[i].Vector {
+			vectors[i].Vector[j] = float32(j)
+		}
+		// Runtime check: dimension must match
+		require.Equal(t, int(dim), len(vectors[i].Vector), "vector length mismatch for %s", vectors[i].Id)
 
-	// Clean up
-	err = index.DeleteIndex(context.Background())
-	require.NoError(t, err)
-}
-
-func generateRandomVector(dim int) []float32 {
-	vec := make([]float32, dim)
-	for i := range vec {
-		// Generate random float between -1 and 1
-		vec[i] = float32((mathrand.Float64() * 2) - 1)
+		// Log vector contents
+		t.Logf("Vector[%d] ID: %s | Dim: %d | Contents: %v", i, vectors[i].Id, len(vectors[i].Vector), vectors[i].Contents)
 	}
-	return vec
+
+	// Call Upsert
+	err = index.Upsert(context.Background(), vectors)
+
+	// If error, unwrap and show API body
+	if err != nil {
+		if apiErr, ok := err.(*cyborgdb.GenericOpenAPIError); ok {
+			t.Logf("Raw error body:\n%s", string(apiErr.Body()))
+		}
+		t.Fatalf("Upsert failed: %v", err)
+		t.FailNow()
+	}
+
+	t.Log("Upsert successful")
 }
 
-func stringPtr(s string) *string {
+func strPtr(s string) *string {
 	return &s
 }

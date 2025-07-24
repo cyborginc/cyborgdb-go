@@ -1,7 +1,7 @@
 /*
 CyborgDB API
 
-CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks. 
+CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks.
 
 API version: 1.0.0
 */
@@ -11,8 +11,8 @@ API version: 1.0.0
 package cyborgdb
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -21,7 +21,9 @@ var _ MappedNullable = &UpsertRequest{}
 
 // UpsertRequest struct for UpsertRequest
 type UpsertRequest struct {
-	Items []VectorItem `json:"items"`
+	IndexKey  string       `json:"index_key"`
+	IndexName string       `json:"index_name"`
+	Items     []VectorItem `json:"items"`
 }
 
 type _UpsertRequest UpsertRequest
@@ -30,8 +32,10 @@ type _UpsertRequest UpsertRequest
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewUpsertRequest(items []VectorItem) *UpsertRequest {
+func NewUpsertRequest(indexKey string, indexName string, items []VectorItem) *UpsertRequest {
 	this := UpsertRequest{}
+	this.IndexKey = indexKey
+	this.IndexName = indexName
 	this.Items = items
 	return &this
 }
@@ -69,7 +73,7 @@ func (o *UpsertRequest) SetItems(v []VectorItem) {
 }
 
 func (o UpsertRequest) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -78,6 +82,8 @@ func (o UpsertRequest) MarshalJSON() ([]byte, error) {
 
 func (o UpsertRequest) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
+	toSerialize["index_key"] = o.IndexKey   
+	toSerialize["index_name"] = o.IndexName 
 	toSerialize["items"] = o.Items
 	return toSerialize, nil
 }
@@ -87,6 +93,8 @@ func (o *UpsertRequest) UnmarshalJSON(data []byte) (err error) {
 	// by unmarshalling the object into a generic map with string keys and checking
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
+		"index_key", 
+		"index_name", 
 		"items",
 	}
 
@@ -95,10 +103,10 @@ func (o *UpsertRequest) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err;
+		return err
 	}
 
-	for _, requiredProperty := range(requiredProperties) {
+	for _, requiredProperty := range requiredProperties {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -154,5 +162,3 @@ func (v *NullableUpsertRequest) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

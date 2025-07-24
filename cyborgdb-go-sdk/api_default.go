@@ -928,7 +928,7 @@ func (a *DefaultAPIService) UpsertVectorsExecute(r ApiUpsertVectorsRequest) (*ht
 		return nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/indexes/{indexName}/vectors"
+	localVarPath := localBasePath + "/vectors/upsert"
 	localVarPath = strings.Replace(localVarPath, "{"+"indexName"+"}", url.PathEscape(parameterValueToString(r.indexName, "indexName")), -1)
 
 	localVarHeaderParams := make(map[string]string)
