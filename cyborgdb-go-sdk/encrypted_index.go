@@ -7,50 +7,48 @@ import (
 
 // Upsert adds or updates vectors in the index
 func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
-    if e.client == nil {
-        return fmt.Errorf("cannot upsert vectors: client reference is nil")
-    }
-    if e.IndexName == nil || *e.IndexName == "" {
-        return fmt.Errorf("index name is required")
-    }
-    if e.IndexKey == "" {
-        return fmt.Errorf("index key is required")
-    }
+	if e.client == nil {
+		return fmt.Errorf("cannot upsert vectors: client reference is nil")
+	}
+	if e.IndexName == nil || *e.IndexName == "" {
+		return fmt.Errorf("index name is required")
+	}
+	if e.IndexKey == "" {
+		return fmt.Errorf("index key is required")
+	}
 
-	
+	// Map user-facing VectorItems to API VectorItems
+	apiItems := make([]VectorItem, len(items))
+	for i, item := range items {
+		apiItem := VectorItem{
+			Id:       item.Id,
+			Vector:   item.Vector,
+			Metadata: item.Metadata,
+		}
+		if item.Contents != nil {
+			apiItem.Contents = item.Contents
+		}
+		apiItems[i] = apiItem
+	}
 
-    // Map user-facing VectorItems to API VectorItems
-    apiItems := make([]VectorItem, len(items))
-    for i, item := range items {
-        apiItem := VectorItem{
-            Id:       item.Id,
-            Vector:   item.Vector,
-            Metadata: item.Metadata,
-        }
-        if item.Contents != nil {
-            apiItem.Contents = item.Contents
-        }
-        apiItems[i] = apiItem
-    }
+	// Construct request with ALL required fields
+	upsertRequest := UpsertRequest{
+		IndexKey:  e.IndexKey,
+		IndexName: *e.IndexName,
+		Items:     apiItems,
+	}
 
-    // Construct request with ALL required fields
-    upsertRequest := UpsertRequest{
-        IndexKey:  e.IndexKey,
-        IndexName: *e.IndexName,
-        Items:     apiItems,
-    }
-
-    // Call without XIndexKey header since it's now in the body
-    _, err := e.client.apiClient.DefaultAPI.
-        UpsertVectors(ctx, *e.IndexName).
+	// Call without XIndexKey header since it's now in the body
+	_, err := e.client.apiClient.DefaultAPI.
+		UpsertVectors(ctx, *e.IndexName).
 		XIndexKey(e.IndexKey).
-        UpsertRequest(upsertRequest).
-        Execute()
+		UpsertRequest(upsertRequest).
+		Execute()
 
-    if err != nil {
-        return fmt.Errorf("failed to upsert vectors: %w", err)
-    }
-    return nil
+	if err != nil {
+		return fmt.Errorf("failed to upsert vectors: %w", err)
+	}
+	return nil
 }
 
 // DeleteIndex deletes the current encrypted index from the CyborgDB service.
@@ -188,4 +186,52 @@ func (e *EncryptedIndex) Query(ctx context.Context, queryVectors interface{}, to
     }
 
     return resp, nil
+}
+// Delete removes vectors from the encrypted index by their IDs.
+//
+// This method permanently removes the specified vectors from the index.
+// The operation cannot be undone.
+//
+// Parameters:
+//   - ctx: Context for request cancellation and timeout control
+//   - ids: Slice of string IDs to delete
+//
+// Returns:
+//   - An error if the deletion fails
+func (e *EncryptedIndex) Delete(ctx context.Context, ids []string) error {
+	if e.client == nil {
+		return fmt.Errorf("cannot delete vectors: client reference is nil")
+	}
+	if e.IndexName == nil || *e.IndexName == "" {
+		return fmt.Errorf("index name is required")
+	}
+	if e.IndexKey == "" {
+		return fmt.Errorf("index key is required")
+	}
+	if len(e.IndexKey) != 64 {
+		return fmt.Errorf("index key must be 64-character hex string (32 bytes), got %d", len(e.IndexKey))
+	}
+	if len(ids) == 0 {
+		return fmt.Errorf("at least one vector ID must be provided for deletion")
+	}
+
+	// Construct the delete request body
+	deleteReq := DeleteRequest{
+		IndexName: *e.IndexName,
+		IndexKey:  e.IndexKey,
+		Ids:       ids,
+	}
+
+	// Call the low-level API
+	_, err := e.client.apiClient.DefaultAPI.
+		DeleteVectors(ctx, *e.IndexName).
+		XIndexKey(e.IndexKey).
+		DeleteRequest(deleteReq).
+		Execute()
+
+	if err != nil {
+		return fmt.Errorf("failed to delete vectors from index '%s': %w", *e.IndexName, err)
+	}
+
+	return nil
 }
