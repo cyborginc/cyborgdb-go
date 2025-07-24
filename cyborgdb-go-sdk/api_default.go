@@ -23,8 +23,8 @@ import (
 type DefaultAPIService service
 
 type ApiCreateIndexRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx                context.Context
+	ApiService         *DefaultAPIService
 	createIndexRequest *CreateIndexRequest
 }
 
@@ -40,24 +40,25 @@ func (r ApiCreateIndexRequest) Execute() (*EncryptedIndexResponse, *http.Respons
 /*
 CreateIndex Create a new encrypted index
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiCreateIndexRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiCreateIndexRequest
 */
 func (a *DefaultAPIService) CreateIndex(ctx context.Context) ApiCreateIndexRequest {
 	return ApiCreateIndexRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return EncryptedIndexResponse
+//
+//	@return EncryptedIndexResponse
 func (a *DefaultAPIService) CreateIndexExecute(r ApiCreateIndexRequest) (*EncryptedIndexResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *EncryptedIndexResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *EncryptedIndexResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.CreateIndex")
@@ -131,10 +132,10 @@ func (a *DefaultAPIService) CreateIndexExecute(r ApiCreateIndexRequest) (*Encryp
 }
 
 type ApiDeleteIndexRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *DefaultAPIService
-	indexName string
-	xIndexKey *string
+	indexName  string
+	xIndexKey  *string
 }
 
 // Hex-encoded encryption key for the index
@@ -150,24 +151,24 @@ func (r ApiDeleteIndexRequest) Execute() (*http.Response, error) {
 /*
 DeleteIndex Delete an encrypted index
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @param indexName
- @return ApiDeleteIndexRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param indexName
+	@return ApiDeleteIndexRequest
 */
 func (a *DefaultAPIService) DeleteIndex(ctx context.Context, indexName string) ApiDeleteIndexRequest {
 	return ApiDeleteIndexRequest{
 		ApiService: a,
-		ctx: ctx,
-		indexName: indexName,
+		ctx:        ctx,
+		indexName:  indexName,
 	}
 }
 
 // Execute executes the request
 func (a *DefaultAPIService) DeleteIndexExecute(r ApiDeleteIndexRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarHTTPMethod = http.MethodPost
+		localVarPostBody   interface{}
+		formFiles          []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.DeleteIndex")
@@ -225,10 +226,10 @@ func (a *DefaultAPIService) DeleteIndexExecute(r ApiDeleteIndexRequest) (*http.R
 }
 
 type ApiDeleteVectorsRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
-	indexName string
-	xIndexKey *string
+	ctx           context.Context
+	ApiService    *DefaultAPIService
+	indexName     string
+	xIndexKey     *string
 	deleteRequest *DeleteRequest
 }
 
@@ -249,24 +250,24 @@ func (r ApiDeleteVectorsRequest) Execute() (*http.Response, error) {
 /*
 DeleteVectors Delete vectors by IDs
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @param indexName
- @return ApiDeleteVectorsRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param indexName
+	@return ApiDeleteVectorsRequest
 */
 func (a *DefaultAPIService) DeleteVectors(ctx context.Context, indexName string) ApiDeleteVectorsRequest {
 	return ApiDeleteVectorsRequest{
 		ApiService: a,
-		ctx: ctx,
-		indexName: indexName,
+		ctx:        ctx,
+		indexName:  indexName,
 	}
 }
 
 // Execute executes the request
 func (a *DefaultAPIService) DeleteVectorsExecute(r ApiDeleteVectorsRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarHTTPMethod = http.MethodPost
+		localVarPostBody   interface{}
+		formFiles          []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.DeleteVectors")
@@ -336,7 +337,7 @@ func (a *DefaultAPIService) DeleteVectorsExecute(r ApiDeleteVectorsRequest) (*ht
 }
 
 type ApiGetHealthRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *DefaultAPIService
 }
 
@@ -347,24 +348,25 @@ func (r ApiGetHealthRequest) Execute() (*HealthResponse, *http.Response, error) 
 /*
 GetHealth Check service health
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiGetHealthRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiGetHealthRequest
 */
 func (a *DefaultAPIService) GetHealth(ctx context.Context) ApiGetHealthRequest {
 	return ApiGetHealthRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return HealthResponse
+//
+//	@return HealthResponse
 func (a *DefaultAPIService) GetHealthExecute(r ApiGetHealthRequest) (*HealthResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *HealthResponse
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *HealthResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.GetHealth")
@@ -433,12 +435,12 @@ func (a *DefaultAPIService) GetHealthExecute(r ApiGetHealthRequest) (*HealthResp
 }
 
 type ApiGetVectorsRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *DefaultAPIService
-	indexName string
-	xIndexKey *string
-	ids *[]string
-	include *[]string
+	indexName  string
+	xIndexKey  *string
+	ids        *[]string
+	include    *[]string
 }
 
 func (r ApiGetVectorsRequest) XIndexKey(xIndexKey string) ApiGetVectorsRequest {
@@ -463,107 +465,111 @@ func (r ApiGetVectorsRequest) Execute() ([]VectorItem, *http.Response, error) {
 /*
 GetVectors Retrieve vectors by IDs
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @param indexName
- @return ApiGetVectorsRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param indexName
+	@return ApiGetVectorsRequest
 */
 func (a *DefaultAPIService) GetVectors(ctx context.Context, indexName string) ApiGetVectorsRequest {
 	return ApiGetVectorsRequest{
 		ApiService: a,
-		ctx: ctx,
-		indexName: indexName,
+		ctx:        ctx,
+		indexName:  indexName,
 	}
 }
 
 // Execute executes the request
-//  @return []VectorItem
 func (a *DefaultAPIService) GetVectorsExecute(r ApiGetVectorsRequest) ([]VectorItem, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  []VectorItem
+		localVarHTTPMethod = http.MethodPost
+		localVarPostBody   interface{}
+		formFiles          []formFile
+		localVarReturnVal  struct {
+			Results []VectorItem `json:"results"`
+		}
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.GetVectors")
 	if err != nil {
-		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
+		return nil, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vectors/get"
-	localVarPath = strings.Replace(localVarPath, "{"+"indexName"+"}", url.PathEscape(parameterValueToString(r.indexName, "indexName")), -1)
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
+
 	if r.xIndexKey == nil {
-		return localVarReturnValue, nil, reportError("xIndexKey is required and must be specified")
+		return nil, nil, reportError("xIndexKey is required and must be specified")
 	}
 	if r.ids == nil {
-		return localVarReturnValue, nil, reportError("ids is required and must be specified")
+		return nil, nil, reportError("ids is required and must be specified")
 	}
 
-	parameterAddToHeaderOrQuery(localVarQueryParams, "ids", r.ids, "form", "csv")
+	// Prepare request body
+	body := GetRequest{
+		IndexName: r.indexName,
+		IndexKey:  *r.xIndexKey,
+		Ids:       *r.ids,
+	}
 	if r.include != nil {
-		parameterAddToHeaderOrQuery(localVarQueryParams, "include", r.include, "form", "csv")
+		body.Include = *r.include
 	}
-	// to determine the Content-Type header
-	localVarHTTPContentTypes := []string{}
+	localVarPostBody = body
 
-	// set Content-Type header
+	// Set headers
+	localVarHTTPContentTypes := []string{"application/json"}
 	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
 	if localVarHTTPContentType != "" {
 		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
 	}
 
-	// to determine the Accept header
 	localVarHTTPHeaderAccepts := []string{"application/json"}
-
-	// set Accept header
 	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	parameterAddToHeaderOrQuery(localVarHeaderParams, "X-Index-Key", r.xIndexKey, "simple", "")
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod,
+		localVarPostBody, localVarHeaderParams,
+		localVarQueryParams, localVarFormParams, formFiles)
 	if err != nil {
-		return localVarReturnValue, nil, err
+		return nil, nil, err
 	}
 
 	localVarHTTPResponse, err := a.client.callAPI(req)
 	if err != nil || localVarHTTPResponse == nil {
-		return localVarReturnValue, localVarHTTPResponse, err
+		return nil, localVarHTTPResponse, err
 	}
 
 	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
-		return localVarReturnValue, localVarHTTPResponse, err
+		return nil, localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		newErr := &GenericOpenAPIError{
+		return nil, localVarHTTPResponse, &GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
-		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
-	err = a.client.decode(&localVarReturnValue, localVarBody, localVarHTTPResponse.Header.Get("Content-Type"))
+	err = a.client.decode(&localVarReturnVal, localVarBody,
+		localVarHTTPResponse.Header.Get("Content-Type"))
 	if err != nil {
-		newErr := &GenericOpenAPIError{
+		return nil, localVarHTTPResponse, &GenericOpenAPIError{
 			body:  localVarBody,
 			error: err.Error(),
 		}
-		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
 
-	return localVarReturnValue, localVarHTTPResponse, nil
+	return localVarReturnVal.Results, localVarHTTPResponse, nil
 }
 
 type ApiListIndexesRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *DefaultAPIService
 }
 
@@ -574,24 +580,25 @@ func (r ApiListIndexesRequest) Execute() (*IndexListResponseModel, *http.Respons
 /*
 ListIndexes List all indexes
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiListIndexesRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiListIndexesRequest
 */
 func (a *DefaultAPIService) ListIndexes(ctx context.Context) ApiListIndexesRequest {
 	return ApiListIndexesRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return []string
+//
+//	@return []string
 func (a *DefaultAPIService) ListIndexesExecute(r ApiListIndexesRequest) (*IndexListResponseModel, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *IndexListResponseModel
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *IndexListResponseModel
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.ListIndexes")
@@ -656,9 +663,9 @@ func (a *DefaultAPIService) ListIndexesExecute(r ApiListIndexesRequest) (*IndexL
 }
 
 type ApiQueryVectorsRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
-	indexName string
+	ctx          context.Context
+	ApiService   *DefaultAPIService
+	indexName    string
 	queryRequest *QueryRequest
 }
 
@@ -674,25 +681,26 @@ func (r ApiQueryVectorsRequest) Execute() (*QueryResponse, *http.Response, error
 /*
 QueryVectors Query vectors in the encrypted index
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @param indexName
- @return ApiQueryVectorsRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param indexName
+	@return ApiQueryVectorsRequest
 */
 func (a *DefaultAPIService) QueryVectors(ctx context.Context) ApiQueryVectorsRequest {
 	return ApiQueryVectorsRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return QueryResponse
+//
+//	@return QueryResponse
 func (a *DefaultAPIService) QueryVectorsExecute(r ApiQueryVectorsRequest) (*QueryResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *QueryResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *QueryResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.QueryVectors")
@@ -701,7 +709,6 @@ func (a *DefaultAPIService) QueryVectorsExecute(r ApiQueryVectorsRequest) (*Quer
 	}
 
 	localVarPath := localBasePath + "/vectors/query"
-
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
@@ -767,10 +774,10 @@ func (a *DefaultAPIService) QueryVectorsExecute(r ApiQueryVectorsRequest) (*Quer
 }
 
 type ApiTrainIndexRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
-	indexName string
-	xIndexKey *string
+	ctx          context.Context
+	ApiService   *DefaultAPIService
+	indexName    string
+	xIndexKey    *string
 	trainRequest *TrainRequest
 }
 
@@ -791,24 +798,24 @@ func (r ApiTrainIndexRequest) Execute() (*http.Response, error) {
 /*
 TrainIndex Train the index for efficient search
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @param indexName
- @return ApiTrainIndexRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param indexName
+	@return ApiTrainIndexRequest
 */
 func (a *DefaultAPIService) TrainIndex(ctx context.Context, indexName string) ApiTrainIndexRequest {
 	return ApiTrainIndexRequest{
 		ApiService: a,
-		ctx: ctx,
-		indexName: indexName,
+		ctx:        ctx,
+		indexName:  indexName,
 	}
 }
 
 // Execute executes the request
 func (a *DefaultAPIService) TrainIndexExecute(r ApiTrainIndexRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarHTTPMethod = http.MethodPost
+		localVarPostBody   interface{}
+		formFiles          []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.TrainIndex")
@@ -878,10 +885,10 @@ func (a *DefaultAPIService) TrainIndexExecute(r ApiTrainIndexRequest) (*http.Res
 }
 
 type ApiUpsertVectorsRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
-	indexName string
-	xIndexKey *string
+	ctx           context.Context
+	ApiService    *DefaultAPIService
+	indexName     string
+	xIndexKey     *string
 	upsertRequest *UpsertRequest
 }
 
@@ -902,24 +909,24 @@ func (r ApiUpsertVectorsRequest) Execute() (*http.Response, error) {
 /*
 UpsertVectors Add or update vectors in the index
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @param indexName
- @return ApiUpsertVectorsRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@param indexName
+	@return ApiUpsertVectorsRequest
 */
 func (a *DefaultAPIService) UpsertVectors(ctx context.Context, indexName string) ApiUpsertVectorsRequest {
 	return ApiUpsertVectorsRequest{
 		ApiService: a,
-		ctx: ctx,
-		indexName: indexName,
+		ctx:        ctx,
+		indexName:  indexName,
 	}
 }
 
 // Execute executes the request
 func (a *DefaultAPIService) UpsertVectorsExecute(r ApiUpsertVectorsRequest) (*http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
+		localVarHTTPMethod = http.MethodPost
+		localVarPostBody   interface{}
+		formFiles          []formFile
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.UpsertVectors")
