@@ -127,3 +127,65 @@ func (e *EncryptedIndex) Train(ctx context.Context, batchSize int32, maxIters in
 
 	return nil
 }
+
+
+// Query searches for nearest neighbors in the index
+func (e *EncryptedIndex) Query(ctx context.Context, queryVectors interface{}, topK int32, nProbes int32, greedy bool, filters map[string]interface{}, include []string) (*QueryResponse, error) {
+    if e.client == nil {
+        return nil, fmt.Errorf("cannot query index: client reference is nil")
+    }
+    if e.IndexName == nil || *e.IndexName == "" {
+        return nil, fmt.Errorf("index name is required")
+    }
+    if e.IndexKey == "" {
+        return nil, fmt.Errorf("index key is required")
+    }
+
+    // Handle single vector vs batch of vectors
+    var vectors [][]float32
+    switch v := queryVectors.(type) {
+    case []float32:
+        // Single vector - wrap in array
+        vectors = [][]float32{v}
+    case [][]float32:
+        // Batch of vectors
+        vectors = v
+    default:
+        return nil, fmt.Errorf("queryVectors must be []float32 or [][]float32")
+    }
+
+    // Set defaults if needed
+    if topK == 0 {
+        topK = 100
+    }
+    if nProbes == 0 {
+        nProbes = 1
+    }
+    if include == nil || len(include) == 0 {
+        include = []string{"distance", "metadata"}
+    }
+
+    // Create the query request
+    queryRequest := QueryRequest{
+        IndexName:    *e.IndexName,
+        IndexKey:     e.IndexKey,
+        QueryVectors: vectors,
+        TopK:         topK,
+        NProbes:      nProbes,
+        Greedy:       &greedy,
+        Filters:      filters,
+        Include:      include,
+    }
+
+    // Execute the query
+    resp, _, err := e.client.apiClient.DefaultAPI.
+        QueryVectors(ctx).
+        QueryRequest(queryRequest).
+        Execute()
+
+    if err != nil {
+        return nil, fmt.Errorf("failed to query index '%s': %w", *e.IndexName, err)
+    }
+
+    return resp, nil
+}
