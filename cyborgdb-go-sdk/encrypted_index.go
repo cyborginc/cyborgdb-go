@@ -235,3 +235,45 @@ func (e *EncryptedIndex) Delete(ctx context.Context, ids []string) error {
 
 	return nil
 }
+
+// Get retrieves vectors from the index by their IDs.
+//
+// This method fetches specific vectors from the encrypted index using their
+// unique identifiers. The returned vectors are decrypted automatically.
+//
+// Parameters:
+//   - ctx: Context for request cancellation and timeout control
+//   - ids: Slice of string IDs to retrieve
+//   - include: Slice of field names to include in the response
+//
+// Returns:
+//   - A slice of VectorItem objects containing the requested data
+//   - An error if the retrieval fails
+func (e *EncryptedIndex) Get(ctx context.Context, ids []string, include []string) ([]VectorItem, error) {
+	if e.client == nil {
+		return nil, fmt.Errorf("cannot get vectors: client reference is nil")
+	}
+	if e.IndexName == nil || *e.IndexName == "" {
+		return nil, fmt.Errorf("index name is required")
+	}
+	if e.IndexKey == "" {
+		return nil, fmt.Errorf("index key is required")
+	}
+	if len(ids) == 0 {
+		return nil, fmt.Errorf("at least one vector ID must be provided for retrieval")
+	}
+
+	// Prepare the API request
+	resp, _, err := e.client.apiClient.DefaultAPI.
+		GetVectors(ctx, *e.IndexName).
+		XIndexKey(e.IndexKey).
+		Ids(ids).
+		Include(include).
+		Execute()
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to retrieve vectors from index '%s': %w", *e.IndexName, err)
+	}
+
+	return resp, nil
+}

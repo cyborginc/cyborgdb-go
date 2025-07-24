@@ -496,3 +496,67 @@ func TestQuery(t *testing.T) {
 	err = index.DeleteIndex(context.Background())
 	require.NoError(t, err)
 }
+
+func TestGetVectors(t *testing.T) {
+	apiURL := "http://localhost:8000"
+	apiKey := os.Getenv("CYBORGDB_API_KEY")
+
+	if apiURL == "" || apiKey == "" {
+		t.Skip("CYBORGDB_API_URL or CYBORGDB_API_KEY environment variable not set")
+	}
+
+	client, err := cyborgdb.NewClient(apiURL, apiKey, false)
+	require.NoError(t, err)
+
+	indexName := generateTestIndexName()
+	indexKey := generateRandomKey(t)
+	dim := int32(32)
+
+	model := &cyborgdb.IndexIVFPQModel{
+		Dimension: dim,
+		Metric:    "cosine",
+		NLists:    4,
+		PqDim:     8,
+		PqBits:    8,
+	}
+
+	index, err := client.CreateIndex(context.Background(), indexName, indexKey, model, nil)
+	require.NoError(t, err)
+	require.NotNil(t, index)
+
+	// Insert vectors
+	vectors := []cyborgdb.VectorItem{
+		{
+			Id:       "vec_get_1",
+			Vector:   make([]float32, dim),
+			Contents: strPtr("retrievable one"),
+		},
+		{
+			Id:       "vec_get_2",
+			Vector:   make([]float32, dim),
+			Contents: strPtr("retrievable two"),
+		},
+	}
+	for i := range vectors {
+		for j := range vectors[i].Vector {
+			vectors[i].Vector[j] = float32(i + j)
+		}
+	}
+
+	err = index.Upsert(context.Background(), vectors)
+	require.NoError(t, err)
+
+	// Retrieve them using Get
+	retrieved, err := index.Get(context.Background(), []string{"vec_get_1", "vec_get_2"}, []string{"contents"})
+	require.NoError(t, err)
+	require.Len(t, retrieved, 2)
+
+	ids := map[string]bool{}
+	for _, item := range retrieved {
+		ids[item.Id] = true
+		require.NotNil(t, item.Contents)
+		t.Logf("Retrieved ID: %s | Contents: %s", item.Id, *item.Contents)
+	}
+	require.True(t, ids["vec_get_1"])
+	require.True(t, ids["vec_get_2"])
+}
