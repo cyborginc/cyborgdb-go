@@ -678,11 +678,10 @@ QueryVectors Query vectors in the encrypted index
  @param indexName
  @return ApiQueryVectorsRequest
 */
-func (a *DefaultAPIService) QueryVectors(ctx context.Context, indexName string) ApiQueryVectorsRequest {
+func (a *DefaultAPIService) QueryVectors(ctx context.Context) ApiQueryVectorsRequest {
 	return ApiQueryVectorsRequest{
 		ApiService: a,
 		ctx: ctx,
-		indexName: indexName,
 	}
 }
 
@@ -701,8 +700,8 @@ func (a *DefaultAPIService) QueryVectorsExecute(r ApiQueryVectorsRequest) (*Quer
 		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
-	localVarPath := localBasePath + "/indexes/{indexName}/query"
-	localVarPath = strings.Replace(localVarPath, "{"+"indexName"+"}", url.PathEscape(parameterValueToString(r.indexName, "indexName")), -1)
+	localVarPath := localBasePath + "/vectors/query"
+
 
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}

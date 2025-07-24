@@ -4,9 +4,9 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
+	"fmt"
 	"os"
 	"testing"
-	"fmt"
 
 	"github.com/stretchr/testify/require"
 
@@ -297,4 +297,118 @@ func TestTrainIndex(t *testing.T) {
 
 func strPtr(s string) *string {
 	return &s
+}
+
+
+func TestQuery(t *testing.T) {
+	apiURL := "http://localhost:8000"
+	apiKey := os.Getenv("CYBORGDB_API_KEY")
+
+	if apiURL == "" || apiKey == "" {
+		t.Skip("CYBORGDB_API_URL or CYBORGDB_API_KEY environment variable not set")
+	}
+
+	client, err := cyborgdb.NewClient(apiURL, apiKey, false)
+	require.NoError(t, err)
+
+	// Create a test index
+	indexName := generateTestIndexName()
+	indexKey := generateRandomKey(t)
+	dim := int32(64)
+
+	model := &cyborgdb.IndexIVFPQModel{
+		Dimension: dim,
+		Metric:    "cosine",
+		NLists:    8,
+		PqDim:     8,
+		PqBits:    8,
+	}
+
+	index, err := client.CreateIndex(context.Background(), indexName, indexKey, model, nil)
+	require.NoError(t, err)
+	require.NotNil(t, index)
+
+	// Insert test vectors with metadata
+	vectors := []cyborgdb.VectorItem{
+		{
+			Id:     "vec_1",
+			Vector: make([]float32, dim),
+			Metadata: map[string]interface{}{
+				"category": "A",
+				"score":    0.9,
+			},
+			Contents: strPtr("First test vector"),
+		},
+		{
+			Id:     "vec_2",
+			Vector: make([]float32, dim),
+			Metadata: map[string]interface{}{
+				"category": "B",
+				"score":    0.8,
+			},
+			Contents: strPtr("Second test vector"),
+		},
+		{
+			Id:     "vec_3",
+			Vector: make([]float32, dim),
+			Metadata: map[string]interface{}{
+				"category": "A",
+				"score":    0.7,
+			},
+			Contents: strPtr("Third test vector"),
+		},
+		{
+			Id:     "vec_4",
+			Vector: make([]float32, dim),
+			Metadata: map[string]interface{}{
+				"category": "B",
+				"score":    0.6,
+			},
+			Contents: strPtr("Fourth test vector"),
+		},
+	}
+
+	err = index.Upsert(context.Background(), vectors)
+	require.NoError(t, err, "upsert should succeed")
+
+	// Train the index (required for IVF indexes before querying)
+	err = index.Train(context.Background(), 2048, 100, 1e-6)
+	require.NoError(t, err, "training should succeed")
+
+	// Test 1: Single vector query with default parameters
+	t.Run("SingleVectorQuery", func(t *testing.T) {
+		queryVector := make([]float32, dim)
+		for j := range queryVector {
+			queryVector[j] = float32(j)
+		}
+		
+		result, err := index.Query(
+			context.Background(),
+			queryVector,      // single vector
+			int32(2),         // topK
+			int32(1),         // nProbes
+			false,            // greedy
+			nil,              // no filters
+			[]string{"distance", "metadata"},
+		)
+		
+		require.NoError(t, err)
+		require.NotNil(t, result)
+		require.NotNil(t, result.Results)
+		require.Len(t, result.Results, 1, "single query should return 1 result set")
+		require.LessOrEqual(t, len(result.Results[0]), 2, "should return at most topK results")
+		
+		// Check that results have the requested fields
+		if len(result.Results[0]) > 0 {
+			firstResult := result.Results[0][0]
+			require.NotEmpty(t, firstResult.Id)
+			require.NotNil(t, firstResult.Distance)
+			require.NotNil(t, firstResult.Metadata)
+			t.Logf("Top result: ID=%s, Distance=%f", firstResult.Id, *firstResult.Distance)
+		}
+	})
+
+	// Clean up
+	err = index.DeleteIndex(context.Background())
+	require.NoError(t, err)
 }
