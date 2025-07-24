@@ -560,3 +560,30 @@ func TestGetVectors(t *testing.T) {
 	require.True(t, ids["vec_get_1"])
 	require.True(t, ids["vec_get_2"])
 }
+
+func TestEncryptedIndex_Getters(t *testing.T) {
+	// Test GetIndexName and GetIndexType from EncryptedIndex struct
+	index := cyborgdb.NewEncryptedIndex()
+	require.Equal(t, "", index.GetIndexName())
+	require.Equal(t, "", index.GetIndexType())
+
+	name := "my_index"
+	typ := "ivf_pq"
+
+	index.SetIndexName(name)
+	index.SetIndexType(typ)
+
+	require.True(t, index.HasIndexName())
+	require.True(t, index.HasIndexType())
+
+	require.Equal(t, name, index.GetIndexName())
+	require.Equal(t, typ, index.GetIndexType())
+
+	namePtr, okName := index.GetIndexNameOk()
+	require.True(t, okName)
+	require.Equal(t, name, *namePtr)
+
+	typPtr, okType := index.GetIndexTypeOk()
+	require.True(t, okType)
+	require.Equal(t, typ, *typPtr)
+} 
