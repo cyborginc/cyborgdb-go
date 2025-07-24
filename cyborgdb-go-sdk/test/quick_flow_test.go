@@ -2,8 +2,6 @@ package cyborgdb_test
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"os"
 	"testing"
@@ -12,19 +10,6 @@ import (
 
 	cyborgdb "github.com/cyborginc/cyborgdb-go"
 )
-
-func generateRandomKey(t *testing.T) []byte {
-	key := make([]byte, 32)
-	_, err := rand.Read(key)
-	require.NoError(t, err)
-	return key
-}
-
-func generateTestIndexName() string {
-	random := make([]byte, 4)
-	_, _ = rand.Read(random) // ignore error, test name is not security-critical
-	return "test_index_" + hex.EncodeToString(random)
-}
 
 func TestGetHealth(t *testing.T) {
 	apiURL := "http://localhost:8000"
@@ -349,11 +334,6 @@ func TestDeleteVectors(t *testing.T) {
 
 	t.Log("Delete succeeded")
 }
-
-func strPtr(s string) *string {
-	return &s
-}
-
 
 func TestQuery(t *testing.T) {
 	apiURL := "http://localhost:8000"
