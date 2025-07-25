@@ -19,120 +19,182 @@ import (
 // checks if the EncryptedIndex type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &EncryptedIndex{}
 
-// EncryptedIndex struct for EncryptedIndex
+// EncryptedIndex represents an encrypted vector index in CyborgDB.
+// It provides a secure way to store and query high-dimensional vectors with end-to-end encryption.
+// The index maintains references to the index name, encryption key, type, configuration, and client connection.
 type EncryptedIndex struct {
-	IndexName *string      `json:"index_name,omitempty"`
-	IndexKey  string       `json:"-"` // Don't serialize the key for security
-	IndexType *string      `json:"index_type,omitempty"`
-	Config    *IndexConfig `json:"config,omitempty"`
-	client    *Client      `json:"-"` // Don't serialize the client
+    indexName *string      `json:"index_name,omitempty"`
+    indexKey  string       `json:"-"`
+    indexType *string      `json:"index_type,omitempty"`
+    config    *IndexConfig `json:"config,omitempty"`
+    client    *Client      `json:"-"`
+    trained   bool         `json:"-"`
 }
 
-// NewEncryptedIndex instantiates a new EncryptedIndex object
+// NewEncryptedIndex creates and returns a new EncryptedIndex instance with default values.
+// This function initializes an empty EncryptedIndex struct.
+//
+// Returns:
+//   - *EncryptedIndex: A pointer to the newly created EncryptedIndex instance
 func NewEncryptedIndex() *EncryptedIndex {
 	this := EncryptedIndex{}
 	return &this
 }
 
-// NewEncryptedIndexWithDefaults instantiates a new EncryptedIndex object
+// NewEncryptedIndexWithDefaults creates and returns a new EncryptedIndex instance with default values.
+// This function is identical to NewEncryptedIndex() and exists for API consistency.
+//
+// Returns:
+//   - *EncryptedIndex: A pointer to the newly created EncryptedIndex instance
 func NewEncryptedIndexWithDefaults() *EncryptedIndex {
 	this := EncryptedIndex{}
 	return &this
 }
 
-// GetIndexName returns the IndexName field value if set, zero value otherwise.
+// GetIndexName retrieves the name of the encrypted index.
+// If the index name is not set, it returns an empty string.
+//
+// Returns:
+//   - string: The index name, or empty string if not set
 func (o *EncryptedIndex) GetIndexName() string {
-	if o == nil || IsNil(o.IndexName) {
+	if o == nil || IsNil(o.indexName) {
 		var ret string
 		return ret
 	}
-	return *o.IndexName
+	return *o.indexName
 }
 
-// GetIndexNameOk returns a tuple with the IndexName field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *EncryptedIndex) GetIndexNameOk() (*string, bool) {
-	if o == nil || IsNil(o.IndexName) {
+// GetIndexNameOk retrieves the index name and a boolean indicating if the value was set.
+// This method is useful when you need to distinguish between an empty string and an unset value.
+//
+// Returns:
+//   - *string: Pointer to the index name if set, nil otherwise
+//   - bool: true if the index name was set, false otherwise
+func (o *EncryptedIndex) getIndexNameOk() (*string, bool) {
+	if o == nil || IsNil(o.indexName) {
 		return nil, false
 	}
-	return o.IndexName, true
+	return o.indexName, true
 }
 
-// HasIndexName returns a boolean if a field has been set.
-func (o *EncryptedIndex) HasIndexName() bool {
-	if o != nil && !IsNil(o.IndexName) {
+// HasIndexName checks whether the index name field has been set.
+//
+// Returns:
+//   - bool: true if the index name is set, false otherwise
+func (o *EncryptedIndex) hasIndexName() bool {
+	if o != nil && !IsNil(o.indexName) {
 		return true
 	}
 	return false
 }
 
-// SetIndexName gets a reference to the given string and assigns it to the IndexName field.
-func (o *EncryptedIndex) SetIndexName(v string) {
-	o.IndexName = &v
+// SetIndexName assigns a new index name to the EncryptedIndex.
+// The provided string is stored as a pointer internally.
+//
+// Parameters:
+//   - v: The new index name to set
+func (o *EncryptedIndex) setIndexName(v string) {
+	o.indexName = &v
 }
 
-// GetIndexType returns the IndexType field value if set, zero value otherwise.
+// GetIndexType retrieves the type of the encrypted index (e.g., "ivf", "ivfpq", "ivfflat").
+// If the index type is not set, it returns an empty string.
+//
+// Returns:
+//   - string: The index type, or empty string if not set
 func (o *EncryptedIndex) GetIndexType() string {
-	if o == nil || IsNil(o.IndexType) {
+	if o == nil || IsNil(o.indexType) {
 		var ret string
 		return ret
 	}
-	return *o.IndexType
+	return *o.indexType
 }
 
-// GetIndexTypeOk returns a tuple with the IndexType field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *EncryptedIndex) GetIndexTypeOk() (*string, bool) {
-	if o == nil || IsNil(o.IndexType) {
+// GetIndexTypeOk retrieves the index type and a boolean indicating if the value was set.
+// This method is useful when you need to distinguish between an empty string and an unset value.
+//
+// Returns:
+//   - *string: Pointer to the index type if set, nil otherwise
+//   - bool: true if the index type was set, false otherwise
+func (o *EncryptedIndex) getIndexTypeOk() (*string, bool) {
+	if o == nil || IsNil(o.indexType) {
 		return nil, false
 	}
-	return o.IndexType, true
+	return o.indexType, true
 }
 
-// HasIndexType returns a boolean if a field has been set.
-func (o *EncryptedIndex) HasIndexType() bool {
-	if o != nil && !IsNil(o.IndexType) {
+// HasIndexType checks whether the index type field has been set.
+//
+// Returns:
+//   - bool: true if the index type is set, false otherwise
+func (o *EncryptedIndex) hasIndexType() bool {
+	if o != nil && !IsNil(o.indexType) {
 		return true
 	}
 	return false
 }
 
-// SetIndexType gets a reference to the given string and assigns it to the IndexType field.
-func (o *EncryptedIndex) SetIndexType(v string) {
-	o.IndexType = &v
+// SetIndexType assigns a new index type to the EncryptedIndex.
+// The provided string is stored as a pointer internally.
+//
+// Parameters:
+//   - v: The new index type to set (e.g., "ivf", "ivfpq", "ivfflat")
+func (o *EncryptedIndex) setIndexType(v string) {
+	o.indexType = &v
 }
 
-// GetConfig returns the Config field value if set, zero value otherwise.
+// GetConfig retrieves the configuration of the encrypted index.
+// If the configuration is not set, it returns a zero-value IndexConfig.
+//
+// Returns:
+//   - IndexConfig: The index configuration, or zero value if not set
 func (o *EncryptedIndex) GetConfig() IndexConfig {
-	if o == nil || IsNil(o.Config) {
+	if o == nil || IsNil(o.config) {
 		var ret IndexConfig
 		return ret
 	}
-	return *o.Config
+	return *o.config
 }
 
-// GetConfigOk returns a tuple with the Config field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-func (o *EncryptedIndex) GetConfigOk() (*IndexConfig, bool) {
-	if o == nil || IsNil(o.Config) {
+// GetConfigOk retrieves the index configuration and a boolean indicating if the value was set.
+// This method is useful when you need to distinguish between a zero-value config and an unset value.
+//
+// Returns:
+//   - *IndexConfig: Pointer to the index configuration if set, nil otherwise
+//   - bool: true if the configuration was set, false otherwise
+func (o *EncryptedIndex) getConfigOk() (*IndexConfig, bool) {
+	if o == nil || IsNil(o.config) {
 		return nil, false
 	}
-	return o.Config, true
+	return o.config, true
 }
 
-// HasConfig returns a boolean if a field has been set.
-func (o *EncryptedIndex) HasConfig() bool {
-	if o != nil && !IsNil(o.Config) {
+// HasConfig checks whether the index configuration field has been set.
+//
+// Returns:
+//   - bool: true if the configuration is set, false otherwise
+func (o *EncryptedIndex) hasConfig() bool {
+	if o != nil && !IsNil(o.config) {
 		return true
 	}
 	return false
 }
 
-// SetConfig gets a reference to the given IndexConfig and assigns it to the Config field.
-func (o *EncryptedIndex) SetConfig(v IndexConfig) {
-	o.Config = &v
+// SetConfig assigns a new configuration to the EncryptedIndex.
+// The provided IndexConfig is stored as a pointer internally.
+//
+// Parameters:
+//   - v: The new index configuration to set
+func (o *EncryptedIndex) setConfig(v IndexConfig) {
+	o.config = &v
 }
 
+// MarshalJSON converts the EncryptedIndex to JSON format.
+// Note that sensitive fields like IndexKey and client are excluded from serialization.
+//
+// Returns:
+//   - []byte: The JSON representation of the EncryptedIndex
+//   - error: Any error that occurred during marshaling
 func (o EncryptedIndex) MarshalJSON() ([]byte, error) {
 	toSerialize, err := o.ToMap()
 	if err != nil {
@@ -141,51 +203,91 @@ func (o EncryptedIndex) MarshalJSON() ([]byte, error) {
 	return json.Marshal(toSerialize)
 }
 
+// ToMap converts the EncryptedIndex to a map representation suitable for JSON serialization.
+// Sensitive fields like IndexKey and client are excluded for security reasons.
+//
+// Returns:
+//   - map[string]interface{}: A map containing the serializable fields
+//   - error: Any error that occurred during conversion (currently always nil)
 func (o EncryptedIndex) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	if !IsNil(o.IndexName) {
-		toSerialize["index_name"] = o.IndexName
+	if !IsNil(o.indexName) {
+		toSerialize["index_name"] = o.indexName
 	}
-	if !IsNil(o.IndexType) {
-		toSerialize["index_type"] = o.IndexType
+	if !IsNil(o.indexType) {
+		toSerialize["index_type"] = o.indexType
 	}
-	if !IsNil(o.Config) {
-		toSerialize["config"] = o.Config
+	if !IsNil(o.config) {
+		toSerialize["config"] = o.config
 	}
 	return toSerialize, nil
 }
 
+// NullableEncryptedIndex is a wrapper that allows EncryptedIndex to be nullable.
+// It tracks whether the value has been explicitly set, which is useful for API serialization.
 type NullableEncryptedIndex struct {
 	value *EncryptedIndex
 	isSet bool
 }
 
+// Get retrieves the underlying EncryptedIndex value.
+//
+// Returns:
+//   - *EncryptedIndex: The wrapped EncryptedIndex value, or nil if not set
 func (v NullableEncryptedIndex) Get() *EncryptedIndex {
 	return v.value
 }
 
+// Set assigns a new EncryptedIndex value and marks it as set.
+//
+// Parameters:
+//   - val: The EncryptedIndex value to set
 func (v *NullableEncryptedIndex) Set(val *EncryptedIndex) {
 	v.value = val
 	v.isSet = true
 }
 
+// IsSet checks whether a value has been explicitly set.
+//
+// Returns:
+//   - bool: true if a value has been set, false otherwise
 func (v NullableEncryptedIndex) IsSet() bool {
 	return v.isSet
 }
 
+// Unset clears the value and marks it as not set.
 func (v *NullableEncryptedIndex) Unset() {
 	v.value = nil
 	v.isSet = false
 }
 
+// NewNullableEncryptedIndex creates a new NullableEncryptedIndex with the given value.
+//
+// Parameters:
+//   - val: The EncryptedIndex value to wrap
+//
+// Returns:
+//   - *NullableEncryptedIndex: A new NullableEncryptedIndex instance
 func NewNullableEncryptedIndex(val *EncryptedIndex) *NullableEncryptedIndex {
 	return &NullableEncryptedIndex{value: val, isSet: true}
 }
 
+// MarshalJSON converts the NullableEncryptedIndex to JSON format.
+//
+// Returns:
+//   - []byte: The JSON representation of the wrapped value
+//   - error: Any error that occurred during marshaling
 func (v NullableEncryptedIndex) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.value)
 }
 
+// UnmarshalJSON deserializes JSON data into the NullableEncryptedIndex.
+//
+// Parameters:
+//   - src: The JSON data to unmarshal
+//
+// Returns:
+//   - error: Any error that occurred during unmarshaling
 func (v *NullableEncryptedIndex) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
@@ -195,15 +297,30 @@ func (v *NullableEncryptedIndex) UnmarshalJSON(src []byte) error {
 // METHODS
 // ============================================================================
 
-// Upsert adds or updates vectors in the index
+// Upsert adds or updates vectors in the encrypted index.
+// This operation will insert new vectors or update existing ones based on their IDs.
+// All vectors are encrypted before being stored in the index.
+//
+// Parameters:
+//   - ctx: Context for controlling the request lifecycle (timeouts, cancellation, etc.)
+//   - items: Slice of VectorItem structs containing the vectors and metadata to upsert
+//
+// Returns:
+//   - error: nil on success, or an error describing what went wrong
+//
+// Example:
+//   items := []VectorItem{
+//       {Id: "vec1", Vector: []float32{1.0, 2.0, 3.0}, Metadata: map[string]interface{}{"tag": "example"}},
+//   }
+//   err := index.Upsert(ctx, items)
 func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 	if e.client == nil {
 		return fmt.Errorf("cannot upsert vectors: client reference is nil")
 	}
-	if e.IndexName == nil || *e.IndexName == "" {
+	if e.indexName == nil || *e.indexName == "" {
 		return fmt.Errorf("index name is required")
 	}
-	if e.IndexKey == "" {
+	if e.indexKey == "" {
 		return fmt.Errorf("index key is required")
 	}
 
@@ -223,15 +340,15 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 
 	// Construct request with ALL required fields
 	upsertRequest := UpsertRequest{
-		IndexKey:  e.IndexKey,
-		IndexName: *e.IndexName,
+		IndexKey:  e.indexKey,
+		IndexName: *e.indexName,
 		Items:     apiItems,
 	}
 
 	// Call with XIndexKey header (keeping for compatibility with current API client)
 	_, err := e.client.apiClient.DefaultAPI.
-		UpsertVectors(ctx, *e.IndexName).
-		XIndexKey(e.IndexKey).
+		UpsertVectors(ctx, *e.indexName).
+		XIndexKey(e.indexKey).
 		UpsertRequest(upsertRequest).
 		Execute()
 
@@ -241,53 +358,85 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 	return nil
 }
 
-// DeleteIndex deletes the current encrypted index from the CyborgDB service.
+// DeleteIndex permanently removes the entire encrypted index from the CyborgDB service.
+// This operation is irreversible and will delete all vectors and metadata associated with the index.
+// Use with caution as this cannot be undone.
+//
+// Parameters:
+//   - ctx: Context for controlling the request lifecycle (timeouts, cancellation, etc.)
+//
+// Returns:
+//   - error: nil on success, or an error describing what went wrong
+//
+// Example:
+//   err := index.DeleteIndex(ctx)
+//   if err != nil {
+//       log.Printf("Failed to delete index: %v", err)
+//   }
 func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 	if e.client == nil {
 		return fmt.Errorf("cannot delete index: client reference is nil")
 	}
-	if e.IndexName == nil || *e.IndexName == "" {
+	if e.indexName == nil || *e.indexName == "" {
 		return fmt.Errorf("index name is required")
 	}
-	if e.IndexKey == "" {
+	if e.indexKey == "" {
 		return fmt.Errorf("index key is required")
 	}
-	if len(e.IndexKey) != 64 {
-		return fmt.Errorf("index key must be 64-character hex string (32 bytes), got %d", len(e.IndexKey))
+	if len(e.indexKey) != 64 {
+		return fmt.Errorf("index key must be 64-character hex string (32 bytes), got %d", len(e.indexKey))
 	}
 
 	// Call the low-level API
 	_, err := e.client.apiClient.DefaultAPI.
-		DeleteIndex(ctx, *e.IndexName).
-		XIndexKey(e.IndexKey).
+		DeleteIndex(ctx, *e.indexName).
+		XIndexKey(e.indexKey).
 		Execute()
 
 	if err != nil {
-		return fmt.Errorf("failed to delete index '%s': %w", *e.IndexName, err)
+		return fmt.Errorf("failed to delete index '%s': %w", *e.indexName, err)
 	}
 
 	return nil
 }
 
-// Train trains the encrypted index using the specified parameters.
+// Train optimizes the encrypted index for better search performance using machine learning techniques.
+// Training is typically performed after upserting a significant number of vectors and improves
+// query speed and accuracy. The training process uses clustering algorithms to organize vectors
+// for more efficient similarity searches.
+//
+// Parameters:
+//   - ctx: Context for controlling the request lifecycle (timeouts, cancellation, etc.)
+//   - batchSize: Number of vectors to process in each training batch (affects memory usage)
+//   - maxIters: Maximum number of training iterations to perform
+//   - tolerance: Convergence tolerance for training (smaller values = more precise training)
+//
+// Returns:
+//   - error: nil on success, or an error describing what went wrong
+//
+// Example:
+//   err := index.Train(ctx, 100, 50, 1e-5)
+//   if err != nil {
+//       log.Printf("Failed to train index: %v", err)
+//   }
 func (e *EncryptedIndex) Train(ctx context.Context, batchSize int32, maxIters int32, tolerance float64) error {
 	if e.client == nil {
 		return fmt.Errorf("cannot train index: client reference is nil")
 	}
-	if e.IndexName == nil || *e.IndexName == "" {
+	if e.indexName == nil || *e.indexName == "" {
 		return fmt.Errorf("index name is required")
 	}
-	if e.IndexKey == "" {
+	if e.indexKey == "" {
 		return fmt.Errorf("index key is required")
 	}
-	if len(e.IndexKey) != 64 {
-		return fmt.Errorf("index key must be 64-character hex string (32 bytes), got %d", len(e.IndexKey))
+	if len(e.indexKey) != 64 {
+		return fmt.Errorf("index key must be 64-character hex string (32 bytes), got %d", len(e.indexKey))
 	}
 
 	// Prepare the train request
 	trainReq := TrainRequest{
-		IndexName: *e.IndexName,
-		IndexKey:  e.IndexKey,
+		IndexName: *e.indexName,
+		IndexKey:  e.indexKey,
 		BatchSize: &batchSize,
 		MaxIters:  &maxIters,
 		Tolerance: &tolerance,
@@ -295,27 +444,50 @@ func (e *EncryptedIndex) Train(ctx context.Context, batchSize int32, maxIters in
 
 	// Call the low-level API
 	_, err := e.client.apiClient.DefaultAPI.
-		TrainIndex(ctx, *e.IndexName).
-		XIndexKey(e.IndexKey).
+		TrainIndex(ctx, *e.indexName).
+		XIndexKey(e.indexKey).
 		TrainRequest(trainReq).
 		Execute()
 
 	if err != nil {
-		return fmt.Errorf("failed to train index '%s': %w", *e.IndexName, err)
+		return fmt.Errorf("failed to train index '%s': %w", *e.indexName, err)
 	}
 
 	return nil
 }
 
-// Query searches for nearest neighbors in the index
+// Query searches for the nearest neighbors to the given query vector(s) in the encrypted index.
+// This method performs similarity search using the specified distance metric and returns
+// the most similar vectors along with their distances and metadata.
+//
+// Parameters:
+//   - ctx: Context for controlling the request lifecycle (timeouts, cancellation, etc.)
+//   - queryVectors: Either a single vector ([]float32) or batch of vectors ([][]float32) to search for
+//   - topK: Maximum number of nearest neighbors to return per query (default: 100)
+//   - nProbes: Number of clusters to search (higher = more accurate but slower, default: 1)
+//   - greedy: Whether to use greedy search strategy for potentially faster results
+//   - filters: Metadata filters to apply to the search results (can be nil for no filtering)
+//   - include: Fields to include in results (e.g., ["distance", "metadata", "vector"])
+//
+// Returns:
+//   - *QueryResponse: Contains the search results with nearest neighbors, distances, and metadata
+//   - error: nil on success, or an error describing what went wrong
+//
+// Example:
+//   // Single vector query
+//   results, err := index.Query(ctx, []float32{1.0, 2.0, 3.0}, 10, 5, false, nil, []string{"metadata"})
+//
+//   // Batch query
+//   batch := [][]float32{{1.0, 2.0}, {3.0, 4.0}}
+//   results, err := index.Query(ctx, batch, 5, 3, false, map[string]interface{}{"category": "test"}, []string{"distance", "metadata"})
 func (e *EncryptedIndex) Query(ctx context.Context, queryVectors interface{}, topK int32, nProbes int32, greedy bool, filters map[string]interface{}, include []string) (*QueryResponse, error) {
 	if e.client == nil {
 		return nil, fmt.Errorf("cannot query index: client reference is nil")
 	}
-	if e.IndexName == nil || *e.IndexName == "" {
+	if e.indexName == nil || *e.indexName == "" {
 		return nil, fmt.Errorf("index name is required")
 	}
-	if e.IndexKey == "" {
+	if e.indexKey == "" {
 		return nil, fmt.Errorf("index key is required")
 	}
 
@@ -345,8 +517,8 @@ func (e *EncryptedIndex) Query(ctx context.Context, queryVectors interface{}, to
 
 	// Create the query request
 	queryRequest := QueryRequest{
-		IndexName:    *e.IndexName,
-		IndexKey:     e.IndexKey,
+		IndexName:    *e.indexName,
+		IndexKey:     e.indexKey,
 		QueryVectors: vectors,
 		TopK:         topK,
 		NProbes:      nProbes,
@@ -362,25 +534,41 @@ func (e *EncryptedIndex) Query(ctx context.Context, queryVectors interface{}, to
 		Execute()
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to query index '%s': %w", *e.IndexName, err)
+		return nil, fmt.Errorf("failed to query index '%s': %w", *e.indexName, err)
 	}
 
 	return resp, nil
 }
 
-// Delete removes vectors from the encrypted index by their IDs.
+// Delete removes specific vectors from the encrypted index using their unique identifiers.
+// This operation permanently deletes the specified vectors and their associated metadata.
+// The vectors cannot be recovered after deletion.
+//
+// Parameters:
+//   - ctx: Context for controlling the request lifecycle (timeouts, cancellation, etc.)
+//   - ids: Slice of string IDs identifying the vectors to delete
+//
+// Returns:
+//   - error: nil on success, or an error describing what went wrong
+//
+// Example:
+//   idsToDelete := []string{"vec1", "vec2", "vec3"}
+//   err := index.Delete(ctx, idsToDelete)
+//   if err != nil {
+//       log.Printf("Failed to delete vectors: %v", err)
+//   }
 func (e *EncryptedIndex) Delete(ctx context.Context, ids []string) error {
 	if e.client == nil {
 		return fmt.Errorf("cannot delete vectors: client reference is nil")
 	}
-	if e.IndexName == nil || *e.IndexName == "" {
+	if e.indexName == nil || *e.indexName == "" {
 		return fmt.Errorf("index name is required")
 	}
-	if e.IndexKey == "" {
+	if e.indexKey == "" {
 		return fmt.Errorf("index key is required")
 	}
-	if len(e.IndexKey) != 64 {
-		return fmt.Errorf("index key must be 64-character hex string (32 bytes), got %d", len(e.IndexKey))
+	if len(e.indexKey) != 64 {
+		return fmt.Errorf("index key must be 64-character hex string (32 bytes), got %d", len(e.indexKey))
 	}
 	if len(ids) == 0 {
 		return fmt.Errorf("at least one vector ID must be provided for deletion")
@@ -388,34 +576,56 @@ func (e *EncryptedIndex) Delete(ctx context.Context, ids []string) error {
 
 	// Construct the delete request body
 	deleteReq := DeleteRequest{
-		IndexName: *e.IndexName,
-		IndexKey:  e.IndexKey,
+		IndexName: *e.indexName,
+		IndexKey:  e.indexKey,
 		Ids:       ids,
 	}
 
 	// Call the low-level API
 	_, err := e.client.apiClient.DefaultAPI.
-		DeleteVectors(ctx, *e.IndexName).
-		XIndexKey(e.IndexKey).
+		DeleteVectors(ctx, *e.indexName).
+		XIndexKey(e.indexKey).
 		DeleteRequest(deleteReq).
 		Execute()
 
 	if err != nil {
-		return fmt.Errorf("failed to delete vectors from index '%s': %w", *e.IndexName, err)
+		return fmt.Errorf("failed to delete vectors from index '%s': %w", *e.indexName, err)
 	}
 
 	return nil
 }
 
-// Get retrieves vectors from the index by their IDs.
+// Get retrieves specific vectors from the encrypted index using their unique identifiers.
+// This method allows you to fetch vectors by their IDs and specify which fields to include
+// in the response (vectors, metadata, contents).
+//
+// Parameters:
+//   - ctx: Context for controlling the request lifecycle (timeouts, cancellation, etc.)
+//   - ids: Slice of string IDs identifying the vectors to retrieve
+//   - include: Fields to include in the response (e.g., ["vector", "metadata", "contents"])
+//
+// Returns:
+//   - []VectorItem: Slice of VectorItem structs containing the requested vectors and their data
+//   - error: nil on success, or an error describing what went wrong
+//
+// Example:
+//   ids := []string{"vec1", "vec2"}
+//   include := []string{"vector", "metadata", "contents"}
+//   vectors, err := index.Get(ctx, ids, include)
+//   if err != nil {
+//       log.Printf("Failed to retrieve vectors: %v", err)
+//   }
+//   for _, vec := range vectors {
+//       fmt.Printf("Retrieved vector %s with %d dimensions\n", vec.Id, len(vec.Vector))
+//   }
 func (e *EncryptedIndex) Get(ctx context.Context, ids []string, include []string) ([]VectorItem, error) {
 	if e.client == nil {
 		return nil, fmt.Errorf("cannot get vectors: client reference is nil")
 	}
-	if e.IndexName == nil || *e.IndexName == "" {
+	if e.indexName == nil || *e.indexName == "" {
 		return nil, fmt.Errorf("index name is required")
 	}
-	if e.IndexKey == "" {
+	if e.indexKey == "" {
 		return nil, fmt.Errorf("index key is required")
 	}
 	if len(ids) == 0 {
@@ -424,15 +634,19 @@ func (e *EncryptedIndex) Get(ctx context.Context, ids []string, include []string
 
 	// Prepare the API request
 	resp, _, err := e.client.apiClient.DefaultAPI.
-		GetVectors(ctx, *e.IndexName).
-		XIndexKey(e.IndexKey).
+		GetVectors(ctx, *e.indexName).
+		XIndexKey(e.indexKey).
 		Ids(ids).
 		Include(include).
 		Execute()
 
 	if err != nil {
-		return nil, fmt.Errorf("failed to retrieve vectors from index '%s': %w", *e.IndexName, err)
+		return nil, fmt.Errorf("failed to retrieve vectors from index '%s': %w", *e.indexName, err)
 	}
 
 	return resp, nil
+}
+
+func (e *EncryptedIndex) IsTrained() bool {
+    return e.trained  // You'll need to add this field
 }
