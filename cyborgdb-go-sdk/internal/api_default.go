@@ -665,12 +665,18 @@ func (a *DefaultAPIService) ListIndexesExecute(r ApiListIndexesRequest) (*IndexL
 type ApiQueryVectorsRequest struct {
 	ctx          context.Context
 	ApiService   *DefaultAPIService
-	indexName    string
-	queryRequest *QueryRequest
+	queryRequest interface{} // Can be *QueryRequest or *BatchQueryRequest
 }
 
+// QueryRequest method for single queries
 func (r ApiQueryVectorsRequest) QueryRequest(queryRequest QueryRequest) ApiQueryVectorsRequest {
 	r.queryRequest = &queryRequest
+	return r
+}
+
+// BatchQueryRequest method for batch queries
+func (r ApiQueryVectorsRequest) BatchQueryRequest(batchQueryRequest BatchQueryRequest) ApiQueryVectorsRequest {
+	r.queryRequest = &batchQueryRequest
 	return r
 }
 
@@ -679,10 +685,9 @@ func (r ApiQueryVectorsRequest) Execute() (*QueryResponse, *http.Response, error
 }
 
 /*
-QueryVectors Query vectors in the encrypted index
+QueryVectors Query vectors in the encrypted index (supports both single and batch queries)
 
 	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
-	@param indexName
 	@return ApiQueryVectorsRequest
 */
 func (a *DefaultAPIService) QueryVectors(ctx context.Context) ApiQueryVectorsRequest {
@@ -713,30 +718,30 @@ func (a *DefaultAPIService) QueryVectorsExecute(r ApiQueryVectorsRequest) (*Quer
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
+	
 	if r.queryRequest == nil {
 		return localVarReturnValue, nil, reportError("queryRequest is required and must be specified")
 	}
 
-	// to determine the Content-Type header
+	// Set Content-Type header
 	localVarHTTPContentTypes := []string{"application/json"}
-
-	// set Content-Type header
 	localVarHTTPContentType := selectHeaderContentType(localVarHTTPContentTypes)
 	if localVarHTTPContentType != "" {
 		localVarHeaderParams["Content-Type"] = localVarHTTPContentType
 	}
 
-	// to determine the Accept header
+	// Set Accept header
 	localVarHTTPHeaderAccepts := []string{"application/json"}
-
-	// set Accept header
 	localVarHTTPHeaderAccept := selectHeaderAccept(localVarHTTPHeaderAccepts)
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	// body params
+
+	// Always serialize as the request type (matching TypeScript's ObjectSerializer.serialize approach)
 	localVarPostBody = r.queryRequest
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
+
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, 
+		localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
 	if err != nil {
 		return localVarReturnValue, nil, err
 	}

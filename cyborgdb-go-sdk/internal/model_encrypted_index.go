@@ -455,32 +455,56 @@ func (e *EncryptedIndex) Train(ctx context.Context, batchSize int32, maxIters in
 
 	return nil
 }
-
 // Query searches for the nearest neighbors to the given query vector(s) in the encrypted index.
 // This method performs similarity search using the specified distance metric and returns
 // the most similar vectors along with their distances and metadata.
 //
+// This method supports multiple calling patterns:
+// 1. Direct parameters: Query(ctx, queryVectors, topK, nProbes, greedy, filters, include)
+// 2. QueryRequest struct: Query(ctx, queryRequest)
+// 3. BatchQueryRequest struct: Query(ctx, batchQueryRequest)
+//
 // Parameters:
 //   - ctx: Context for controlling the request lifecycle (timeouts, cancellation, etc.)
-//   - queryVectors: Either a single vector ([]float32) or batch of vectors ([][]float32) to search for
-//   - topK: Maximum number of nearest neighbors to return per query (default: 100)
-//   - nProbes: Number of clusters to search (higher = more accurate but slower, default: 1)
-//   - greedy: Whether to use greedy search strategy for potentially faster results
-//   - filters: Metadata filters to apply to the search results (can be nil for no filtering)
-//   - include: Fields to include in results (e.g., ["distance", "metadata", "vector"])
+//   - args: Variable arguments supporting multiple patterns:
+//     * (queryVectors, topK, nProbes, greedy, filters, include) - Direct parameter style
+//     * (QueryRequest) - Single query request struct
+//     * (BatchQueryRequest) - Batch query request struct
 //
 // Returns:
 //   - *QueryResponse: Contains the search results with nearest neighbors, distances, and metadata
 //   - error: nil on success, or an error describing what went wrong
 //
-// Example:
-//   // Single vector query
+// Examples:
+//   // Direct parameters - single vector
 //   results, err := index.Query(ctx, []float32{1.0, 2.0, 3.0}, 10, 5, false, nil, []string{"metadata"})
 //
-//   // Batch query
+//   // Direct parameters - batch vectors
 //   batch := [][]float32{{1.0, 2.0}, {3.0, 4.0}}
-//   results, err := index.Query(ctx, batch, 5, 3, false, map[string]interface{}{"category": "test"}, []string{"distance", "metadata"})
-func (e *EncryptedIndex) Query(ctx context.Context, queryVectors interface{}, topK int32, nProbes int32, greedy bool, filters map[string]interface{}, include []string) (*QueryResponse, error) {
+//   results, err := index.Query(ctx, batch, 5, 3, false, nil, []string{"distance", "metadata"})
+//
+//   // Using QueryRequest struct
+//   queryReq := &QueryRequest{
+//       IndexName: "my-index",
+//       IndexKey: "hex-key",
+//       QueryVector: []float32{1.0, 2.0, 3.0},
+//       TopK: 10,
+//       NProbes: 5,
+//       Include: []string{"metadata"},
+//   }
+//   results, err := index.Query(ctx, queryReq)
+//
+//   // Using BatchQueryRequest struct
+//   batchReq := &BatchQueryRequest{
+//       IndexName: "my-index", 
+//       IndexKey: "hex-key",
+//       QueryVectors: [][]float32{{1.0, 2.0}, {3.0, 4.0}},
+//       TopK: &topK,
+//       NProbes: &nProbes,
+//       Include: []string{"distance", "metadata"},
+//   }
+//   results, err := index.Query(ctx, batchReq)
+func (e *EncryptedIndex) Query(ctx context.Context, args ...interface{}) (*QueryResponse, error) {
 	if e.client == nil {
 		return nil, fmt.Errorf("cannot query index: client reference is nil")
 	}
@@ -489,6 +513,308 @@ func (e *EncryptedIndex) Query(ctx context.Context, queryVectors interface{}, to
 	}
 	if e.indexKey == "" {
 		return nil, fmt.Errorf("index key is required")
+	}
+
+	if len(args) == 0 {
+		return nil, fmt.Errorf("at least one argument is required")
+	}
+
+	// Convert the binary indexKey to hex (matching TypeScript: Buffer.from(this.indexKey).toString('hex'))
+	keyHex := e.indexKey
+
+	// Handle different argument patterns
+	switch req := args[0].(type) {
+	case *QueryRequest:
+		// Convert QueryRequest to BatchQueryRequest (like TypeScript does)
+		return e.executeUnifiedQuery(ctx, keyHex, convertQueryRequestToBatch(req))
+	case QueryRequest:
+		return e.executeUnifiedQuery(ctx, keyHex, convertQueryRequestToBatch(&req))
+	case *BatchQueryRequest:
+		return e.executeUnifiedQuery(ctx, keyHex, req)
+	case BatchQueryRequest:
+		return e.executeUnifiedQuery(ctx, keyHex, &req)
+	default:
+		// Handle direct parameter style - convert to BatchQueryRequest
+		return e.executeDirectQueryAsBatch(ctx, keyHex, args...)
+	}
+}
+
+func convertQueryRequestToBatch(req *QueryRequest) *BatchQueryRequest {
+	batch := &BatchQueryRequest{
+		IndexName: req.IndexName,
+		IndexKey:  req.IndexKey,
+		Filters:   req.Filters,
+		Include:   req.Include,
+	}
+
+	// Convert single vector to batch format
+	if req.QueryVector != nil && len(req.QueryVector) > 0 {
+		batch.QueryVectors = [][]float32{req.QueryVector}
+	} else if req.QueryVectors != nil && len(req.QueryVectors) > 0 {
+		batch.QueryVectors = req.QueryVectors
+	}
+
+	// Handle TopK, NProbes, Greedy - convert from direct values to pointers
+	batch.TopK = &req.TopK
+	batch.NProbes = &req.NProbes
+	if req.Greedy != nil {
+		batch.Greedy = req.Greedy
+	}
+
+	return batch
+}
+
+func (e *EncryptedIndex) executeUnifiedQuery(ctx context.Context, keyHex string, req *BatchQueryRequest) (*QueryResponse, error) {
+	// Validate input
+	if req.QueryVectors == nil || len(req.QueryVectors) == 0 {
+		return nil, fmt.Errorf("QueryVectors is required")
+	}
+
+	// Ensure index name and key are set
+	req.IndexName = *e.indexName
+	req.IndexKey = keyHex
+
+	// Set defaults (matching TypeScript defaults)
+	if req.TopK == nil {
+		defaultTopK := int32(100)
+		req.TopK = &defaultTopK
+	}
+	if req.NProbes == nil {
+		defaultNProbes := int32(1)
+		req.NProbes = &defaultNProbes
+	}
+	if req.Greedy == nil {
+		defaultGreedy := false
+		req.Greedy = &defaultGreedy
+	}
+	if req.Include == nil || len(req.Include) == 0 {
+		req.Include = []string{"distance", "metadata"}
+	}
+
+	// IMPORTANT: Always use BatchQueryRequest method like TypeScript does
+	resp, _, err := e.client.apiClient.DefaultAPI.
+		QueryVectors(ctx).
+		BatchQueryRequest(*req).
+		Execute()
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to query index '%s': %w", *e.indexName, err)
+	}
+
+	return resp, nil
+}
+
+// executeQueryRequest handles QueryRequest struct
+func (e *EncryptedIndex) executeQueryRequest(ctx context.Context, req *QueryRequest) (*QueryResponse, error) {
+	// Validate that we have either QueryVector, QueryVectors, or QueryContents
+	hasQueryVector := req.QueryVector != nil && len(req.QueryVector) > 0
+	hasQueryVectors := req.QueryVectors != nil && len(req.QueryVectors) > 0
+	hasQueryContents := req.QueryContents != nil && *req.QueryContents != ""
+
+	if !hasQueryVector && !hasQueryVectors && !hasQueryContents {
+		return nil, fmt.Errorf("QueryRequest must have QueryVector, QueryVectors, or QueryContents")
+	}
+
+	// Set default values if not provided
+	if req.TopK == 0 {
+		req.TopK = 100
+	}
+	if req.NProbes == 0 {
+		req.NProbes = 1
+	}
+	if req.Include == nil || len(req.Include) == 0 {
+		req.Include = []string{"distance", "metadata"}
+	}
+
+	// Ensure index name and key are set from the EncryptedIndex
+	req.IndexName = *e.indexName
+	req.IndexKey = e.indexKey
+
+	// Execute the query
+	resp, _, err := e.client.apiClient.DefaultAPI.
+		QueryVectors(ctx).
+		QueryRequest(*req).
+		Execute()
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to query index '%s': %w", *e.indexName, err)
+	}
+
+	return resp, nil
+}
+
+func (e *EncryptedIndex) executeDirectQueryAsBatch(ctx context.Context, keyHex string, args ...interface{}) (*QueryResponse, error) {
+	if len(args) < 1 {
+		return nil, fmt.Errorf("at least queryVectors argument is required")
+	}
+
+	// Parse arguments with defaults (matching TypeScript)
+	var inputVectors interface{} = args[0]
+	var topK int32 = 100
+	var nProbes int32 = 1
+	var greedy bool = false
+	var filters map[string]interface{}
+	var include []string = []string{"distance", "metadata"}
+
+	// Extract optional arguments
+	if len(args) > 1 {
+		if v, ok := args[1].(int32); ok {
+			topK = v
+		} else if v, ok := args[1].(int); ok {
+			topK = int32(v)
+		}
+	}
+
+	if len(args) > 2 {
+		if v, ok := args[2].(int32); ok {
+			nProbes = v
+		} else if v, ok := args[2].(int); ok {
+			nProbes = int32(v)
+		}
+	}
+
+	if len(args) > 3 {
+		if v, ok := args[3].(bool); ok {
+			greedy = v
+		}
+	}
+
+	if len(args) > 4 {
+		if v, ok := args[4].(map[string]interface{}); ok {
+			filters = v
+		}
+	}
+
+	if len(args) > 5 {
+		if v, ok := args[5].([]string); ok {
+			include = v
+		}
+	}
+
+	// Convert input to batch format (exactly like TypeScript does)
+	var queryVectors [][]float32
+
+	switch v := inputVectors.(type) {
+	case []float32:
+		// Single vector - wrap in array (like TypeScript: [inputVectors as number[]])
+		queryVectors = [][]float32{v}
+	case [][]float32:
+		// Already batch format
+		queryVectors = v
+	default:
+		return nil, fmt.Errorf("queryVectors must be []float32 or [][]float32, got %T", inputVectors)
+	}
+
+	// Create BatchQueryRequest (matching TypeScript structure)
+	batchRequest := &BatchQueryRequest{
+		IndexName:    *e.indexName,
+		IndexKey:     keyHex,
+		QueryVectors: queryVectors,
+		TopK:         &topK,
+		NProbes:      &nProbes,
+		Greedy:       &greedy,
+		Filters:      filters,
+		Include:      include,
+	}
+
+	return e.executeUnifiedQuery(ctx, keyHex, batchRequest)
+}
+
+// executeBatchQueryRequest handles BatchQueryRequest struct
+func (e *EncryptedIndex) executeBatchQueryRequest(ctx context.Context, req *BatchQueryRequest) (*QueryResponse, error) {
+	// Validate that we have QueryVectors
+	if req.QueryVectors == nil || len(req.QueryVectors) == 0 {
+		return nil, fmt.Errorf("BatchQueryRequest must have QueryVectors")
+	}
+
+	// Set default values if not provided
+	if req.TopK == nil {
+		defaultTopK := int32(100)
+		req.TopK = &defaultTopK
+	}
+	if req.NProbes == nil {
+		defaultNProbes := int32(1)
+		req.NProbes = &defaultNProbes
+	}
+	if req.Greedy == nil {
+		defaultGreedy := false
+		req.Greedy = &defaultGreedy
+	}
+	if req.Include == nil || len(req.Include) == 0 {
+		req.Include = []string{"distance", "metadata"}
+	}
+
+	// Ensure index name and key are set from the EncryptedIndex
+	req.IndexName = *e.indexName
+	req.IndexKey = e.indexKey
+
+	// Execute the batch query (assuming you have a BatchQueryVectors API endpoint)
+	resp, _, err := e.client.apiClient.DefaultAPI.
+		QueryVectors(ctx).
+		BatchQueryRequest(*req).
+		Execute()
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to batch query index '%s': %w", *e.indexName, err)
+	}
+
+	return resp, nil
+}
+
+// executeDirectQuery handles the direct parameter style
+func (e *EncryptedIndex) executeDirectQuery(ctx context.Context, args ...interface{}) (*QueryResponse, error) {
+	if len(args) < 1 {
+		return nil, fmt.Errorf("at least queryVectors argument is required")
+	}
+
+	// Parse arguments with defaults
+	var queryVectors interface{}
+	var topK int32 = 100
+	var nProbes int32 = 1
+	var greedy bool = false
+	var filters map[string]interface{}
+	var include []string
+
+	// Extract arguments
+	queryVectors = args[0]
+
+	if len(args) > 1 {
+		if v, ok := args[1].(int32); ok {
+			topK = v
+		} else if v, ok := args[1].(int); ok {
+			topK = int32(v)
+		}
+	}
+
+	if len(args) > 2 {
+		if v, ok := args[2].(int32); ok {
+			nProbes = v
+		} else if v, ok := args[2].(int); ok {
+			nProbes = int32(v)
+		}
+	}
+
+	if len(args) > 3 {
+		if v, ok := args[3].(bool); ok {
+			greedy = v
+		}
+	}
+
+	if len(args) > 4 {
+		if v, ok := args[4].(map[string]interface{}); ok {
+			filters = v
+		}
+	}
+
+	if len(args) > 5 {
+		if v, ok := args[5].([]string); ok {
+			include = v
+		}
+	}
+
+	// Set default include if not provided
+	if include == nil || len(include) == 0 {
+		include = []string{"distance", "metadata"}
 	}
 
 	// Handle single vector vs batch of vectors
@@ -504,40 +830,36 @@ func (e *EncryptedIndex) Query(ctx context.Context, queryVectors interface{}, to
 		return nil, fmt.Errorf("queryVectors must be []float32 or [][]float32")
 	}
 
-	// Set defaults if needed
-	if topK == 0 {
-		topK = 100
-	}
-	if nProbes == 0 {
-		nProbes = 1
-	}
-	if include == nil || len(include) == 0 {
-		include = []string{"distance", "metadata"}
-	}
+	// Determine if this should be a single query or batch query based on input
+	if len(vectors) == 1 {
+		// Use QueryRequest for single vector
+		queryRequest := QueryRequest{
+			IndexName:    *e.indexName,
+			IndexKey:     e.indexKey,
+			QueryVector:  vectors[0], // Use single vector field
+			TopK:         topK,
+			NProbes:      nProbes,
+			Greedy:       &greedy,
+			Filters:      filters,
+			Include:      include,
+		}
 
-	// Create the query request
-	queryRequest := QueryRequest{
-		IndexName:    *e.indexName,
-		IndexKey:     e.indexKey,
-		QueryVectors: vectors,
-		TopK:         topK,
-		NProbes:      nProbes,
-		Greedy:       &greedy,
-		Filters:      filters,
-		Include:      include,
+		return e.executeQueryRequest(ctx, &queryRequest)
+	} else {
+		// Use BatchQueryRequest for multiple vectors
+		batchRequest := BatchQueryRequest{
+			IndexName:    *e.indexName,
+			IndexKey:     e.indexKey,
+			QueryVectors: vectors,
+			TopK:         &topK,
+			NProbes:      &nProbes,
+			Greedy:       &greedy,
+			Filters:      filters,
+			Include:      include,
+		}
+
+		return e.executeBatchQueryRequest(ctx, &batchRequest)
 	}
-
-	// Execute the query
-	resp, _, err := e.client.apiClient.DefaultAPI.
-		QueryVectors(ctx).
-		QueryRequest(queryRequest).
-		Execute()
-
-	if err != nil {
-		return nil, fmt.Errorf("failed to query index '%s': %w", *e.indexName, err)
-	}
-
-	return resp, nil
 }
 
 // Delete removes specific vectors from the encrypted index using their unique identifiers.

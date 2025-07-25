@@ -76,43 +76,50 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 }
 
 // Query searches for nearest neighbors in the encrypted index.
-// This corresponds to the TypeScript method: index.query(...)
+// This method supports multiple calling patterns:
+// 1. Direct parameters: Query(ctx, queryVectors, topK, nProbes, greedy, filters, include)
+// 2. QueryRequest struct: Query(ctx, queryRequest)
+// 3. BatchQueryRequest struct: Query(ctx, batchQueryRequest)
 //
 // Parameters:
 //   - ctx: Context for request cancellation and timeouts
-//   - queryVectors: Either a single vector ([]float32) or batch of vectors ([][]float32)
-//   - topK: Maximum number of nearest neighbors to return per query
-//   - nProbes: Number of clusters to search (higher = more accurate but slower)
-//   - greedy: Whether to use greedy search strategy
-//   - filters: Metadata filters to apply (can be nil)
-//   - include: Fields to include in results (e.g., ["distance", "metadata", "vector"])
+//   - args: Variable arguments supporting multiple patterns:
+//     * (queryVectors, topK, nProbes, greedy, filters, include) - Direct parameter style
+//     * (QueryRequest) - Single query request struct
+//     * (BatchQueryRequest) - Batch query request struct
 //
 // Returns:
 //   - *QueryResponse: Search results with nearest neighbors and metadata
 //   - error: nil on success, or an error describing what went wrong
 //
-// Example:
-//   // Single vector query
+// Examples:
+//   // Direct parameters - single vector
 //   results, err := index.Query(ctx, []float32{1.0, 2.0, 3.0}, 10, 5, false, nil, []string{"metadata"})
-//   
-//   // With metadata filtering
-//   filters := map[string]interface{}{
-//       "category": "example",
-//       "tags": map[string]interface{}{
-//           "$in": []string{"test", "demo"},
-//       },
+//
+//   // Direct parameters - batch vectors
+//   batch := [][]float32{{1.0, 2.0}, {3.0, 4.0}}
+//   results, err := index.Query(ctx, batch, 5, 3, false, nil, []string{"distance", "metadata"})
+//
+//   // Using QueryRequest struct
+//   queryReq := &QueryRequest{
+//       QueryVector: []float32{1.0, 2.0, 3.0},
+//       TopK: 10,
+//       NProbes: 5,
+//       Include: []string{"metadata"},
 //   }
-//   results, err := index.Query(ctx, queryVector, 5, 3, false, filters, []string{"distance", "metadata"})
-func (e *EncryptedIndex) Query(
-	ctx context.Context,
-	queryVectors interface{}, // []float32 or [][]float32
-	topK int32,
-	nProbes int32,
-	greedy bool,
-	filters map[string]interface{},
-	include []string,
-) (*internal.QueryResponse, error) {
-	return e.internal.Query(ctx, queryVectors, topK, nProbes, greedy, filters, include)
+//   results, err := index.Query(ctx, queryReq)
+//
+//   // Using BatchQueryRequest struct
+//   batchReq := &BatchQueryRequest{
+//       QueryVectors: [][]float32{{1.0, 2.0}, {3.0, 4.0}},
+//       TopK: &topK,
+//       NProbes: &nProbes,
+//       Include: []string{"distance", "metadata"},
+//   }
+//   results, err := index.Query(ctx, batchReq)
+func (e *EncryptedIndex) Query(ctx context.Context, args ...interface{}) (*QueryResponse, error) {
+	// Delegate to the internal implementation which has the full logic
+	return e.internal.Query(ctx, args...)
 }
 
 // Get retrieves specific vectors from the encrypted index by their IDs.
