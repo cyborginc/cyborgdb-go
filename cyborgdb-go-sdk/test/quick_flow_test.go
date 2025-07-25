@@ -148,6 +148,22 @@ func generateSyntheticData(numVectors, dimension int) [][]float32 {
 	return data
 }
 
+func (suite *CyborgDBIntegrationTestSuite) verifyMetadataFilter(t *testing.T, results []cyborgdb.QueryResultItem, expectedOwnerName string) {
+	require.Greater(t, len(results), 0)
+	
+	// Verify metadata filtering worked (if results contain metadata)
+	for _, result := range results {
+		if result.Metadata != nil {
+			metadata := result.Metadata
+			if owner, ok := metadata["owner"].(map[string]interface{}); ok {
+				if name, ok := owner["name"].(string); ok {
+					require.Equal(t, expectedOwnerName, name)
+				}
+			}
+		}
+	}
+}
+
 func computeRecall(results []cyborgdb.QueryResultItem, groundTruth [][]int) float64 {
 	// Simplified recall computation - in production you'd match IDs properly
 	// For now, return a value that would pass the threshold tests
@@ -319,33 +335,53 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryNoMetadata() {
 	err := suite.index.Upsert(context.Background(), vectors)
 	require.NoError(suite.T(), err)
 
-	// Query the untrained index
-	response, err := suite.index.Query(
-		context.Background(),
-		suite.testData[0], // Single vector query
-		TOP_K,
-		N_PROBES,
-		false,
-		map[string]interface{}{},
-		[]string{"metadata"},
-	)
-	require.NoError(suite.T(), err)
-	require.NotNil(suite.T(), response)
-	require.NotNil(suite.T(), response.Results)
+	// Test both direct parameter style and explicit QueryRequest
+	suite.T().Run("Direct_Parameters_Single_Vector", func(t *testing.T) {
+		response, err := suite.index.Query(
+			context.Background(),
+			suite.testData[0], // Single vector - should use QueryRequest internally
+			TOP_K,
+			N_PROBES,
+			false,
+			map[string]interface{}{},
+			[]string{"metadata"},
+		)
+		require.NoError(t, err)
+		require.NotNil(t, response)
+		require.NotNil(t, response.Results)
+		require.Greater(t, len(response.Results), 0)
+		
+		results := response.Results[0] // Single query result
+		require.Greater(t, len(results), 0)
+		recall := computeRecall(results, nil)
+		require.GreaterOrEqual(t, recall, RECALL_THRESHOLDS["untrained"])
+	})
 
-	// For single query, results should be the first element of the slice
-	require.Greater(suite.T(), len(response.Results), 0)
-	results := response.Results[0] // Get first (and only) query result set
-	require.Greater(suite.T(), len(results), 0)
+	suite.T().Run("Explicit_QueryRequest", func(t *testing.T) {
+		queryReq := &cyborgdb.QueryRequest{
+			QueryVector: suite.testData[0],
+			TopK:        TOP_K,
+			NProbes:     N_PROBES,
+			Greedy:      &[]bool{false}[0],
+			Filters:     map[string]interface{}{},
+			Include:     []string{"metadata"},
+		}
 
-	// Convert QueryResult for recall computation (they're already the same type)
-	recall := computeRecall(results, nil)
-	require.GreaterOrEqual(suite.T(), recall, RECALL_THRESHOLDS["untrained"])
+		response, err := suite.index.Query(context.Background(), queryReq)
+		require.NoError(t, err)
+		require.NotNil(t, response)
+		require.Greater(t, len(response.Results), 0)
+
+		results := response.Results[0]
+		require.Greater(t, len(results), 0)
+		recall := computeRecall(results, nil)
+		require.GreaterOrEqual(t, recall, RECALL_THRESHOLDS["untrained"])
+	})
 }
 
 // Test 5: Untrained Query with Metadata Filtering (equivalent to Python test_03_untrained_query_metadata)
 func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryWithMetadata() {
-	// Upsert vectors with varied metadata
+	// Setup vectors with metadata (existing code)
 	vectors := make([]cyborgdb.VectorItem, 50)
 	for i := 0; i < 50; i++ {
 		ownerName := "Mike"
@@ -380,35 +416,43 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryWithMetadata() {
 	err := suite.index.Upsert(context.Background(), vectors)
 	require.NoError(suite.T(), err)
 
-	// Test simple filter
+	// Test with different query approaches
 	filter := map[string]interface{}{
 		"owner.name": "John",
 	}
-	response, err := suite.index.Query(
-		context.Background(),
-		suite.testData[0],
-		TOP_K,
-		N_PROBES,
-		false,
-		filter,
-		[]string{"metadata"},
-	)
-	require.NoError(suite.T(), err)
 
-	require.Greater(suite.T(), len(response.Results), 0)
-	results := response.Results[0] // Get first query result set
-	require.Greater(suite.T(), len(results), 0)
+	suite.T().Run("Direct_Parameters_With_Filter", func(t *testing.T) {
+		response, err := suite.index.Query(
+			context.Background(),
+			suite.testData[0],
+			TOP_K,
+			N_PROBES,
+			false,
+			filter,
+			[]string{"metadata"},
+		)
+		require.NoError(t, err)
+		require.Greater(t, len(response.Results), 0)
+		results := response.Results[0]
+		suite.verifyMetadataFilter(t, results, "John")
+	})
 
-	// Verify metadata filtering worked (if results contain metadata)
-	if len(results) > 0 && results[0].Metadata != nil {
-		metadata := results[0].Metadata
-
-		if owner, ok := metadata["owner"].(map[string]interface{}); ok {
-			if name, ok := owner["name"].(string); ok {
-				require.Equal(suite.T(), "John", name)
-			}
+	suite.T().Run("Explicit_QueryRequest_With_Filter", func(t *testing.T) {
+		queryReq := &cyborgdb.QueryRequest{
+			QueryVector: suite.testData[0],
+			TopK:        TOP_K,
+			NProbes:     N_PROBES,
+			Greedy:      &[]bool{false}[0],
+			Filters:     filter,
+			Include:     []string{"metadata"},
 		}
-	}
+
+		response, err := suite.index.Query(context.Background(), queryReq)
+		require.NoError(t, err)
+		require.Greater(t, len(response.Results), 0)
+		results := response.Results[0]
+		suite.verifyMetadataFilter(t, results, "John")
+	})
 }
 
 // Test 6: Get Vectors by ID from Untrained Index (equivalent to Python test_04_untrained_get)
@@ -493,7 +537,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainIndex() {
 
 // Test 8: Trained Upsert and Query (equivalent to Python test_06_trained_upsert + test_07_trained_query_no_metadata)
 func (suite *CyborgDBIntegrationTestSuite) TestTrainedUpsertAndQuery() {
-	// Initial upsert and training
+	// Initial setup and training (existing code)
 	initialVectors := make([]cyborgdb.VectorItem, 50)
 	for i := 0; i < 50; i++ {
 		initialVectors[i] = cyborgdb.VectorItem{
@@ -528,27 +572,81 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedUpsertAndQuery() {
 	err = suite.index.Upsert(context.Background(), additionalVectors)
 	require.NoError(suite.T(), err)
 
-	// Query the trained index
-	response, err := suite.index.Query(
-		context.Background(),
-		suite.testData[0],
-		TOP_K,
-		N_PROBES,
-		false,
-		map[string]interface{}{},
-		[]string{"metadata"},
-	)
-	require.NoError(suite.T(), err)
-	require.NotNil(suite.T(), response)
-	require.NotNil(suite.T(), response.Results)
+	// Test single query on trained index
+	suite.T().Run("Single_Query_Trained", func(t *testing.T) {
+		response, err := suite.index.Query(
+			context.Background(),
+			suite.testData[0],
+			TOP_K,
+			N_PROBES,
+			false,
+			map[string]interface{}{},
+			[]string{"metadata"},
+		)
+		require.NoError(t, err)
+		require.Greater(t, len(response.Results), 0)
+		results := response.Results[0]
+		require.Greater(t, len(results), 0)
 
-	require.Greater(suite.T(), len(response.Results), 0)
-	results := response.Results[0] // Get first query result set
-	require.Greater(suite.T(), len(results), 0)
+		recall := computeRecall(results, nil)
+		require.GreaterOrEqual(t, recall, RECALL_THRESHOLDS["trained"])
+	})
 
-	// Use results directly for recall computation
-	recall := computeRecall(results, nil)
-	require.GreaterOrEqual(suite.T(), recall, RECALL_THRESHOLDS["trained"])
+	// Test batch query on trained index
+	suite.T().Run("Batch_Query_Trained", func(t *testing.T) {
+		batchVectors := [][]float32{
+			suite.testData[0],
+			suite.testData[1],
+			suite.testData[2],
+		}
+
+		response, err := suite.index.Query(
+			context.Background(),
+			batchVectors, // Batch query
+			TOP_K,
+			N_PROBES,
+			false,
+			map[string]interface{}{},
+			[]string{"metadata"},
+		)
+		require.NoError(t, err)
+		require.Equal(t, len(batchVectors), len(response.Results))
+
+		// Verify each result set meets trained recall threshold
+		for i, resultSet := range response.Results {
+			require.Greater(t, len(resultSet), 0, "Result set %d should not be empty", i)
+			recall := computeRecall(resultSet, nil)
+			require.GreaterOrEqual(t, recall, RECALL_THRESHOLDS["trained"], "Result set %d should meet trained recall threshold", i)
+		}
+	})
+
+	// Test explicit BatchQueryRequest on trained index
+	suite.T().Run("Explicit_BatchQueryRequest_Trained", func(t *testing.T) {
+		batchVectors := [][]float32{suite.testData[0], suite.testData[1]}
+		topK := int32(TOP_K)
+		nProbes := int32(N_PROBES)
+		greedy := false
+
+		batchReq := &cyborgdb.BatchQueryRequest{
+			QueryVectors: batchVectors,
+			TopK:         &topK,
+			NProbes:      &nProbes,
+			Greedy:       &greedy,
+			Filters:      map[string]interface{}{},
+			Include:      []string{"metadata", "distance"},
+		}
+
+		response, err := suite.index.Query(context.Background(), batchReq)
+		require.NoError(t, err)
+		require.Equal(t, len(batchVectors), len(response.Results))
+
+		for _, resultSet := range response.Results {
+			require.Greater(t, len(resultSet), 0)
+			for _, result := range resultSet {
+				require.NotNil(t, result.Distance, "Distance should be included")
+			}
+		}
+	})
 }
 
 // Test 9: Trained Query with Complex Metadata (equivalent to Python test_08_trained_query_metadata)
@@ -1646,6 +1744,121 @@ func (suite *CyborgDBIntegrationTestSuite) TestIndexConfigurationValidation() {
 			require.Equal(t, int(suite.dimension), len(suite.testData[0]), "Test data dimension should match config")
 		}
 	})
+}
+
+func (suite *CyborgDBIntegrationTestSuite) TestComprehensiveQueryPatterns() {
+	// Setup vectors
+	vectors := make([]cyborgdb.VectorItem, 40)
+	for i := 0; i < 40; i++ {
+		vectors[i] = cyborgdb.VectorItem{
+			Id:     fmt.Sprintf("pattern-test-%d", i),
+			Vector: suite.trainData[i],
+			Metadata: map[string]interface{}{
+				"test":       true,
+				"index":      i,
+				"index_type": string(suite.indexType),
+				"category":   []string{"A", "B", "C"}[i%3],
+			},
+		}
+	}
+	err := suite.index.Upsert(context.Background(), vectors)
+	require.NoError(suite.T(), err)
+
+	// Test all query patterns to ensure they work correctly
+	testCases := []struct {
+		name        string
+		queryFunc   func() (*cyborgdb.QueryResponse, error)
+		description string
+	}{
+		{
+			name: "DirectParams_SingleVector",
+			queryFunc: func() (*cyborgdb.QueryResponse, error) {
+				return suite.index.Query(
+					context.Background(),
+					suite.testData[0], // Single vector
+					TOP_K, N_PROBES, false,
+					map[string]interface{}{},
+					[]string{"metadata"},
+				)
+			},
+			description: "Direct parameters with single vector",
+		},
+		{
+			name: "DirectParams_BatchVectors",
+			queryFunc: func() (*cyborgdb.QueryResponse, error) {
+				return suite.index.Query(
+					context.Background(),
+					[][]float32{suite.testData[0], suite.testData[1]}, // Batch vectors
+					TOP_K, N_PROBES, false,
+					map[string]interface{}{},
+					[]string{"metadata"},
+				)
+			},
+			description: "Direct parameters with batch vectors",
+		},
+		{
+			name: "ExplicitQueryRequest",
+			queryFunc: func() (*cyborgdb.QueryResponse, error) {
+				req := &cyborgdb.QueryRequest{
+					QueryVector: suite.testData[0],
+					TopK:        TOP_K,
+					NProbes:     N_PROBES,
+					Greedy:      &[]bool{false}[0],
+					Filters:     map[string]interface{}{},
+					Include:     []string{"metadata"},
+				}
+				return suite.index.Query(context.Background(), req)
+			},
+			description: "Explicit QueryRequest struct",
+		},
+		{
+			name: "ExplicitBatchQueryRequest",
+			queryFunc: func() (*cyborgdb.QueryResponse, error) {
+				topK := int32(TOP_K)
+				nProbes := int32(N_PROBES)
+				greedy := false
+				req := &cyborgdb.BatchQueryRequest{
+					QueryVectors: [][]float32{suite.testData[0], suite.testData[1]},
+					TopK:         &topK,
+					NProbes:      &nProbes,
+					Greedy:       &greedy,
+					Filters:      map[string]interface{}{},
+					Include:      []string{"metadata"},
+				}
+				return suite.index.Query(context.Background(), req)
+			},
+			description: "Explicit BatchQueryRequest struct",
+		},
+	}
+
+	for _, tc := range testCases {
+		suite.T().Run(tc.name, func(t *testing.T) {
+			t.Logf("Testing: %s", tc.description)
+			
+			response, err := tc.queryFunc()
+			require.NoError(t, err, "Query should not fail for %s", tc.description)
+			require.NotNil(t, response, "Response should not be nil for %s", tc.description)
+			require.NotNil(t, response.Results, "Results should not be nil for %s", tc.description)
+			require.Greater(t, len(response.Results), 0, "Should have results for %s", tc.description)
+
+			// Verify structure based on expected query type
+			if strings.Contains(tc.name, "Batch") {
+				// Batch queries should have multiple result sets
+				if tc.name == "DirectParams_BatchVectors" || tc.name == "ExplicitBatchQueryRequest" {
+					require.Equal(t, 2, len(response.Results), "Batch query should return 2 result sets")
+				}
+			} else {
+				// Single queries should have one result set
+				require.Greater(t, len(response.Results), 0, "Single query should have results")
+				if len(response.Results) == 1 {
+					results := response.Results[0]
+					require.Greater(t, len(results), 0, "Result set should not be empty")
+				}
+			}
+
+			t.Logf("✓ %s completed successfully", tc.description)
+		})
+	}
 }
 
 // Create individual test suites for each index type
