@@ -163,10 +163,10 @@ func (c *Client) CreateIndex(
 	// Construct and return a high-level EncryptedIndex object containing
 	// the index name, type, and configuration used in the request.
 	return &EncryptedIndex{
-		IndexName: &indexName,
-		IndexKey: keyHex,
-		IndexType: &createReq.IndexConfig.IndexType,
-		Config:    &createReq.IndexConfig,
+		indexName: &indexName,
+		indexKey:  keyHex,
+		indexType: &createReq.IndexConfig.IndexType,
+		config:    &createReq.IndexConfig,
 		client: c,
 	}, nil
 }
