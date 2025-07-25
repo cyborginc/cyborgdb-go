@@ -1,4 +1,4 @@
-package cyborgdb
+package internal
 
 // IndexOperationRequest represents a request to perform an operation
 // (such as describe or delete) on an existing encrypted index.

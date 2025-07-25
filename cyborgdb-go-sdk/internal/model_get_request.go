@@ -1,4 +1,4 @@
-package cyborgdb
+package internal
 
 type GetRequest struct {
 	IndexName string   `json:"index_name"`

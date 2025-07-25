@@ -1,4 +1,4 @@
-package cyborgdb
+package internal
 
 import (
 	"encoding/json"

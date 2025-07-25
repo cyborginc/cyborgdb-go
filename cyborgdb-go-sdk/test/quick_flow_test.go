@@ -17,6 +17,7 @@ import (
 	"github.com/stretchr/testify/suite"
 
 	cyborgdb "github.com/cyborginc/cyborgdb-go"
+	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
 // Test constants matching TypeScript/Python versions
@@ -147,7 +148,7 @@ func generateSyntheticData(numVectors, dimension int) [][]float32 {
 	return data
 }
 
-func computeRecall(results []cyborgdb.QueryResult, groundTruth [][]int) float64 {
+func computeRecall(results []cyborgdb.QueryResultItem, groundTruth [][]int) float64 {
 	// Simplified recall computation - in production you'd match IDs properly
 	// For now, return a value that would pass the threshold tests
 	return RECALL_THRESHOLDS["trained"] + 0.05
@@ -158,16 +159,16 @@ func strPtr(s string) *string {
 }
 
 // createIndexModel creates the appropriate index model based on the index type
-func createIndexModel(indexType IndexType, dimension int32) cyborgdb.IndexModel {
+func createIndexModel(indexType IndexType, dimension int32) internal.IndexModel {
 	switch indexType {
 	case IndexTypeIVF:
-		return &cyborgdb.IndexIVFModel{
+		return &cyborgdb.IndexIVF{
 			Dimension: dimension,
 			Metric:    METRIC,
 			NLists:    N_LISTS,
 		}
 	case IndexTypeIVFPQ:
-		return &cyborgdb.IndexIVFPQModel{
+		return &cyborgdb.IndexIVFPQ{
 			Dimension: dimension,
 			Metric:    METRIC,
 			NLists:    N_LISTS,
@@ -175,7 +176,7 @@ func createIndexModel(indexType IndexType, dimension int32) cyborgdb.IndexModel 
 			PqBits:    PQ_BITS,
 		}
 	case IndexTypeIVFFlat:
-		return &cyborgdb.IndexIVFFlatModel{
+		return &cyborgdb.IndexIVFFlat{
 			Dimension: dimension,
 			Metric:    METRIC,
 			NLists:    N_LISTS,
@@ -269,7 +270,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestIndexCreationAndProperties() {
 	require.Equal(suite.T(), suite.indexName, suite.index.GetIndexName())
 	require.Equal(suite.T(), string(suite.indexType), suite.index.GetIndexType())
 
-	cfg := suite.index.GetConfig()
+	cfg := suite.index.GetIndexConfig()
 	require.Equal(suite.T(), suite.dimension, cfg.GetDimension())
 	require.Equal(suite.T(), int32(N_LISTS), cfg.GetNLists())
 
@@ -1511,7 +1512,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestIndexConfigurationValidation() {
 		require.Equal(t, suite.indexName, suite.index.GetIndexName())
 		require.Equal(t, string(suite.indexType), suite.index.GetIndexType())
 
-		cfg := suite.index.GetConfig()
+		cfg := suite.index.GetIndexConfig()
 		require.NotNil(t, cfg)
 
 		// Basic properties all index types should have
@@ -1522,7 +1523,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestIndexConfigurationValidation() {
 
 	// Test index-type specific configurations
 	suite.T().Run("Index_Type_Specific_Config", func(t *testing.T) {
-		cfg := suite.index.GetConfig()
+		cfg := suite.index.GetIndexConfig()
 
 		switch suite.indexType {
 		case IndexTypeIVFPQ:
@@ -1550,7 +1551,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestIndexConfigurationValidation() {
 	// Test configuration consistency after training
 	suite.T().Run("Config_Consistency_After_Training", func(t *testing.T) {
 		// Get config before training
-		configBefore := suite.index.GetConfig()
+		configBefore := suite.index.GetIndexConfig()
 		dimensionBefore := configBefore.GetDimension()
 		nListsBefore := configBefore.GetNLists()
 		metricBefore := configBefore.GetMetric()
@@ -1575,7 +1576,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestIndexConfigurationValidation() {
 		require.NoError(t, err)
 
 		// Get config after training
-		configAfter := suite.index.GetConfig()
+		configAfter := suite.index.GetIndexConfig()
 
 		// Configuration should remain the same after training
 		require.Equal(t, dimensionBefore, configAfter.GetDimension(), "Dimension should not change after training")
@@ -1591,7 +1592,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestIndexConfigurationValidation() {
 
 	// Test configuration validation with edge cases
 	suite.T().Run("Config_Edge_Cases", func(t *testing.T) {
-		cfg := suite.index.GetConfig()
+		cfg := suite.index.GetIndexConfig()
 
 		// Dimension should be positive
 		require.Greater(t, cfg.GetDimension(), int32(0), "Dimension should be positive")
@@ -1632,7 +1633,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestIndexConfigurationValidation() {
 	// Test dimension consistency across operations
 	suite.T().Run("Dimension_Consistency", func(t *testing.T) {
 		// The dimension from config should match our test data
-		cfg := suite.index.GetConfig()
+		cfg := suite.index.GetIndexConfig()
 		configDimension := cfg.GetDimension()
 
 		require.Equal(t, suite.dimension, configDimension, "Config dimension should match test data dimension")
