@@ -307,12 +307,6 @@ func (v *NullableEncryptedIndex) UnmarshalJSON(src []byte) error {
 //
 // Returns:
 //   - error: nil on success, or an error describing what went wrong
-//
-// Example:
-//   items := []VectorItem{
-//       {Id: "vec1", Vector: []float32{1.0, 2.0, 3.0}, Metadata: map[string]interface{}{"tag": "example"}},
-//   }
-//   err := index.Upsert(ctx, items)
 func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 	if e.client == nil {
 		return fmt.Errorf("cannot upsert vectors: client reference is nil")
@@ -367,12 +361,6 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 //
 // Returns:
 //   - error: nil on success, or an error describing what went wrong
-//
-// Example:
-//   err := index.DeleteIndex(ctx)
-//   if err != nil {
-//       log.Printf("Failed to delete index: %v", err)
-//   }
 func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 	if e.client == nil {
 		return fmt.Errorf("cannot delete index: client reference is nil")
@@ -413,12 +401,6 @@ func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 //
 // Returns:
 //   - error: nil on success, or an error describing what went wrong
-//
-// Example:
-//   err := index.Train(ctx, 100, 50, 1e-5)
-//   if err != nil {
-//       log.Printf("Failed to train index: %v", err)
-//   }
 func (e *EncryptedIndex) Train(ctx context.Context, batchSize int32, maxIters int32, tolerance float64) error {
 	if e.client == nil {
 		return fmt.Errorf("cannot train index: client reference is nil")
@@ -474,36 +456,6 @@ func (e *EncryptedIndex) Train(ctx context.Context, batchSize int32, maxIters in
 // Returns:
 //   - *QueryResponse: Contains the search results with nearest neighbors, distances, and metadata
 //   - error: nil on success, or an error describing what went wrong
-//
-// Examples:
-//   // Direct parameters - single vector
-//   results, err := index.Query(ctx, []float32{1.0, 2.0, 3.0}, 10, 5, false, nil, []string{"metadata"})
-//
-//   // Direct parameters - batch vectors
-//   batch := [][]float32{{1.0, 2.0}, {3.0, 4.0}}
-//   results, err := index.Query(ctx, batch, 5, 3, false, nil, []string{"distance", "metadata"})
-//
-//   // Using QueryRequest struct
-//   queryReq := &QueryRequest{
-//       IndexName: "my-index",
-//       IndexKey: "hex-key",
-//       QueryVector: []float32{1.0, 2.0, 3.0},
-//       TopK: 10,
-//       NProbes: 5,
-//       Include: []string{"metadata"},
-//   }
-//   results, err := index.Query(ctx, queryReq)
-//
-//   // Using BatchQueryRequest struct
-//   batchReq := &BatchQueryRequest{
-//       IndexName: "my-index", 
-//       IndexKey: "hex-key",
-//       QueryVectors: [][]float32{{1.0, 2.0}, {3.0, 4.0}},
-//       TopK: &topK,
-//       NProbes: &nProbes,
-//       Include: []string{"distance", "metadata"},
-//   }
-//   results, err := index.Query(ctx, batchReq)
 func (e *EncryptedIndex) Query(ctx context.Context, args ...interface{}) (*QueryResponse, error) {
 	if e.client == nil {
 		return nil, fmt.Errorf("cannot query index: client reference is nil")
@@ -538,7 +490,15 @@ func (e *EncryptedIndex) Query(ctx context.Context, args ...interface{}) (*Query
 		return e.executeDirectQueryAsBatch(ctx, keyHex, args...)
 	}
 }
-
+// convertQueryRequestToBatch converts a QueryRequest to BatchQueryRequest format.
+// This helper function ensures consistency with the TypeScript SDK which always
+// uses batch format internally, even for single vector queries.
+//
+// Parameters:
+//   - req: The QueryRequest to convert
+//
+// Returns:
+//   - *BatchQueryRequest: The converted batch request
 func convertQueryRequestToBatch(req *QueryRequest) *BatchQueryRequest {
 	batch := &BatchQueryRequest{
 		IndexName: req.IndexName,
@@ -564,6 +524,18 @@ func convertQueryRequestToBatch(req *QueryRequest) *BatchQueryRequest {
 	return batch
 }
 
+// executeUnifiedQuery executes a query using the BatchQueryRequest format.
+// This is the core query execution method that all other query patterns ultimately use.
+// It matches the TypeScript SDK behavior of always using batch requests internally.
+//
+// Parameters:
+//   - ctx: Context for controlling the request lifecycle
+//   - keyHex: The index encryption key in hexadecimal format
+//   - req: The BatchQueryRequest containing query parameters
+//
+// Returns:
+//   - *QueryResponse: The query results
+//   - error: nil on success, or an error describing what went wrong
 func (e *EncryptedIndex) executeUnifiedQuery(ctx context.Context, keyHex string, req *BatchQueryRequest) (*QueryResponse, error) {
 	// Validate input
 	if req.QueryVectors == nil || len(req.QueryVectors) == 0 {
@@ -604,7 +576,16 @@ func (e *EncryptedIndex) executeUnifiedQuery(ctx context.Context, keyHex string,
 	return resp, nil
 }
 
-// executeQueryRequest handles QueryRequest struct
+// executeQueryRequest handles QueryRequest struct by converting it to BatchQueryRequest.
+// This method is kept for backward compatibility but internally uses the unified batch approach.
+//
+// Parameters:
+//   - ctx: Context for controlling the request lifecycle
+//   - req: The QueryRequest to execute
+//
+// Returns:
+//   - *QueryResponse: The query results
+//   - error: nil on success, or an error describing what went wrong
 func (e *EncryptedIndex) executeQueryRequest(ctx context.Context, req *QueryRequest) (*QueryResponse, error) {
 	// Validate that we have either QueryVector, QueryVectors, or QueryContents
 	hasQueryVector := req.QueryVector != nil && len(req.QueryVector) > 0
@@ -643,6 +624,18 @@ func (e *EncryptedIndex) executeQueryRequest(ctx context.Context, req *QueryRequ
 	return resp, nil
 }
 
+// executeDirectQueryAsBatch handles direct parameter queries by converting them to BatchQueryRequest.
+// This method parses the variable arguments and creates a BatchQueryRequest, matching
+// the TypeScript SDK behavior.
+//
+// Parameters:
+//   - ctx: Context for controlling the request lifecycle
+//   - keyHex: The index encryption key in hexadecimal format
+//   - args: Variable arguments containing queryVectors, topK, nProbes, greedy, filters, include
+//
+// Returns:
+//   - *QueryResponse: The query results
+//   - error: nil on success, or an error describing what went wrong
 func (e *EncryptedIndex) executeDirectQueryAsBatch(ctx context.Context, keyHex string, args ...interface{}) (*QueryResponse, error) {
 	if len(args) < 1 {
 		return nil, fmt.Errorf("at least queryVectors argument is required")
@@ -720,7 +713,20 @@ func (e *EncryptedIndex) executeDirectQueryAsBatch(ctx context.Context, keyHex s
 	return e.executeUnifiedQuery(ctx, keyHex, batchRequest)
 }
 
-// executeBatchQueryRequest handles BatchQueryRequest struct
+// executeDirectQuery handles the direct parameter style (LEGACY).
+// This method exists for backward compatibility but is no longer the primary execution path.
+// New implementations should use executeDirectQueryAsBatch which maintains consistency
+// with the TypeScript SDK.
+//
+// Parameters:
+//   - ctx: Context for controlling the request lifecycle
+//   - args: Variable arguments containing query parameters
+//
+// Returns:
+//   - *QueryResponse: The query results
+//   - error: nil on success, or an error describing what went wrong
+//
+// Deprecated: Use executeDirectQueryAsBatch instead for better consistency with TypeScript SDK.
 func (e *EncryptedIndex) executeBatchQueryRequest(ctx context.Context, req *BatchQueryRequest) (*QueryResponse, error) {
 	// Validate that we have QueryVectors
 	if req.QueryVectors == nil || len(req.QueryVectors) == 0 {
@@ -879,6 +885,9 @@ func (e *EncryptedIndex) executeDirectQuery(ctx context.Context, args ...interfa
 //   if err != nil {
 //       log.Printf("Failed to delete vectors: %v", err)
 //   }
+//
+// Note: Deleting non-existent IDs will not cause an error. The operation will
+// succeed and only existing vectors will be removed.
 func (e *EncryptedIndex) Delete(ctx context.Context, ids []string) error {
 	if e.client == nil {
 		return fmt.Errorf("cannot delete vectors: client reference is nil")
@@ -927,20 +936,14 @@ func (e *EncryptedIndex) Delete(ctx context.Context, ids []string) error {
 //   - include: Fields to include in the response (e.g., ["vector", "metadata", "contents"])
 //
 // Returns:
-//   - []VectorItem: Slice of VectorItem structs containing the requested vectors and their data
+//   - *GetResponse: Response containing retrieved vectors with requested fields
 //   - error: nil on success, or an error describing what went wrong
 //
-// Example:
-//   ids := []string{"vec1", "vec2"}
-//   include := []string{"vector", "metadata", "contents"}
-//   vectors, err := index.Get(ctx, ids, include)
-//   if err != nil {
-//       log.Printf("Failed to retrieve vectors: %v", err)
-//   }
-//   for _, vec := range vectors {
-//       fmt.Printf("Retrieved vector %s with %d dimensions\n", vec.Id, len(vec.Vector))
-//   }
-func (e *EncryptedIndex) Get(ctx context.Context, ids []string, include []string) ([]VectorItem, error) {
+// Note: If a requested ID does not exist, it will not be included in the results.
+// The returned slice may be shorter than the requested IDs slice.
+// For trained IVFPQ indexes, retrieved vectors may be compressed and have different
+// dimensions than the original vectors.
+func (e *EncryptedIndex) Get(ctx context.Context, ids []string, include []string) (*GetResponse, error) {
 	if e.client == nil {
 		return nil, fmt.Errorf("cannot get vectors: client reference is nil")
 	}
@@ -968,7 +971,15 @@ func (e *EncryptedIndex) Get(ctx context.Context, ids []string, include []string
 
 	return resp, nil
 }
-
+// IsTrained returns whether the index has been trained.
+// Training optimizes the index for better search performance and is typically
+// performed after upserting a significant number of vectors.
+//
+// Returns:
+//   - bool: true if the index has been trained, false otherwise
+//
+// Note: The trained state is tracked locally and may not reflect the actual
+// server-side state if the index was trained outside of this client instance.
 func (e *EncryptedIndex) IsTrained() bool {
     return e.trained  // You'll need to add this field
 }

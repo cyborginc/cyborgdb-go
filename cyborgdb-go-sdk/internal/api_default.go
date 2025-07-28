@@ -458,7 +458,7 @@ func (r ApiGetVectorsRequest) Include(include []string) ApiGetVectorsRequest {
 	return r
 }
 
-func (r ApiGetVectorsRequest) Execute() ([]VectorItem, *http.Response, error) {
+func (r ApiGetVectorsRequest) Execute() (*GetResponse, *http.Response, error) {
 	return r.ApiService.GetVectorsExecute(r)
 }
 
@@ -478,19 +478,19 @@ func (a *DefaultAPIService) GetVectors(ctx context.Context, indexName string) Ap
 }
 
 // Execute executes the request
-func (a *DefaultAPIService) GetVectorsExecute(r ApiGetVectorsRequest) ([]VectorItem, *http.Response, error) {
+//
+//	@return *GetResponse
+func (a *DefaultAPIService) GetVectorsExecute(r ApiGetVectorsRequest) (*GetResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod = http.MethodPost
-		localVarPostBody   interface{}
-		formFiles          []formFile
-		localVarReturnVal  struct {
-			Results []VectorItem `json:"results"`
-		}
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *GetResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.GetVectors")
 	if err != nil {
-		return nil, nil, &GenericOpenAPIError{error: err.Error()}
+		return localVarReturnValue, nil, &GenericOpenAPIError{error: err.Error()}
 	}
 
 	localVarPath := localBasePath + "/vectors/get"
@@ -500,10 +500,10 @@ func (a *DefaultAPIService) GetVectorsExecute(r ApiGetVectorsRequest) ([]VectorI
 	localVarFormParams := url.Values{}
 
 	if r.xIndexKey == nil {
-		return nil, nil, reportError("xIndexKey is required and must be specified")
+		return localVarReturnValue, nil, reportError("xIndexKey is required and must be specified")
 	}
 	if r.ids == nil {
-		return nil, nil, reportError("ids is required and must be specified")
+		return localVarReturnValue, nil, reportError("ids is required and must be specified")
 	}
 
 	// Prepare request body
@@ -534,38 +534,39 @@ func (a *DefaultAPIService) GetVectorsExecute(r ApiGetVectorsRequest) ([]VectorI
 		localVarPostBody, localVarHeaderParams,
 		localVarQueryParams, localVarFormParams, formFiles)
 	if err != nil {
-		return nil, nil, err
+		return localVarReturnValue, nil, err
 	}
 
 	localVarHTTPResponse, err := a.client.callAPI(req)
 	if err != nil || localVarHTTPResponse == nil {
-		return nil, localVarHTTPResponse, err
+		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
 	localVarBody, err := io.ReadAll(localVarHTTPResponse.Body)
 	localVarHTTPResponse.Body.Close()
 	localVarHTTPResponse.Body = io.NopCloser(bytes.NewBuffer(localVarBody))
 	if err != nil {
-		return nil, localVarHTTPResponse, err
+		return localVarReturnValue, localVarHTTPResponse, err
 	}
 
 	if localVarHTTPResponse.StatusCode >= 300 {
-		return nil, localVarHTTPResponse, &GenericOpenAPIError{
+		return localVarReturnValue, localVarHTTPResponse, &GenericOpenAPIError{
 			body:  localVarBody,
 			error: localVarHTTPResponse.Status,
 		}
 	}
 
-	err = a.client.decode(&localVarReturnVal, localVarBody,
+	// Decode directly into GetResponse instead of intermediate struct
+	err = a.client.decode(&localVarReturnValue, localVarBody,
 		localVarHTTPResponse.Header.Get("Content-Type"))
 	if err != nil {
-		return nil, localVarHTTPResponse, &GenericOpenAPIError{
+		return localVarReturnValue, localVarHTTPResponse, &GenericOpenAPIError{
 			body:  localVarBody,
 			error: err.Error(),
 		}
 	}
 
-	return localVarReturnVal.Results, localVarHTTPResponse, nil
+	return localVarReturnValue, localVarHTTPResponse, nil
 }
 
 type ApiListIndexesRequest struct {
