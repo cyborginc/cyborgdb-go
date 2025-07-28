@@ -7,28 +7,32 @@ import (
 )
 
 // Client provides a high-level interface to the CyborgDB API, similar to the TypeScript SDK.
-// It wraps the internal implementation and exposes user-friendly methods.
+// It wraps the internal implementation and exposes user-friendly methods for managing
+// encrypted vector indexes and performing vector database operations.
+//
+// The Client handles authentication, connection management, and provides methods for:
+//   - Creating and listing encrypted indexes
+//   - Health checking the CyborgDB service
+//   - Managing the lifecycle of vector indexes
+//
+// All operations performed through this client maintain end-to-end encryption of vector data.
 type Client struct {
 	internal *internal.Client // Embedded internal client
 }
 
 // NewClient creates a new CyborgDB client instance.
-// This is equivalent to the TypeScript constructor: new CyborgDB(baseUrl, apiKey).
+//
+// The client manages the connection to CyborgDB and handles authentication automatically.
+// SSL verification can be disabled for development environments with self-signed certificates.
 //
 // Parameters:
 //   - baseURL: Base URL of the CyborgDB service (e.g., "https://api.cyborgdb.com")
-//   - apiKey: API key for authentication (optional, can be empty string)
-//   - verifySSL: Whether to verify SSL certificates (set false for localhost dev)
+//   - apiKey: API key for authentication (required for most operations)
+//   - verifySSL: Whether to verify SSL certificates (set false for localhost development)
 //
 // Returns:
-//   - *Client: A new Client instance
+//   - *Client: A new Client instance ready for use
 //   - error: Any error that occurred during client creation
-//
-// Example:
-//   client, err := cyborgdb.NewClient("https://api.cyborgdb.com", "your-api-key", true)
-//   if err != nil {
-//       log.Fatal(err)
-//   }
 func NewClient(baseURL, apiKey string, verifySSL bool) (*Client, error) {
 	internalClient, err := internal.NewClient(baseURL, apiKey, verifySSL)
 	if err != nil {
@@ -40,59 +44,41 @@ func NewClient(baseURL, apiKey string, verifySSL bool) (*Client, error) {
 	}, nil
 }
 
-// ListIndexes retrieves a list of all available encrypted index names.
-// This method corresponds to the TypeScript method: client.listIndexes()
+// ListIndexes retrieves a list of all available encrypted index names from your CyborgDB instance.
+//
+// This operation queries the CyborgDB service for all indexes that have been created
+// under your API key. The returned list contains only the index names, not their
+// configurations or contents.
 //
 // Parameters:
-//   - ctx: Context for request cancellation and timeouts
+//   - ctx: Context for request cancellation, timeouts, and tracing
 //
 // Returns:
-//   - []string: List of index names
+//   - []string: List of index names (empty slice if no indexes exist)
 //   - error: Any error that occurred during the request
-//
-// Example:
-//   indexes, err := client.ListIndexes(context.Background())
-//   if err != nil {
-//       log.Printf("Failed to list indexes: %v", err)
-//   }
-//   for _, indexName := range indexes {
-//       fmt.Printf("Found index: %s\n", indexName)
-//   }
 func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 	return c.internal.ListIndexes(ctx)
 }
 
-// CreateIndex creates a new encrypted vector index.
-// This method corresponds to the TypeScript method: client.createIndex()
+// CreateIndex creates a new encrypted vector index with the specified configuration.
+//
+// The created index will be empty and ready for vector operations. Different index types
+// (IVF, IVFPQ, IVFFlat) offer different trade-offs between speed, accuracy, and memory usage.
+// All vector data stored in the index is encrypted using the provided encryption key.
 //
 // Parameters:
-//   - ctx: Context for request cancellation and timeouts
-//   - indexName: Unique name for the index
-//   - indexKey: 32-byte encryption key (must be exactly 32 bytes)
-//   - indexModel: Index configuration (IndexIVF, IndexIVFPQ, or IndexIVFFlat)
-//   - embeddingModel: Optional name of embedding model to associate
+//   - ctx: Context for request cancellation, timeouts, and tracing
+//   - indexName: Unique name for the index (must be unique within your CyborgDB instance)
+//   - indexKey: 32-byte encryption key (generate using crypto/rand for security)
+//   - indexModel: Index configuration specifying type, dimension, and parameters
+//   - embeddingModel: Optional name of embedding model to associate with this index
 //
 // Returns:
-//   - *EncryptedIndex: A new EncryptedIndex instance for performing operations
+//   - *EncryptedIndex: A new EncryptedIndex instance for performing vector operations
 //   - error: Any error that occurred during index creation
 //
-// Example:
-//   // Create IVFPQ index
-//   indexModel := &cyborgdb.IndexIVFPQ{
-//       Dimension: 768,
-//       Metric:    "euclidean",
-//       NLists:    100,
-//       PqDim:     32,
-//       PqBits:    8,
-//   }
-//   
-//   key := make([]byte, 32)
-//   rand.Read(key) // Generate random key
-//   
-//   index, err := client.CreateIndex(ctx, "my-index", key, indexModel, nil)
-//   if err != nil {
-//       log.Printf("Failed to create index: %v", err)
-//   }
+// Note: Store the encryption key securely - it cannot be recovered if lost.
+// The index name must be unique; creating an index with an existing name will fail.
 func (c *Client) CreateIndex(
 	ctx context.Context,
 	indexName string,
@@ -112,30 +98,17 @@ func (c *Client) CreateIndex(
 }
 
 // GetHealth checks the health status of the CyborgDB service.
-// This method corresponds to the TypeScript method: client.getHealth()
+//
+// This is useful for monitoring, readiness checks, and verifying that the CyborgDB
+// service is accessible and operational. The health check typically does not require
+// authentication and can be used to test connectivity.
 //
 // Parameters:
-//   - ctx: Context for request cancellation and timeouts
+//   - ctx: Context for request cancellation, timeouts, and tracing
 //
 // Returns:
 //   - *HealthResponse: Health status information from the server
 //   - error: Any error that occurred during the health check
-//
-// Example:
-//   health, err := client.GetHealth(context.Background())
-//   if err != nil {
-//       log.Printf("Health check failed: %v", err)
-//   } else {
-//       fmt.Printf("Service status: %s\n", *health.Status)
-//   }
 func (c *Client) GetHealth(ctx context.Context) (*internal.HealthResponse, error) {
 	return c.internal.GetHealth(ctx)
-}
-
-// handleAPIError provides consistent error handling (private method).
-// This corresponds to the TypeScript private method: handleApiError()
-func (c *Client) handleAPIError(err error) error {
-	// Add any Go-specific error handling/formatting here
-	// For now, just return the error as-is, but you could enhance this
-	return err
 }

@@ -14,6 +14,7 @@ type BatchQueryRequest = internal.BatchQueryRequest
 type TrainRequest = internal.TrainRequest
 type DeleteRequest = internal.DeleteRequest
 type GetRequest = internal.GetRequest
+type GetResponse = internal.GetResponse
 type VectorItem = internal.VectorItem
 type QueryResponse = internal.QueryResponse
 type IndexIVFFlat = internal.IndexIVFFlatModel

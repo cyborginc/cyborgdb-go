@@ -475,8 +475,12 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedGet() {
 	require.NoError(suite.T(), err)
 
 	ids := []string{"test-id-0", "test-id-1", "test-id-2"}
-	retrieved, err := suite.index.Get(context.Background(), ids, []string{"vector", "metadata", "contents"})
+	response, err := suite.index.Get(context.Background(), ids, []string{"vector", "metadata", "contents"})
 	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), response)
+	require.Equal(suite.T(), len(ids), response.GetResultCount())
+
+	retrieved := response.GetResults()
 	require.Equal(suite.T(), len(ids), len(retrieved))
 
 	for idx, item := range retrieved {
@@ -484,32 +488,56 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedGet() {
 		expectedIndex, _ := strconv.Atoi(expectedId[8:]) // Extract number from "test-id-X"
 
 		// ID check
-		require.Equal(suite.T(), expectedId, item.Id)
+		require.Equal(suite.T(), expectedId, item.GetId())
 
 		// Vector check
-		require.NotNil(suite.T(), item.Vector)
+		require.True(suite.T(), item.HasVector(), "Vector should be present")
+		vector := item.GetVector()
+		require.NotNil(suite.T(), vector)
 
 		// For IVFPQ, vectors might be compressed, so we check differently
 		if suite.indexType == IndexTypeIVFPQ {
 			// IVFPQ returns compressed vectors, so dimension might be different
-			require.Greater(suite.T(), len(item.Vector), 0, "Vector should not be empty")
+			require.Greater(suite.T(), len(vector), 0, "Vector should not be empty")
 		} else {
 			// For IVF and IVFFlat, vectors should maintain original dimension
-			require.Equal(suite.T(), int(suite.dimension), len(item.Vector))
+			require.Equal(suite.T(), int(suite.dimension), len(vector))
 		}
 
 		// Metadata check
-		require.NotNil(suite.T(), item.Metadata)
-		metadata := item.Metadata
+		require.True(suite.T(), item.HasMetadata(), "Metadata should be present")
+		metadata := item.GetMetadata()
+		require.NotNil(suite.T(), metadata)
 		require.Equal(suite.T(), true, metadata["test"])
 		require.Equal(suite.T(), float64(expectedIndex), metadata["index"]) // JSON numbers are float64
 		require.Equal(suite.T(), string(suite.indexType), metadata["index_type"])
 
 		// Contents check
-		if item.Contents != nil {
-			require.Equal(suite.T(), fmt.Sprintf("test-content-%d", expectedIndex), *item.Contents)
-		}
+		require.True(suite.T(), item.HasContents(), "Contents should be present")
+		contents := item.GetContents()
+		require.Equal(suite.T(), fmt.Sprintf("test-content-%d", expectedIndex), contents)
 	}
+
+	// Test helper methods
+	suite.T().Run("Test_GetResponse_Helper_Methods", func(t *testing.T) {
+		// Test GetResultByID
+		result, found := response.GetResultByID("test-id-1")
+		require.True(t, found, "Should find test-id-1")
+		require.NotNil(t, result)
+		require.Equal(t, "test-id-1", result.GetId())
+
+		// Test GetResultByID with non-existent ID
+		result, found = response.GetResultByID("non-existent-id")
+		require.False(t, found, "Should not find non-existent ID")
+		require.Nil(t, result)
+
+		// Test GetAllIDs
+		allIds := response.GetAllIDs()
+		require.Equal(t, len(ids), len(allIds))
+		for _, expectedId := range ids {
+			require.Contains(t, allIds, expectedId)
+		}
+	})
 }
 
 // Test 7: Train Index (equivalent to Python test_05_train_index)
@@ -781,10 +809,24 @@ func (suite *CyborgDBIntegrationTestSuite) TestDeleteVectors() {
 	require.NoError(suite.T(), err)
 
 	// Try to get the deleted vectors
-	remaining, err := suite.index.Get(context.Background(), idsToDelete, []string{"vector", "metadata"})
+	remainingResponse, err := suite.index.Get(context.Background(), idsToDelete, []string{"vector", "metadata"})
 	// Some implementations might return an error, others might return empty results
 	if err == nil {
-		require.Less(suite.T(), len(remaining), len(idsToDelete))
+		require.Less(suite.T(), remainingResponse.GetResultCount(), len(idsToDelete))
+		
+		// Verify that any remaining results don't include the deleted IDs
+		remaining := remainingResponse.GetResults()
+		for _, result := range remaining {
+			resultId := result.GetId()
+			found := false
+			for _, deletedId := range idsToDelete {
+				if resultId == deletedId {
+					found = true
+					break
+				}
+			}
+			require.False(suite.T(), found, "Deleted vector %s should not be returned", resultId)
+		}
 	}
 }
 
@@ -940,9 +982,9 @@ func (suite *CyborgDBIntegrationTestSuite) TestGetDeletedItemsVerification() {
 	for i, v := range allVectors {
 		allIds[i] = v.Id
 	}
-	beforeDeletion, err := suite.index.Get(context.Background(), allIds, []string{"vector", "metadata"})
+	beforeDeletionResponse, err := suite.index.Get(context.Background(), allIds, []string{"vector", "metadata"})
 	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), len(allIds), len(beforeDeletion))
+	require.Equal(suite.T(), len(allIds), beforeDeletionResponse.GetResultCount())
 
 	// Delete specific vectors
 	idsToDelete := make([]string, len(vectorsToDelete))
@@ -953,15 +995,15 @@ func (suite *CyborgDBIntegrationTestSuite) TestGetDeletedItemsVerification() {
 	require.NoError(suite.T(), err)
 
 	// Attempt to get the deleted vectors - should return fewer results
-	deletedResults, err := suite.index.Get(context.Background(), idsToDelete, []string{"vector", "metadata"})
+	deletedResponse, err := suite.index.Get(context.Background(), idsToDelete, []string{"vector", "metadata"})
 	if err == nil {
-		require.Less(suite.T(), len(deletedResults), len(idsToDelete))
+		require.Less(suite.T(), deletedResponse.GetResultCount(), len(idsToDelete))
 
 		// If any results are returned, they should not be the deleted items
-		for _, result := range deletedResults {
+		for _, result := range deletedResponse.GetResults() {
 			found := false
 			for _, deletedId := range idsToDelete {
-				if result.Id == deletedId {
+				if result.GetId() == deletedId {
 					found = true
 					break
 				}
@@ -975,32 +1017,32 @@ func (suite *CyborgDBIntegrationTestSuite) TestGetDeletedItemsVerification() {
 	for i, v := range vectorsToKeep {
 		keptIds[i] = v.Id
 	}
-	keptResults, err := suite.index.Get(context.Background(), keptIds, []string{"vector", "metadata"})
+	keptResponse, err := suite.index.Get(context.Background(), keptIds, []string{"vector", "metadata"})
 	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), len(keptIds), len(keptResults))
+	require.Equal(suite.T(), len(keptIds), keptResponse.GetResultCount())
 
 	// Verify the kept vectors have correct data
-	for _, result := range keptResults {
+	for _, result := range keptResponse.GetResults() {
 		found := false
 		for _, keptId := range keptIds {
-			if result.Id == keptId {
+			if result.GetId() == keptId {
 				found = true
 				break
 			}
 		}
 		require.True(suite.T(), found, "Kept vector should be accessible")
 
-		require.NotNil(suite.T(), result.Vector)
+		require.True(suite.T(), result.HasVector(), "Vector should be present")
+		vector := result.GetVector()
+		require.NotNil(suite.T(), vector)
 
-		if result.Metadata != nil {
-			metadata := result.Metadata
+		if result.HasMetadata() {
+			metadata := result.GetMetadata()
 			require.Equal(suite.T(), "to-be-kept", metadata["category"])
 			require.Equal(suite.T(), string(suite.indexType), metadata["index_type"])
 		}
 	}
 }
-
-// Add these new test methods to the CyborgDBIntegrationTestSuite
 
 // Test 16: Trained Get Test (Missing from original suite)
 func (suite *CyborgDBIntegrationTestSuite) TestTrainedGet() {
@@ -1058,49 +1100,48 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedGet() {
 		"trained-get-id-50", "trained-get-id-55", "trained-get-id-60", // from additional set
 	}
 
-	retrieved, err := suite.index.Get(context.Background(), idsToGet, []string{"vector", "metadata", "contents"})
+	response, err := suite.index.Get(context.Background(), idsToGet, []string{"vector", "metadata", "contents"})
 	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), len(idsToGet), len(retrieved))
+	require.Equal(suite.T(), len(idsToGet), response.GetResultCount())
 
 	// Verify each retrieved item matches expectations
+	retrieved := response.GetResults()
 	for idx, item := range retrieved {
 		expectedId := idsToGet[idx]
 		expectedIndex, _ := strconv.Atoi(expectedId[len("trained-get-id-"):])
 
 		// ID check
-		require.Equal(suite.T(), expectedId, item.Id)
+		require.Equal(suite.T(), expectedId, item.GetId())
 
-		// Vector check - handle different index types
 		// Vector check - handle different index types with more flexible approach
-		require.NotNil(suite.T(), item.Vector)
+		require.True(suite.T(), item.HasVector(), "Vector should be present")
+		vector := item.GetVector()
+		require.NotNil(suite.T(), vector)
 
 		switch suite.indexType {
 		case IndexTypeIVFPQ:
 			// IVFPQ returns compressed vectors with PQ_DIM dimension
-			if len(item.Vector) > 0 {
-				require.Equal(suite.T(), PQ_DIM, len(item.Vector), "IVFPQ should return compressed vectors with PQ_DIM dimension")
+			if len(vector) > 0 {
+				require.Equal(suite.T(), PQ_DIM, len(vector), "IVFPQ should return compressed vectors with PQ_DIM dimension")
 			} else {
 				suite.T().Logf("Warning: IVFPQ returned empty vector for %s", expectedId)
 			}
 		case IndexTypeIVF, IndexTypeIVFFlat:
-			// For IVF and IVFFlat, the behavior might vary
-			// Some implementations might not return vectors after training, or return compressed/modified vectors
-			if len(item.Vector) == 0 {
-				// Log this but don't fail - some implementations might not return vectors for trained indexes
-				suite.T().Logf("Note: %s index returned empty vector for %s (this might be expected behavior)", suite.indexType, expectedId)
-			} else if len(item.Vector) == int(suite.dimension) {
-				// If vectors are returned, they should have the original dimension
-				require.Equal(suite.T(), int(suite.dimension), len(item.Vector), "Vector should have original dimension")
+			// For IVF and IVFFlat, the behavior might vary after training
+			if len(vector) == 0 {
+				suite.T().Logf("Note: %s index returned empty vector for %s (this might be expected behavior after training)", suite.indexType, expectedId)
+			} else if len(vector) == int(suite.dimension) {
+				require.Equal(suite.T(), int(suite.dimension), len(vector), "Vector should have original dimension")
 			} else {
-				// Log unexpected dimension but don't fail - implementation might vary
 				suite.T().Logf("Note: %s index returned vector with dimension %d instead of expected %d for %s",
-					suite.indexType, len(item.Vector), suite.dimension, expectedId)
+					suite.indexType, len(vector), suite.dimension, expectedId)
 			}
 		}
 
 		// Metadata check
-		require.NotNil(suite.T(), item.Metadata)
-		metadata := item.Metadata
+		require.True(suite.T(), item.HasMetadata(), "Metadata should be present")
+		metadata := item.GetMetadata()
+		require.NotNil(suite.T(), metadata)
 		require.Equal(suite.T(), true, metadata["test"])
 		require.Equal(suite.T(), float64(expectedIndex), metadata["index"])
 		require.Equal(suite.T(), string(suite.indexType), metadata["index_type"])
@@ -1123,10 +1164,47 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedGet() {
 		require.Contains(suite.T(), []string{"John", "Joseph", "Mike"}, ownerName)
 
 		// Contents check
-		if item.Contents != nil {
-			require.Equal(suite.T(), fmt.Sprintf("trained-content-%d", expectedIndex), *item.Contents)
+		require.True(suite.T(), item.HasContents(), "Contents should be present")
+		contents := item.GetContents()
+		require.Equal(suite.T(), fmt.Sprintf("trained-content-%d", expectedIndex), contents)
+
+		// Test GetMetadataValue helper method
+		categoryValue, exists := item.GetMetadataValue("category")
+		require.True(suite.T(), exists)
+		if expectedIndex < 50 {
+			require.Equal(suite.T(), "trained-test", categoryValue)
+		} else {
+			require.Equal(suite.T(), "post-training", categoryValue)
+		}
+
+		// Test GetVectorDimension helper method - handle empty vectors gracefully
+		dimension := item.GetVectorDimension()
+		if len(vector) == 0 {
+			// If vector is empty, dimension should be 0 - this is expected for some index types after training
+			require.Equal(suite.T(), 0, dimension, "Empty vector should have 0 dimension")
+			suite.T().Logf("Note: %s index type returns empty vectors after training, which is expected behavior", suite.indexType)
+		} else {
+			require.Greater(suite.T(), dimension, 0, "Non-empty vector dimension should be positive")
 		}
 	}
+
+	// Test additional GetResponse helper methods
+	suite.T().Run("Test_GetResponse_Helpers_Trained", func(t *testing.T) {
+		// Test GetResultByID
+		result, found := response.GetResultByID("trained-get-id-0")
+		require.True(t, found)
+		require.Equal(t, "trained-get-id-0", result.GetId())
+
+		// Test GetAllIDs
+		allIds := response.GetAllIDs()
+		require.Equal(t, len(idsToGet), len(allIds))
+		for _, expectedId := range idsToGet {
+			require.Contains(t, allIds, expectedId)
+		}
+
+		// Test GetResultCount
+		require.Equal(t, len(idsToGet), response.GetResultCount())
+	})
 }
 
 // Test 17: Complex Metadata Filtering with Advanced Operators
@@ -1486,20 +1564,22 @@ func (suite *CyborgDBIntegrationTestSuite) TestContentsFieldComprehensive() {
 			ids[i] = fmt.Sprintf("content-test-%d", i)
 		}
 
-		retrieved, err := suite.index.Get(context.Background(), ids, []string{"vector", "metadata", "contents"})
+		response, err := suite.index.Get(context.Background(), ids, []string{"vector", "metadata", "contents"})
 		require.NoError(t, err)
-		require.Equal(t, len(testCases), len(retrieved))
+		require.Equal(t, len(testCases), response.GetResultCount())
 
+		retrieved := response.GetResults()
 		for i, item := range retrieved {
 			expectedContent := testCases[i].content
 
 			// Verify contents field exists and matches
-			require.NotNil(t, item.Contents, "Contents should not be nil for item %d", i)
-			require.Equal(t, expectedContent, *item.Contents, "Content mismatch for test case: %s", testCases[i].name)
+			require.True(t, item.HasContents(), "Contents should be present for item %d", i)
+			contents := item.GetContents()
+			require.Equal(t, expectedContent, contents, "Content mismatch for test case: %s", testCases[i].name)
 
 			// Verify metadata
-			require.NotNil(t, item.Metadata)
-			metadata := item.Metadata
+			require.True(t, item.HasMetadata(), "Metadata should be present")
+			metadata := item.GetMetadata()
 			require.Equal(t, testCases[i].name, metadata["content_type"])
 			require.Equal(t, testCases[i].description, metadata["description"])
 			require.Equal(t, float64(len(expectedContent)), metadata["content_length"])
@@ -1509,17 +1589,20 @@ func (suite *CyborgDBIntegrationTestSuite) TestContentsFieldComprehensive() {
 	// Test 2: Retrieve only contents field
 	suite.T().Run("Retrieve_Contents_Only", func(t *testing.T) {
 		ids := []string{"content-test-0", "content-test-1"}
-		retrieved, err := suite.index.Get(context.Background(), ids, []string{"contents"})
+		response, err := suite.index.Get(context.Background(), ids, []string{"contents"})
 		require.NoError(t, err)
-		require.Equal(t, len(ids), len(retrieved))
+		require.Equal(t, len(ids), response.GetResultCount())
 
+		retrieved := response.GetResults()
 		for i, item := range retrieved {
 			// Should have contents but not vector or metadata
-			require.NotNil(t, item.Contents)
-			require.Equal(t, testCases[i].content, *item.Contents)
+			require.True(t, item.HasContents(), "Contents should be present")
+			contents := item.GetContents()
+			require.Equal(t, testCases[i].content, contents)
 
-			// Vector and metadata should be nil or empty when not requested
-			// (behavior may vary by implementation)
+			// Vector and metadata should not be present when not requested
+			require.False(t, item.HasVector(), "Vector should not be present when not requested")
+			require.False(t, item.HasMetadata(), "Metadata should not be present when not requested")
 		}
 	})
 
@@ -1539,13 +1622,17 @@ func (suite *CyborgDBIntegrationTestSuite) TestContentsFieldComprehensive() {
 		err := suite.index.Upsert(context.Background(), []cyborgdb.VectorItem{emptyContentVector})
 		require.NoError(t, err)
 
-		retrieved, err := suite.index.Get(context.Background(), []string{"empty-content-test"}, []string{"contents", "metadata"})
+		response, err := suite.index.Get(context.Background(), []string{"empty-content-test"}, []string{"contents", "metadata"})
 		require.NoError(t, err)
+		require.Equal(t, 1, response.GetResultCount())
+
+		retrieved := response.GetResults()
 		require.Equal(t, 1, len(retrieved))
 
 		// Verify empty content is preserved
-		require.NotNil(t, retrieved[0].Contents)
-		require.Equal(t, "", *retrieved[0].Contents)
+		require.True(t, retrieved[0].HasContents(), "Empty contents should still be present")
+		contents := retrieved[0].GetContents()
+		require.Equal(t, "", contents)
 	})
 
 	// Test 4: Nil contents handling
@@ -1564,12 +1651,21 @@ func (suite *CyborgDBIntegrationTestSuite) TestContentsFieldComprehensive() {
 		err := suite.index.Upsert(context.Background(), []cyborgdb.VectorItem{nilContentVector})
 		require.NoError(t, err)
 
-		retrieved, err := suite.index.Get(context.Background(), []string{"nil-content-test"}, []string{"contents", "metadata"})
+		response, err := suite.index.Get(context.Background(), []string{"nil-content-test"}, []string{"contents", "metadata"})
 		require.NoError(t, err)
+		require.Equal(t, 1, response.GetResultCount())
+
+		retrieved := response.GetResults()
 		require.Equal(t, 1, len(retrieved))
 
-		// Behavior for nil contents may vary - either nil or not present
-		// We just verify the operation succeeds
+		// Behavior for nil contents may vary - either not present or empty
+		// We just verify the operation succeeds and test what we get
+		if retrieved[0].HasContents() {
+			contents := retrieved[0].GetContents()
+			t.Logf("Nil contents returned as: '%s'", contents)
+		} else {
+			t.Log("Nil contents not present in response (expected behavior)")
+		}
 	})
 
 	// Test 5: Large content testing
@@ -1592,14 +1688,58 @@ func (suite *CyborgDBIntegrationTestSuite) TestContentsFieldComprehensive() {
 		err := suite.index.Upsert(context.Background(), []cyborgdb.VectorItem{largeContentVector})
 		require.NoError(t, err)
 
-		retrieved, err := suite.index.Get(context.Background(), []string{"large-content-test"}, []string{"contents", "metadata"})
+		response, err := suite.index.Get(context.Background(), []string{"large-content-test"}, []string{"contents", "metadata"})
 		require.NoError(t, err)
+		require.Equal(t, 1, response.GetResultCount())
+
+		retrieved := response.GetResults()
 		require.Equal(t, 1, len(retrieved))
 
 		// Verify large content is preserved
-		require.NotNil(t, retrieved[0].Contents)
-		require.Equal(t, largeContent, *retrieved[0].Contents)
-		require.Equal(t, len(largeContent), len(*retrieved[0].Contents))
+		require.True(t, retrieved[0].HasContents(), "Large contents should be present")
+		contents := retrieved[0].GetContents()
+		require.Equal(t, largeContent, contents)
+		require.Equal(t, len(largeContent), len(contents))
+
+		// Test GetMetadataValue helper method
+		contentLength, exists := retrieved[0].GetMetadataValue("content_length")
+		require.True(t, exists)
+		require.Equal(t, float64(len(largeContent)), contentLength)
+	})
+
+	// Test 6: Using GetResponse helper methods extensively
+	suite.T().Run("GetResponse_Helper_Methods", func(t *testing.T) {
+		ids := []string{"content-test-0", "content-test-2", "content-test-4"}
+		response, err := suite.index.Get(context.Background(), ids, []string{"vector", "metadata", "contents"})
+		require.NoError(t, err)
+
+		// Test GetResultCount
+		require.Equal(t, len(ids), response.GetResultCount())
+
+		// Test GetAllIDs
+		allIds := response.GetAllIDs()
+		require.Equal(t, len(ids), len(allIds))
+		for _, expectedId := range ids {
+			require.Contains(t, allIds, expectedId)
+		}
+
+		// Test GetResultByID for each ID
+		for i, id := range ids {
+			result, found := response.GetResultByID(id)
+			require.True(t, found, "Should find %s", id)
+			require.NotNil(t, result)
+			require.Equal(t, id, result.GetId())
+			
+			// Verify the expected content
+			expectedContent := testCases[i*2].content // content-test-0, content-test-2, content-test-4
+			require.True(t, result.HasContents())
+			require.Equal(t, expectedContent, result.GetContents())
+		}
+
+		// Test GetResultByID with non-existent ID
+		result, found := response.GetResultByID("non-existent-content-test")
+		require.False(t, found, "Should not find non-existent ID")
+		require.Nil(t, result)
 	})
 }
 

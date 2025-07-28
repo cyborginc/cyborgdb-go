@@ -78,10 +78,9 @@ func NewClient(baseURL, apiKey string, verifySSL bool) (*Client, error) {
 		apiKey:    apiKey,
 	}, nil
 }
-
 // ListIndexes retrieves a list of all available encrypted index names stored in CyborgDB.
 //
-// This function calls the `/indexes` endpoint of the CyborgDB API, which returns
+// This function calls the `/v1/indexes/list` endpoint of the CyborgDB API, which returns
 // a list of index names that have been previously created in the database.
 //
 // Parameters:
@@ -90,12 +89,6 @@ func NewClient(baseURL, apiKey string, verifySSL bool) (*Client, error) {
 // Returns:
 //   - A slice of strings, where each string is the name of an existing encrypted index.
 //   - An error if the request fails or the response is malformed.
-//
-// Behavior:
-//   - Makes a GET request to the `/indexes` endpoint.
-//   - Expects the API to respond with a JSON object containing a field "indexes",
-//     which is an array of strings.
-//   - Automatically unmarshals the response into a ListIndexesResponse struct.
 func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 	// Call the OpenAPI-generated method
 	resp, _, err := c.apiClient.DefaultAPI.ListIndexes(ctx).Execute()
@@ -109,6 +102,9 @@ func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 
 // CreateIndex creates a new encrypted vector index in CyborgDB.
 //
+// This method creates a new index with the specified configuration and encryption key.
+// The index will be empty after creation and ready for vector upserts and queries.
+//
 // Parameters:
 //   - ctx: Context used for cancellation, deadlines, and logging.
 //   - indexName: A string that uniquely identifies the index to be created.
@@ -117,7 +113,7 @@ func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 //   - embeddingModel: An optional string pointer specifying the name of the embedding model to associate.
 //
 // Returns:
-//   - A pointer to an EncryptedIndex struct with basic metadata if the index creation is successful.
+//   - A pointer to an EncryptedIndex struct for performing operations on the created index.
 //   - An error if validation fails or the API call encounters an issue.
 func (c *Client) CreateIndex(
 	ctx context.Context,
@@ -162,18 +158,20 @@ func (c *Client) CreateIndex(
 
 	// Construct and return a high-level EncryptedIndex object containing
 	// the index name, type, and configuration used in the request.
+	// The trained field is initialized to false since new indexes are untrained.
 	return &EncryptedIndex{
 		indexName: &indexName,
 		indexKey:  keyHex,
 		indexType: &createReq.IndexConfig.IndexType,
 		config:    &createReq.IndexConfig,
-		client: c,
+		client:    c,
+		trained:   false, // New indexes start untrained
 	}, nil
 }
 
 // GetHealth checks the health status of the CyborgDB service.
 //
-// This function makes a call to the `/health` endpoint of the CyborgDB API,
+// This function makes a call to the `/v1/health` endpoint of the CyborgDB API,
 // which is typically used for readiness and liveness checks. It can help determine
 // if the backend service is reachable and operational.
 //
