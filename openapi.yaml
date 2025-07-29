@@ -1,0 +1,410 @@
+openapi: 3.0.3
+info:
+  title: CyborgDB API
+  version: 1.0.0
+  description: >
+    CyborgDB is a secure, encrypted vector database that allows you to
+    store and query high-dimensional vectors with end-to-end encryption.
+    This OpenAPI specification describes the REST interface used by the
+    Go SDK client to perform operations such as indexing, querying, and health checks.
+servers:
+  - url: https://api.cyborgdb.co
+
+paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Check service health
+      responses:
+        '200':
+          description: Health status returned
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /indexes:
+    get:
+      operationId: listIndexes
+      summary: List all indexes
+      responses:
+        '200':
+          description: List of index names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+    post:
+      operationId: createIndex
+      summary: Create a new encrypted index
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIndexRequest'
+      responses:
+        '201':
+          description: Encrypted index created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EncryptedIndexResponse'
+
+  /indexes/{indexName}:
+    delete:
+      operationId: deleteIndex
+      summary: Delete an encrypted index
+      parameters:
+        - name: indexName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-Index-Key
+          in: header
+          required: true
+          description: Hex-encoded encryption key for the index
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Index deleted successfully
+        '404':
+          description: Index not found
+
+  /indexes/{indexName}/train:
+    post:
+      operationId: trainIndex
+      summary: Train the index for efficient search
+      parameters:
+        - name: indexName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-Index-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrainRequest'
+      responses:
+        '200':
+          description: Training completed successfully
+        '400':
+          description: Not enough vectors for training
+
+  /indexes/{indexName}/vectors:
+    post:
+      operationId: upsertVectors
+      summary: Add or update vectors in the index
+      parameters:
+        - name: indexName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-Index-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertRequest'
+      responses:
+        '200':
+          description: Vectors upserted successfully
+
+    get:
+      operationId: getVectors
+      summary: Retrieve vectors by IDs
+      parameters:
+        - name: indexName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-Index-Key
+          in: header
+          required: true
+          schema:
+            type: string
+        - name: ids
+          in: query
+          required: true
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+        - name: include
+          in: query
+          required: false
+          style: form
+          explode: false
+          schema:
+            type: array
+            items:
+              type: string
+              enum: [vector, metadata, contents]
+      responses:
+        '200':
+          description: Vectors retrieved successfully
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/VectorItem'
+
+    delete:
+      operationId: deleteVectors
+      summary: Delete vectors by IDs
+      parameters:
+        - name: indexName
+          in: path
+          required: true
+          schema:
+            type: string
+        - name: X-Index-Key
+          in: header
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteRequest'
+      responses:
+        '204':
+          description: Vectors deleted successfully
+
+  /indexes/{indexName}/query:
+    post:
+      operationId: queryVectors
+      summary: Query vectors in the encrypted index
+      parameters:
+        - name: indexName
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/QueryRequest'
+      responses:
+        '200':
+          description: Query results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+
+components:
+  schemas:
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+
+    IndexConfig:
+      type: object
+      required: [dimension, metric, index_type, n_lists]
+      properties:
+        dimension:
+          type: integer
+        metric:
+          type: string
+          enum: [l2, ip, cosine]
+        index_type:
+          type: string
+          enum: [ivf, ivf_flat, ivf_pq]
+        n_lists:
+          type: integer
+        pq_dim:
+          type: integer
+          nullable: true
+        pq_bits:
+          type: integer
+          nullable: true
+
+    VectorItem:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        vector:
+          type: array
+          items:
+            type: number
+            format: double
+        contents:
+          type: string
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+
+    QueryRequest:
+      type: object
+      required: [index_key, top_k, n_probes, include]
+      properties:
+        index_key:
+          type: string
+          description: Hex-encoded encryption key
+        query_vector:
+          type: array
+          items:
+            type: number
+            format: double
+        query_vectors:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+              format: double
+        query_contents:
+          type: string
+          nullable: true
+        top_k:
+          type: integer
+        n_probes:
+          type: integer
+        greedy:
+          type: boolean
+          default: false
+        filters:
+          type: object
+          additionalProperties: true
+        include:
+          type: array
+          items:
+            type: string
+            enum: [distance, metadata, vector, contents]
+
+    QueryResult:
+      type: object
+      required: [id]
+      properties:
+        id:
+          type: string
+        distance:
+          type: number
+          format: double
+          nullable: true
+        metadata:
+          type: object
+          additionalProperties: true
+        vector:
+          type: array
+          items:
+            type: number
+            format: double
+        contents:
+          type: string
+          nullable: true
+
+    QueryResponse:
+      type: object
+      properties:
+        results:
+          type: array
+          items:
+            type: array
+            items:
+              $ref: '#/components/schemas/QueryResult'
+
+    CreateIndexRequest:
+      type: object
+      required: [index_name, index_key, config]
+      properties:
+        index_name:
+          type: string
+        index_key:
+          type: string
+          description: Hex-encoded 32-byte encryption key
+        config:
+          $ref: '#/components/schemas/IndexConfig'
+        embedding_model:
+          type: string
+          nullable: true
+
+    EncryptedIndexResponse:
+      type: object
+      properties:
+        index_name:
+          type: string
+        index_type:
+          type: string
+        config:
+          $ref: '#/components/schemas/IndexConfig'
+
+    TrainRequest:
+      type: object
+      required: [batch_size, max_iterations, tolerance]
+      properties:
+        batch_size:
+          type: integer
+          minimum: 1
+        max_iterations:
+          type: integer
+          minimum: 1
+        tolerance:
+          type: number
+          format: double
+
+    UpsertRequest:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/VectorItem'
+
+    DeleteRequest:
+      type: object
+      required: [ids]
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+
+    # For the UpsertVectors method (Structure of Arrays pattern)
+    UpsertVectorsRequest:
+      type: object
+      required: [ids, vectors]
+      properties:
+        ids:
+          type: array
+          items:
+            type: string
+        vectors:
+          type: array
+          items:
+            type: array
+            items:
+              type: number
+              format: double
