@@ -38,7 +38,7 @@ import (
     "fmt"
     "log"
     
-    "github.com/cyborginc/cyborgdb-go"
+    cyborgdb "github.com/cyborginc/cyborgdb-go"
 )
 
 func main() {
@@ -212,39 +212,6 @@ if err != nil {
 }
 ```
 
-**Index Types**
-
-The Go SDK supports multiple index types, each with different performance characteristics:
-
-**IVF (Inverted File)**
-```go
-indexModel := &cyborgdb.IndexIVF{
-    Dimension: 768,
-    Metric:    "euclidean", // or "cosine", "inner_product"
-    NLists:    1024,
-}
-```
-
-**IVFPQ (IVF with Product Quantization)**
-```go
-indexModel := &cyborgdb.IndexIVFPQ{
-    Dimension: 768,
-    Metric:    "euclidean",
-    NLists:    1024,
-    PqDim:     32,  // Product quantization dimension
-    PqBits:    8,   // Bits per PQ code
-}
-```
-
-**IVFFlat (IVF with Full Vectors)**
-```go
-indexModel := &cyborgdb.IndexIVFFlat{
-    Dimension: 768,
-    Metric:    "euclidean",
-    NLists:    1024,
-}
-```
-
 **Error Handling**
 
 The Go SDK uses standard Go error handling patterns:
@@ -296,46 +263,10 @@ if err != nil {
 fmt.Printf("Service status: %s\n", *health.Status)
 ```
 
-**Best Practices**
-
-1. **Secure Key Management**: Store encryption keys securely and never hardcode them
-2. **Context Usage**: Always use context for operations, especially with timeouts
-3. **Batch Operations**: Use batch upserts and queries for better performance
-4. **Error Handling**: Always check and handle errors appropriately
-5. **Index Training**: Train indexes after inserting significant amounts of data
-6. **Resource Cleanup**: Clean up indexes when no longer needed using `DeleteIndex()`
-
 **Documentation**
 
 For more detailed documentation, visit:
 * [CyborgDB Documentation](https://docs.cyborg.co/)
-* [Go SDK API Reference](https://pkg.go.dev/github.com/cyborginc/cyborgdb-go)
-
-**Examples**
-
-Check out the [`examples/`](./examples/) directory for more comprehensive examples including:
-* RAG (Retrieval-Augmented Generation) implementation
-* Batch processing workflows  
-* Advanced metadata filtering
-* Performance optimization techniques
-
-**Testing**
-
-Run the test suite:
-
-```bash
-# Set your API key
-export CYBORGDB_API_KEY="your-api-key"
-
-# Run all tests
-go test ./...
-
-# Run tests with verbose output
-go test -v ./...
-
-# Run specific test suites
-go test -v ./test -run TestCyborgDBIVF
-```
 
 **License**
 
