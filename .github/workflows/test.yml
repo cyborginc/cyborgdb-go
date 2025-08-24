@@ -1,0 +1,79 @@
+name: Test CyborgDB Go SDK
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    
+    services:
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout SDK code
+        uses: actions/checkout@v4
+        
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          
+      - name: Set up Python for server
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
+          
+      - name: Install cyborgdb-service from main branch
+        run: |
+          # Install the server from the main branch of the service repo
+          pip install git+https://github.com/cyborginc/cyborgdb-service.git@main
+          
+      - name: Set up environment
+        run: |
+          echo "CYBORGDB_API_KEY=${{ secrets.CYBORGDB_API_KEY }}" >> $GITHUB_ENV
+          echo "CYBORGDB_DB_TYPE=redis" >> $GITHUB_ENV
+          echo "CYBORGDB_CONNECTION_STRING=redis://localhost:6379" >> $GITHUB_ENV
+          
+      - name: Start CyborgDB service
+        run: |
+          # Start the service in the background
+          cyborgdb-service &
+          # Wait for the service to be ready
+          sleep 5
+          # Check if service is running
+          curl -f http://localhost:8000/health || (echo "Service failed to start" && exit 1)
+          
+      - name: Get dependencies
+        run: |
+          go mod download
+          go mod verify
+          
+      - name: Build
+        run: go build -v ./...
+        
+      - name: Run tests
+        run: |
+          go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+        env:
+          CYBORGDB_API_KEY: ${{ secrets.CYBORGDB_API_KEY }}
+          CYBORGDB_BASE_URL: http://localhost:8000
+          
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.txt
+          flags: unittests
+          name: codecov-umbrella
+        continue-on-error: true
