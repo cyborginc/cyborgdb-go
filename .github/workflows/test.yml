@@ -1,0 +1,130 @@
+name: Test CyborgDB Go SDK
+
+on:
+  pull_request:
+    types: [opened, synchronize]
+  push:
+    branches: [main]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          
+      - name: Run golangci-lint
+        uses: golangci/golangci-lint-action@v3
+        with:
+          version: latest
+          args: --config .golangci.yml
+          
+  test:
+    runs-on: ubuntu-latest
+    needs: lint
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        ports:
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cyborgdb
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout SDK code
+        uses: actions/checkout@v4
+        
+      - name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: '1.21'
+          
+      - name: Set up Python for server
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+          
+      - name: Checkout cyborgdb-service repository
+        uses: actions/checkout@v4
+        with:
+          repository: cyborginc/cyborgdb-service
+          ref: main
+          path: cyborgdb-service
+          token: ${{ secrets.CYBORGDB_SERVICE_TOKEN }}
+          fetch-depth: 0  # Get full history for version detection
+          fetch-tags: true  # Fetch all tags
+
+      - name: Install service dependencies
+        run: |
+          # Install CPU-only torch
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          # Install optional test dependencies
+          pip install sentence-transformers
+          
+      - name: Install cyborgdb-service from source
+        run: |
+          # Install the server from the cloned repository
+          pip install ./cyborgdb-service
+
+      ## TODO - Add a test for Lite version
+
+      # - name: Test with Lite version
+      #   run: |
+      #     echo "=== Testing with Lite version ==="
+      #     ...
+
+      - name: Test with Standard version
+        run: |
+          echo "=== Testing with Standard version ==="
+          # Set up environment for Standard
+          export CYBORGDB_API_KEY="${{ secrets.CYBORGDB_STANDARD_API_KEY }}"
+          export CYBORGDB_DB_TYPE=postgres
+          export CYBORGDB_CONNECTION_STRING="host=localhost port=5432 dbname=cyborgdb user=postgres password=postgres"
+          export CYBORGDB_SERVICE_LOG_LEVEL=DEBUG
+          export CYBORGDB_BASE_URL=http://localhost:8000
+          
+          # Start the service with Standard API key
+          nohup cyborgdb-service > server-standard.log 2>&1 &
+          echo $! > server-standard.pid
+          
+          # Wait for service to be ready
+          for i in {1..30}; do
+            if curl -fs http://localhost:8000/v1/health > /dev/null; then
+              echo "Standard service is up!"
+              break
+            fi
+            sleep 1
+          done
+          
+          if ! curl -fs http://localhost:8000/v1/health > /dev/null; then
+            echo "Standard service failed to start"
+            cat server-standard.log
+            exit 1
+          fi
+          
+          # Run all tests
+          go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+          
+          # Stop standard server
+          kill $(cat server-standard.pid) || true
+          
+      - name: Upload coverage reports
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.txt
+          flags: unittests
+          name: codecov-umbrella
+        continue-on-error: true

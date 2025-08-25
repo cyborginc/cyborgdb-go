@@ -3,6 +3,7 @@ package cyborgdb
 
 import (
 	"context"
+
 	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
@@ -38,7 +39,7 @@ func NewClient(baseURL, apiKey string, verifySSL bool) (*Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &Client{
 		internal: internalClient,
 	}, nil
@@ -90,7 +91,7 @@ func (c *Client) CreateIndex(
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Wrap the internal EncryptedIndex with our public one
 	return &EncryptedIndex{
 		internal: internalIndex,

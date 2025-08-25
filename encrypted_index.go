@@ -3,6 +3,7 @@ package cyborgdb
 
 import (
 	"context"
+
 	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
@@ -119,11 +120,13 @@ func (e *EncryptedIndex) Query(ctx context.Context, args ...interface{}) (*Query
 //   - include: Fields to include in response (e.g., ["vector", "metadata", "contents"])
 //
 // Returns:
+//
 //   - *GetResponse: Response containing retrieved vectors with requested fields
+//
 //   - error: nil on success, or an error describing what went wrong
 //
-//   // Retrieve only metadata for efficiency
-//   metadataOnly, err := index.Get(ctx, ids, []string{"metadata"})
+//     // Retrieve only metadata for efficiency
+//     metadataOnly, err := index.Get(ctx, ids, []string{"metadata"})
 //
 // Available include fields:
 //   - "vector": The vector embeddings
