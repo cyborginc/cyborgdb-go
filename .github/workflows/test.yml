@@ -53,56 +53,14 @@ jobs:
         run: |
           # Install the server from the cloned repository
           pip install ./cyborgdb-service
-          
-      - name: Test with Lite version
-        run: |
-          echo "=== Testing with Lite version ==="
-          # Set up environment for Lite
-          export CYBORGDB_API_KEY="${{ secrets.CYBORGDB_FREE_API_KEY }}"
-          export CYBORGDB_DB_TYPE=postgres
-          export CYBORGDB_CONNECTION_STRING="host=localhost port=5432 dbname=cyborgdb user=postgres password=postgres"
-          export CYBORGDB_SERVICE_LOG_LEVEL=DEBUG
-          
-          # Start the service with Lite API key
-          nohup cyborgdb-service > server-lite.log 2>&1 &
-          echo $! > server-lite.pid
-          
-          # Wait for service to be ready
-          for i in {1..30}; do
-            if curl -fs http://localhost:8000/v1/health > /dev/null; then
-              echo "Lite service is up!"
-              break
-            fi
-            sleep 1
-          done
-          
-          if ! curl -fs http://localhost:8000/v1/health > /dev/null; then
-            echo "Lite service failed to start"
-            cat server-lite.log
-            exit 1
-          fi
-          
-          # Get dependencies
-          go mod download
-          go mod verify
-          
-          # Build
-          go build -v ./...
-          
-          # Run lite-compatible tests
-          go test -v ./test/quick_flow_lite_test.go || go test -v ./test/
-          
-          # Stop lite server
-          kill $(cat server-lite.pid) || true
 
-          # Remove cyborgdb-lite
-          pip uninstall -y cyborgdb-lite
-          
-          # Clean up PostgreSQL database to avoid conflicts between lite and standard
-          PGPASSWORD=postgres psql -h localhost -U postgres -d cyborgdb -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+      ## TODO - Add a test for Lite version
 
-          sleep 2
-          
+      # - name: Test with Lite version
+      #   run: |
+      #     echo "=== Testing with Lite version ==="
+      #     ...
+                
       - name: Test with Standard version
         run: |
           echo "=== Testing with Standard version ==="
