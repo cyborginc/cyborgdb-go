@@ -194,3 +194,54 @@ func (c *Client) GetHealth(ctx context.Context) (*HealthResponse, error) {
 	return health, nil
 }
 
+// LoadIndex loads an existing encrypted index from CyborgDB.
+//
+// This method retrieves metadata for an existing index and returns an EncryptedIndex
+// instance configured for operations. Unlike CreateIndex, this doesn't create a new
+// index but loads an existing one for use.
+//
+// Parameters:
+//   - ctx: Context for request scoping, cancellation, timeout, and logging.
+//   - indexName: The name of the existing index to load.
+//   - indexKey: The 32-byte encryption key used when the index was created.
+//
+// Returns:
+//   - A pointer to an EncryptedIndex struct for performing operations on the loaded index.
+//   - An error if the index doesn't exist or if the API call fails.
+func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byte) (*EncryptedIndex, error) {
+	// Validate that the provided indexKey is exactly 32 bytes.
+	if len(indexKey) != 32 {
+		return nil, fmt.Errorf("index key must be exactly 32 bytes, got %d", len(indexKey))
+	}
+
+	// Convert the binary indexKey to a hexadecimal string
+	keyHex := hex.EncodeToString(indexKey)
+
+	// Call the describe endpoint to get index information
+	describeReq := IndexOperationRequest{
+		IndexName: indexName,
+		IndexKey:  keyHex,
+	}
+	
+	// Get index info from the server
+	indexInfo, _, err := c.apiClient.DefaultAPI.GetIndexInfo(ctx).
+		IndexOperationRequest(describeReq).
+		Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get index info: %w", err)
+	}
+	
+	// Create the EncryptedIndex with full information from server
+	encryptedIndex := &EncryptedIndex{
+		indexName: &indexInfo.IndexName,
+		indexKey:  keyHex,
+		indexType: &indexInfo.IndexType,
+		config:    &indexInfo.IndexConfig,
+		client:    c,
+		trained:   indexInfo.IsTrained,
+	}
+	
+	return encryptedIndex, nil
+}
+
+

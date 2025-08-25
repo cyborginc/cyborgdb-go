@@ -3,6 +3,8 @@ package cyborgdb
 
 import (
 	"context"
+	"crypto/rand"
+	"fmt"
 	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
@@ -20,25 +22,53 @@ type Client struct {
 	internal *internal.Client // Embedded internal client
 }
 
+// GenerateKey generates a cryptographically secure 32-byte encryption key for use with CyborgDB indexes.
+//
+// This static function generates a random 32-byte key suitable for AES-256 encryption.
+// The generated key should be stored securely as it cannot be recovered if lost.
+//
+// Returns:
+//   - []byte: A 32-byte encryption key
+//   - error: Any error that occurred during key generation
+func GenerateKey() ([]byte, error) {
+	key := make([]byte, 32)
+	_, err := rand.Read(key)
+	if err != nil {
+		return nil, fmt.Errorf("failed to generate key: %w", err)
+	}
+	return key, nil
+}
+
 // NewClient creates a new CyborgDB client instance.
 //
 // The client manages the connection to CyborgDB and handles authentication automatically.
 // SSL verification can be disabled for development environments with self-signed certificates.
+// If verifySSL is not provided (or additional parameters beyond 2), it defaults to true.
 //
 // Parameters:
 //   - baseURL: Base URL of the CyborgDB service (e.g., "https://api.cyborgdb.com")
 //   - apiKey: API key for authentication (required for most operations)
-//   - verifySSL: Whether to verify SSL certificates (set false for localhost development)
+//   - verifySSL: (optional) Whether to verify SSL certificates (default: true, set false for localhost development)
 //
 // Returns:
 //   - *Client: A new Client instance ready for use
 //   - error: Any error that occurred during client creation
-func NewClient(baseURL, apiKey string, verifySSL bool) (*Client, error) {
+func NewClient(baseURL string, apiKey string, optionalArgs ...interface{}) (*Client, error) {
+	// Default verifySSL to true
+	verifySSL := true
+
+	// Check if verifySSL was provided
+	if len(optionalArgs) > 0 {
+		if v, ok := optionalArgs[0].(bool); ok {
+			verifySSL = v
+		}
+	}
+
 	internalClient, err := internal.NewClient(baseURL, apiKey, verifySSL)
 	if err != nil {
 		return nil, err
 	}
-	
+
 	return &Client{
 		internal: internalClient,
 	}, nil
@@ -90,7 +120,43 @@ func (c *Client) CreateIndex(
 	if err != nil {
 		return nil, err
 	}
-	
+
+	// Wrap the internal EncryptedIndex with our public one
+	return &EncryptedIndex{
+		internal: internalIndex,
+	}, nil
+}
+
+// LoadIndex loads an existing encrypted index from CyborgDB.
+//
+// This method retrieves an already created index by name and returns an EncryptedIndex
+// instance for performing vector operations. The encryption key must match the one
+// used when the index was created. The method automatically retrieves the index's
+// configuration and metadata from the server.
+//
+// Parameters:
+//   - ctx: Context for request cancellation, timeouts, and tracing
+//   - indexName: Name of the existing index to load
+//   - indexKey: 32-byte encryption key used when the index was created
+//
+// Returns:
+//   - *EncryptedIndex: An EncryptedIndex instance for performing vector operations
+//   - error: Any error that occurred during index loading
+//
+// Note: The encryption key must be exactly the same as when the index was created.
+// If the wrong key is provided, operations on the index will fail.
+func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byte) (*EncryptedIndex, error) {
+	// Validate the key length
+	if len(indexKey) != 32 {
+		return nil, fmt.Errorf("index key must be exactly 32 bytes, got %d", len(indexKey))
+	}
+
+	// Load the index from the internal client (which now uses the describe endpoint)
+	internalIndex, err := c.internal.LoadIndex(ctx, indexName, indexKey)
+	if err != nil {
+		return nil, err
+	}
+
 	// Wrap the internal EncryptedIndex with our public one
 	return &EncryptedIndex{
 		internal: internalIndex,
@@ -112,3 +178,6 @@ func (c *Client) CreateIndex(
 func (c *Client) GetHealth(ctx context.Context) (*internal.HealthResponse, error) {
 	return c.internal.GetHealth(ctx)
 }
+
+
+

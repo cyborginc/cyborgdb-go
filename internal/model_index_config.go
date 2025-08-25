@@ -212,12 +212,23 @@ func (o *IndexConfig) SetPqBits(v int32) {
 	o.PqBits = &v
 }
 
-func (o IndexConfig) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
-	if err != nil {
-		return []byte{}, err
-	}
-	return json.Marshal(toSerialize)
+func (cfg IndexConfig) MarshalJSON() ([]byte, error) {
+    // Create a map with type first
+    data := map[string]interface{}{
+        "type":       cfg.IndexType,
+        "dimension":  cfg.Dimension,
+        "metric":     cfg.Metric,
+        "n_lists":    cfg.NLists,
+    }
+    
+    if cfg.PqDim != nil {
+        data["pq_dim"] = *cfg.PqDim
+    }
+    if cfg.PqBits != nil {
+        data["pq_bits"] = *cfg.PqBits
+    }
+    
+    return json.Marshal(data)
 }
 
 func (o IndexConfig) ToMap() (map[string]interface{}, error) {

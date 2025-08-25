@@ -3,6 +3,7 @@ package cyborgdb
 
 import (
 	"context"
+	"fmt"
 	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
@@ -80,9 +81,10 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 
 // Query searches for nearest neighbors in the encrypted index.
 // This method supports multiple calling patterns for flexibility and ease of use:
-// 1. Direct parameters: Query(ctx, queryVectors, topK, nProbes, greedy, filters, include)
+// 1. QueryOptions struct (recommended): Query(ctx, queryOptions)
 // 2. QueryRequest struct: Query(ctx, queryRequest)
 // 3. BatchQueryRequest struct: Query(ctx, batchQueryRequest)
+// 4. Direct parameters: Query(ctx, queryVectors, topK, nProbes, greedy, filters, include)
 //
 // The query performs similarity search using the index's configured distance metric
 // and returns the most similar vectors along with their distances and metadata.
@@ -95,16 +97,98 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 //   - *QueryResponse: Search results with nearest neighbors, distances, and metadata
 //   - error: nil on success, or an error describing what went wrong
 //
+// Example with QueryOptions (matches Python SDK):
+//
+//	opts := &QueryOptions{
+//	    QueryVectors: []float32{...}, // or [][]float32 for batch
+//	    QueryContents: "",             // or text to embed
+//	    TopK: 100,
+//	    NProbes: 1,
+//	    Filters: map[string]interface{}{"category": "science"},
+//	    Include: []string{"distance", "metadata"},
+//	    Greedy: false,
+//	}
+//	results, err := index.Query(ctx, opts)
+//
 // Query Parameters:
 //   - queryVectors: Single vector []float32 or batch [][]float32
+//   - queryContents: Text to embed and search (requires embedding model)
 //   - topK: Number of nearest neighbors to return (default: 100)
-//   - nProbes: Number of clusters to search (higher = more accurate, slower)
-//   - greedy: Use greedy search for potentially faster results
+//   - nProbes: Number of clusters to search (higher = more accurate, slower, default: 1)
+//   - greedy: Use greedy search for potentially faster results (default: false)
 //   - filters: Metadata filters for narrowing results
-//   - include: Fields to include in response ("metadata", "distance", "contents", "vector")
+//   - include: Fields to include in response (default: ["distance", "metadata"])
 func (e *EncryptedIndex) Query(ctx context.Context, args ...interface{}) (*QueryResponse, error) {
-	// Delegate to the internal implementation which has the full logic
+	// Check if the first argument is QueryOptions
+	if len(args) > 0 {
+		if opts, ok := args[0].(*QueryOptions); ok {
+			// Convert QueryOptions to the format expected by internal
+			return e.queryWithOptions(ctx, opts)
+		}
+	}
+
+	// Delegate to the internal implementation for other patterns
 	return e.internal.Query(ctx, args...)
+}
+
+// queryWithOptions handles queries using the QueryOptions struct
+func (e *EncryptedIndex) queryWithOptions(ctx context.Context, opts *QueryOptions) (*QueryResponse, error) {
+	// Set defaults to match Python SDK
+	if opts.TopK == 0 {
+		opts.TopK = 100
+	}
+	if opts.NProbes == 0 {
+		opts.NProbes = 1
+	}
+	if len(opts.Include) == 0 {
+		opts.Include = []string{"distance", "metadata"}
+	}
+
+	// Build the request based on whether we have vectors or contents
+	var req interface{}
+
+	// Handle query vectors
+	if opts.QueryVectors != nil {
+		switch v := opts.QueryVectors.(type) {
+		case []float32:
+			// Single vector query
+			req = &QueryRequest{
+				QueryVector: v,
+				TopK:        opts.TopK,
+				NProbes:     opts.NProbes,
+				Greedy:      &opts.Greedy,
+				Filters:     opts.Filters,
+				Include:     opts.Include,
+			}
+		case [][]float32:
+			// Batch query
+			req = &BatchQueryRequest{
+				QueryVectors: v,
+				TopK:         &opts.TopK,
+				NProbes:      &opts.NProbes,
+				Greedy:       &opts.Greedy,
+				Filters:      opts.Filters,
+				Include:      opts.Include,
+			}
+		default:
+			return nil, fmt.Errorf("queryVectors must be []float32 or [][]float32, got %T", v)
+		}
+	} else if opts.QueryContents != "" {
+		// Text-based query
+		req = &QueryRequest{
+			QueryContents: &opts.QueryContents,
+			TopK:          opts.TopK,
+			NProbes:       opts.NProbes,
+			Greedy:        &opts.Greedy,
+			Filters:       opts.Filters,
+			Include:       opts.Include,
+		}
+	} else {
+		return nil, fmt.Errorf("either queryVectors or queryContents must be provided")
+	}
+
+	// Use the internal Query method with the constructed request
+	return e.internal.Query(ctx, req)
 }
 
 // Get retrieves specific vectors from the encrypted index by their IDs.
@@ -119,11 +203,13 @@ func (e *EncryptedIndex) Query(ctx context.Context, args ...interface{}) (*Query
 //   - include: Fields to include in response (e.g., ["vector", "metadata", "contents"])
 //
 // Returns:
+//
 //   - *GetResponse: Response containing retrieved vectors with requested fields
+//
 //   - error: nil on success, or an error describing what went wrong
 //
-//   // Retrieve only metadata for efficiency
-//   metadataOnly, err := index.Get(ctx, ids, []string{"metadata"})
+//     // Retrieve only metadata for efficiency
+//     metadataOnly, err := index.Get(ctx, ids, []string{"metadata"})
 //
 // Available include fields:
 //   - "vector": The vector embeddings
@@ -203,3 +289,4 @@ func (e *EncryptedIndex) Train(ctx context.Context, batchSize int32, maxIters in
 func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 	return e.internal.DeleteIndex(ctx)
 }
+
