@@ -74,13 +74,13 @@ linters:
     - nestif
     - depguard
     - wrapcheck      # Too noisy for internal packages
-    - nlreturn       # Overly pedantic about blank lines
-    - lll            # Line length check can be too strict
-    - wsl            # Whitespace linter is too pedantic
-    - gocritic       # Some rules are style preferences
-    - gochecknoglobals # Test files often need globals
-    - testpackage    # Tests in same package are fine
-    - tparallel      # Not all tests need to be parallel
+    - gocritic       # Style preferences - re-enable when ready  
+    - wsl            # Whitespace rules too pedantic
+    - nlreturn       # Blank line requirements too strict
+    - lll            # Line length can be too restrictive
+    - gochecknoglobals # Tests often need globals
+    - testpackage    # Same package tests are fine
+    - tparallel      # Not all tests need parallelization
 
 linters-settings:
   errcheck:
