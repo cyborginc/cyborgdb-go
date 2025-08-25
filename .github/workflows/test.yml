@@ -11,12 +11,16 @@ jobs:
     runs-on: ubuntu-latest
     
     services:
-      redis:
-        image: redis:7-alpine
+      postgres:
+        image: postgres:15-alpine
         ports:
-          - 6379:6379
+          - 5432:5432
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: cyborgdb
         options: >-
-          --health-cmd "redis-cli ping"
+          --health-cmd pg_isready
           --health-interval 10s
           --health-timeout 5s
           --health-retries 5
@@ -35,40 +39,104 @@ jobs:
         with:
           python-version: '3.11'
           
-      - name: Install cyborgdb-service from main branch
-        run: |
-          # Install the server from the main branch of the service repo
-          pip install git+https://github.com/cyborginc/cyborgdb-service.git@main
+      - name: Checkout cyborgdb-service repository
+        uses: actions/checkout@v4
+        with:
+          repository: cyborginc/cyborgdb-service
+          ref: main
+          path: cyborgdb-service
+          token: ${{ secrets.CYBORGDB_SERVICE_TOKEN }}
+          fetch-depth: 0  # Get full history for version detection
+          fetch-tags: true  # Fetch all tags
           
-      - name: Set up environment
+      - name: Install cyborgdb-service from source
         run: |
-          echo "CYBORGDB_API_KEY=${{ secrets.CYBORGDB_API_KEY }}" >> $GITHUB_ENV
-          echo "CYBORGDB_DB_TYPE=redis" >> $GITHUB_ENV
-          echo "CYBORGDB_CONNECTION_STRING=redis://localhost:6379" >> $GITHUB_ENV
+          # Install the server from the cloned repository
+          pip install ./cyborgdb-service
           
-      - name: Start CyborgDB service
+      - name: Test with Lite version
         run: |
-          # Start the service in the background
-          cyborgdb-service &
-          # Wait for the service to be ready
-          sleep 5
-          # Check if service is running
-          curl -f http://localhost:8000/health || (echo "Service failed to start" && exit 1)
+          echo "=== Testing with Lite version ==="
+          # Set up environment for Lite
+          export CYBORGDB_API_KEY="${{ secrets.CYBORGDB_FREE_API_KEY }}"
+          export CYBORGDB_DB_TYPE=postgres
+          export CYBORGDB_CONNECTION_STRING="host=localhost port=5432 dbname=cyborgdb user=postgres password=postgres"
+          export CYBORGDB_SERVICE_LOG_LEVEL=DEBUG
           
-      - name: Get dependencies
-        run: |
+          # Start the service with Lite API key
+          nohup cyborgdb-service > server-lite.log 2>&1 &
+          echo $! > server-lite.pid
+          
+          # Wait for service to be ready
+          for i in {1..30}; do
+            if curl -fs http://localhost:8000/v1/health > /dev/null; then
+              echo "Lite service is up!"
+              break
+            fi
+            sleep 1
+          done
+          
+          if ! curl -fs http://localhost:8000/v1/health > /dev/null; then
+            echo "Lite service failed to start"
+            cat server-lite.log
+            exit 1
+          fi
+          
+          # Get dependencies
           go mod download
           go mod verify
           
-      - name: Build
-        run: go build -v ./...
-        
-      - name: Run tests
+          # Build
+          go build -v ./...
+          
+          # Run lite-compatible tests
+          go test -v ./test/quick_flow_lite_test.go || go test -v ./test/
+          
+          # Stop lite server
+          kill $(cat server-lite.pid) || true
+
+          # Remove cyborgdb-lite
+          pip uninstall -y cyborgdb-lite
+          
+          # Clean up PostgreSQL database to avoid conflicts between lite and standard
+          PGPASSWORD=postgres psql -h localhost -U postgres -d cyborgdb -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+
+          sleep 2
+          
+      - name: Test with Standard version
         run: |
+          echo "=== Testing with Standard version ==="
+          # Set up environment for Standard
+          export CYBORGDB_API_KEY="${{ secrets.CYBORGDB_STANDARD_API_KEY }}"
+          export CYBORGDB_DB_TYPE=postgres
+          export CYBORGDB_CONNECTION_STRING="host=localhost port=5432 dbname=cyborgdb user=postgres password=postgres"
+          export CYBORGDB_SERVICE_LOG_LEVEL=DEBUG
+          export CYBORGDB_BASE_URL=http://localhost:8000
+          
+          # Start the service with Standard API key
+          nohup cyborgdb-service > server-standard.log 2>&1 &
+          echo $! > server-standard.pid
+          
+          # Wait for service to be ready
+          for i in {1..30}; do
+            if curl -fs http://localhost:8000/v1/health > /dev/null; then
+              echo "Standard service is up!"
+              break
+            fi
+            sleep 1
+          done
+          
+          if ! curl -fs http://localhost:8000/v1/health > /dev/null; then
+            echo "Standard service failed to start"
+            cat server-standard.log
+            exit 1
+          fi
+          
+          # Run all tests
           go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
-        env:
-          CYBORGDB_API_KEY: ${{ secrets.CYBORGDB_API_KEY }}
-          CYBORGDB_BASE_URL: http://localhost:8000
+          
+          # Stop standard server
+          kill $(cat server-standard.pid) || true
           
       - name: Upload coverage reports
         uses: codecov/codecov-action@v3
