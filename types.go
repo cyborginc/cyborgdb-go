@@ -1,7 +1,7 @@
 package cyborgdb
 
 import (
-    "github.com/cyborginc/cyborgdb-go/internal"
+	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
 // type Client = internal.Client
