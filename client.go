@@ -5,6 +5,7 @@ import (
 	"context"
 	"crypto/rand"
 	"fmt"
+	"net/url"
 	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
@@ -41,37 +42,42 @@ func GenerateKey() ([]byte, error) {
 
 // NewClient creates a new CyborgDB client instance.
 //
-// The client manages the connection to CyborgDB and handles authentication automatically.
-// SSL verification can be disabled for development environments with self-signed certificates.
-// If verifySSL is not provided (or additional parameters beyond 2), it defaults to true.
+// If verifySSL is omitted, it auto-detects like the TS SDK:
+//   - http:// -> verifySSL = false
+//   - localhost / 127.0.0.1 -> verifySSL = false
+//   - otherwise -> verifySSL = true
 //
-// Parameters:
-//   - baseURL: Base URL of the CyborgDB service (e.g., "https://api.cyborgdb.com")
-//   - apiKey: API key for authentication (required for most operations)
-//   - verifySSL: (optional) Whether to verify SSL certificates (default: true, set false for localhost development)
-//
-// Returns:
-//   - *Client: A new Client instance ready for use
-//   - error: Any error that occurred during client creation
-func NewClient(baseURL string, apiKey string, optionalArgs ...interface{}) (*Client, error) {
-	// Default verifySSL to true
-	verifySSL := true
+// Call patterns:
+//   NewClient(url, key)            // auto-detect
+//   NewClient(url, key, false)     // force off
+//   NewClient(url, key, true)      // force on
+func NewClient(baseURL, apiKey string, verifySSL ...bool) (*Client, error) {
+    // Explicit override wins
+    if len(verifySSL) > 0 {
+        v := verifySSL[0]
+        internalClient, err := internal.NewClient(baseURL, apiKey, v)
+        if err != nil { return nil, err }
+        return &Client{internal: internalClient}, nil
+    }
 
-	// Check if verifySSL was provided
-	if len(optionalArgs) > 0 {
-		if v, ok := optionalArgs[0].(bool); ok {
-			verifySSL = v
-		}
-	}
+    // Auto-detect like TS
+    u, err := url.Parse(baseURL)
+    if err != nil {
+        return nil, fmt.Errorf("invalid base URL: %w", err)
+    }
+    v := true
+    if u.Scheme == "http" {
+        v = false
+    } else {
+        host := u.Hostname()
+        if host == "localhost" || host == "127.0.0.1" {
+            v = false
+        }
+    }
 
-	internalClient, err := internal.NewClient(baseURL, apiKey, verifySSL)
-	if err != nil {
-		return nil, err
-	}
-
-	return &Client{
-		internal: internalClient,
-	}, nil
+    internalClient, err := internal.NewClient(baseURL, apiKey, v)
+    if err != nil { return nil, err }
+    return &Client{internal: internalClient}, nil
 }
 
 // ListIndexes retrieves a list of all available encrypted index names from your CyborgDB instance.

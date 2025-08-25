@@ -176,17 +176,14 @@ func strPtr(s string) *string {
 
 // createIndexModel creates the appropriate index model based on the index type
 func createIndexModel(indexType IndexType, dimension int32) internal.IndexModel {
-	fmt.Printf("Debug Go: Creating index type: %s\n", indexType)
 	switch indexType {
 	case IndexTypeIVF:
-		fmt.Printf("Debug Go: Returning IndexIVF\n")
 		return &cyborgdb.IndexIVF{
 			Dimension: dimension,
 			Metric:    METRIC,
 			NLists:    N_LISTS,
 		}
 	case IndexTypeIVFPQ:
-		fmt.Printf("Debug Go: Returning IndexIVFPQ\n")
 		return &cyborgdb.IndexIVFPQ{
 			Dimension: dimension,
 			Metric:    METRIC,
@@ -195,7 +192,6 @@ func createIndexModel(indexType IndexType, dimension int32) internal.IndexModel 
 			PqBits:    PQ_BITS,
 		}
 	case IndexTypeIVFFlat:
-		fmt.Printf("Debug Go: Returning IndexIVFFlat\n")
 		return &cyborgdb.IndexIVFFlat{
 			Dimension: dimension,
 			Metric:    METRIC,
