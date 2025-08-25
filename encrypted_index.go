@@ -171,7 +171,7 @@ func (e *EncryptedIndex) queryWithOptions(ctx context.Context, opts *QueryOption
 				Include:      opts.Include,
 			}
 		default:
-			return nil, fmt.Errorf("queryVectors must be []float32 or [][]float32, got %T", v)
+			return nil, fmt.Errorf("queryVectors must be []float32 for single vector queries or [][]float32 for batch queries, got %T", v)
 		}
 	} else if opts.QueryContents != "" {
 		// Text-based query
