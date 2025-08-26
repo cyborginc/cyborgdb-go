@@ -22,7 +22,7 @@ import (
 
 // Test constants matching TypeScript/Python versions
 const (
-	apiUrl   = "http://localhost:8000"
+	apiUrl    = "http://localhost:8000"
 	NLists    = 100
 	PqDim     = 32
 	PqBits    = 8
@@ -2166,7 +2166,7 @@ func TestDeleteIndividualVectors(t *testing.T) {
 
 	// Cleanup
 	defer func() {
-		deleteErr := index.DeleteIndex(ctx)  // Use a different variable name
+		deleteErr := index.DeleteIndex(ctx) // Use a different variable name
 		if deleteErr != nil {
 			t.Logf("Error cleaning up index: %v", deleteErr)
 		}
