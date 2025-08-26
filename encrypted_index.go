@@ -4,7 +4,15 @@ package cyborgdb
 import (
 	"context"
 	"fmt"
+
 	"github.com/cyborginc/cyborgdb-go/internal"
+)
+
+var (
+	// ErrQueryVectorsInvalidType is returned when queryVectors has an invalid type
+	ErrQueryVectorsInvalidType = fmt.Errorf("queryVectors must be []float32 for single vector queries or [][]float32 for batch queries")
+	// ErrMissingQueryInput is returned when neither queryVectors nor queryContents is provided
+	ErrMissingQueryInput = fmt.Errorf("either queryVectors or queryContents must be provided")
 )
 
 // EncryptedIndex represents an encrypted vector index, similar to the TypeScript EncryptedIndex class.
@@ -131,7 +139,7 @@ func (e *EncryptedIndex) Query(ctx context.Context, args ...interface{}) (*Query
 	return e.internal.Query(ctx, args...)
 }
 
-// queryWithOptions handles queries using the QueryOptions struct
+// queryWithOptions handles queries using the QueryOptions struct.
 func (e *EncryptedIndex) queryWithOptions(ctx context.Context, opts *QueryOptions) (*QueryResponse, error) {
 	// Set defaults to match Python SDK
 	if opts.TopK == 0 {
@@ -171,7 +179,7 @@ func (e *EncryptedIndex) queryWithOptions(ctx context.Context, opts *QueryOption
 				Include:      opts.Include,
 			}
 		default:
-			return nil, fmt.Errorf("queryVectors must be []float32 for single vector queries or [][]float32 for batch queries, got %T", v)
+			return nil, fmt.Errorf("%w, got %T", ErrQueryVectorsInvalidType, v)
 		}
 	} else if opts.QueryContents != "" {
 		// Text-based query
@@ -184,7 +192,7 @@ func (e *EncryptedIndex) queryWithOptions(ctx context.Context, opts *QueryOption
 			Include:       opts.Include,
 		}
 	} else {
-		return nil, fmt.Errorf("either queryVectors or queryContents must be provided")
+		return nil, ErrMissingQueryInput
 	}
 
 	// Use the internal Query method with the constructed request

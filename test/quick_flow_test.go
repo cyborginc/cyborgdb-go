@@ -75,13 +75,6 @@ type CyborgDBIntegrationTestSuite struct {
 }
 
 // Helper functions
-// Deprecated: Use cyborgdb.GenerateKey() instead
-func generateRandomKey(t *testing.T) []byte {
-	key, err := cyborgdb.GenerateKey()
-	require.NoError(t, err)
-
-	return key
-}
 
 func generateTestIndexName(indexType IndexType) string {
 	timestamp := time.Now().UnixNano()
@@ -2116,23 +2109,23 @@ func TestOptionalSSLVerification(t *testing.T) {
 
 	t.Run("With SSL verification (default)", func(t *testing.T) {
 		// Test with default SSL verification (true)
-		client, err := cyborgdb.NewClient(API_URL, apiKey)
-		require.NoError(t, err)
-		require.NotNil(t, client)
+		defaultClient, defaultErr := cyborgdb.NewClient(API_URL, apiKey)
+		require.NoError(t, defaultErr)
+		require.NotNil(t, defaultClient)
 	})
 	
 	t.Run("Without SSL verification", func(t *testing.T) {
 		// Test with SSL verification disabled
-		client, err := cyborgdb.NewClient(API_URL, apiKey, false)
-		require.NoError(t, err)
-		require.NotNil(t, client)
+		noSSLClient, noSSLErr := cyborgdb.NewClient(API_URL, apiKey, false)
+		require.NoError(t, noSSLErr)
+		require.NotNil(t, noSSLClient)
 	})
 	
 	t.Run("With SSL verification explicitly true", func(t *testing.T) {
 		// Test with SSL verification explicitly enabled
-		client, err := cyborgdb.NewClient(API_URL, apiKey, true)
-		require.NoError(t, err)
-		require.NotNil(t, client)
+		sslClient, sslErr := cyborgdb.NewClient(API_URL, apiKey, true)
+		require.NoError(t, sslErr)
+		require.NotNil(t, sslClient)
 	})
 }
 

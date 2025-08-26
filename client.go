@@ -6,7 +6,17 @@ import (
 	"crypto/rand"
 	"fmt"
 	"net/url"
+
 	"github.com/cyborginc/cyborgdb-go/internal"
+)
+
+var (
+	// ErrInvalidKeyLength is returned when an index key is not 32 bytes
+	ErrInvalidKeyLength = fmt.Errorf("index key must be exactly 32 bytes")
+	// ErrKeyGeneration is returned when key generation fails
+	ErrKeyGeneration = fmt.Errorf("failed to generate key")
+	// ErrInvalidURL is returned when the base URL is invalid
+	ErrInvalidURL = fmt.Errorf("invalid base URL")
 )
 
 // Client provides a high-level interface to the CyborgDB API, similar to the TypeScript SDK.
@@ -35,7 +45,7 @@ func GenerateKey() ([]byte, error) {
 	key := make([]byte, 32)
 	_, err := rand.Read(key)
 	if err != nil {
-		return nil, fmt.Errorf("failed to generate key: %w", err)
+		return nil, fmt.Errorf("%w: %v", ErrKeyGeneration, err)
 	}
 	return key, nil
 }
@@ -52,32 +62,36 @@ func GenerateKey() ([]byte, error) {
 //   NewClient(url, key, false)     // force off
 //   NewClient(url, key, true)      // force on
 func NewClient(baseURL, apiKey string, verifySSL ...bool) (*Client, error) {
-    // Explicit override wins
-    if len(verifySSL) > 0 {
-        v := verifySSL[0]
-        internalClient, err := internal.NewClient(baseURL, apiKey, v)
-        if err != nil { return nil, err }
-        return &Client{internal: internalClient}, nil
-    }
+	// Explicit override wins
+	if len(verifySSL) > 0 {
+		v := verifySSL[0]
+		internalClient, err := internal.NewClient(baseURL, apiKey, v)
+		if err != nil {
+			return nil, err
+		}
+		return &Client{internal: internalClient}, nil
+	}
 
-    // Auto-detect like TS
-    u, err := url.Parse(baseURL)
-    if err != nil {
-        return nil, fmt.Errorf("invalid base URL: %w", err)
-    }
-    v := true
-    if u.Scheme == "http" {
-        v = false
-    } else {
-        host := u.Hostname()
-        if host == "localhost" || host == "127.0.0.1" {
-            v = false
-        }
-    }
+	// Auto-detect like TS
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidURL, err)
+	}
+	v := true
+	if u.Scheme == "http" {
+		v = false
+	} else {
+		host := u.Hostname()
+		if host == "localhost" || host == "127.0.0.1" {
+			v = false
+		}
+	}
 
-    internalClient, err := internal.NewClient(baseURL, apiKey, v)
-    if err != nil { return nil, err }
-    return &Client{internal: internalClient}, nil
+	internalClient, err := internal.NewClient(baseURL, apiKey, v)
+	if err != nil {
+		return nil, err
+	}
+	return &Client{internal: internalClient}, nil
 }
 
 // ListIndexes retrieves a list of all available encrypted index names from your CyborgDB instance.
@@ -154,7 +168,7 @@ func (c *Client) CreateIndex(
 func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byte) (*EncryptedIndex, error) {
 	// Validate the key length
 	if len(indexKey) != 32 {
-		return nil, fmt.Errorf("index key must be exactly 32 bytes, got %d", len(indexKey))
+		return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(indexKey))
 	}
 
 	// Load the index from the internal client (which now uses the describe endpoint)

@@ -22,7 +22,7 @@ type IndexIVF = internal.IndexIVFModel
 type IndexIVFPQ = internal.IndexIVFPQModel
 type QueryResultItem = internal.QueryResult
 
-// QueryOptions provides a cleaner interface for query parameters that matches the Python SDK
+// QueryOptions provides a cleaner interface for query parameters that matches the Python SDK.
 type QueryOptions struct {
 	// QueryVectors can be a single vector ([]float32) or multiple vectors ([][]float32)
 	QueryVectors interface{}
