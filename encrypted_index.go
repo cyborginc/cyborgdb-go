@@ -289,4 +289,3 @@ func (e *EncryptedIndex) Train(ctx context.Context, batchSize int32, maxIters in
 func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 	return e.internal.DeleteIndex(ctx)
 }
-

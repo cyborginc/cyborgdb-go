@@ -184,6 +184,3 @@ func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byt
 func (c *Client) GetHealth(ctx context.Context) (*internal.HealthResponse, error) {
 	return c.internal.GetHealth(ctx)
 }
-
-
-
