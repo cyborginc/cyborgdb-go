@@ -22,7 +22,7 @@ import (
 
 // Test constants matching TypeScript/Python versions
 const (
-	API_URL    = "http://localhost:8000"
+	API_URL   = "http://localhost:8000"
 	NLists    = 100
 	PqDim     = 32
 	PqBits    = 8
@@ -213,7 +213,7 @@ func (suite *CyborgDBIntegrationTestSuite) SetupSuite() {
 	client, err := cyborgdb.NewClient(API_URL, apiKey, false)
 	require.NoError(suite.T(), err, "Failed to create CyborgDB client")
 	suite.client = client
-	
+
 	// Test connection to server
 	ctx := context.Background()
 	_, err = client.GetHealth(ctx)
@@ -310,7 +310,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestIndexCreationAndProperties() {
 // NEW Test: Load existing index (matches TypeScript test)
 func (suite *CyborgDBIntegrationTestSuite) TestLoadExistingIndex() {
 	ctx := context.Background()
-	
+
 	// Create some test data in the original index
 	vectors := []cyborgdb.VectorItem{}
 	for i := 0; i < 10; i++ {
@@ -322,24 +322,24 @@ func (suite *CyborgDBIntegrationTestSuite) TestLoadExistingIndex() {
 	}
 	err := suite.index.Upsert(ctx, vectors)
 	require.NoError(suite.T(), err)
-	
+
 	// Load the same index with the same credentials using LoadIndex
 	// The describe endpoint will fetch the index configuration automatically
 	loadedIndex, err := suite.client.LoadIndex(ctx, suite.indexName, suite.indexKey)
 	require.NoError(suite.T(), err)
 	require.NotNil(suite.T(), loadedIndex)
-	
+
 	// Verify the loaded index has the same properties
 	require.Equal(suite.T(), suite.index.GetIndexName(), loadedIndex.GetIndexName())
 	require.Equal(suite.T(), suite.index.GetIndexType(), loadedIndex.GetIndexType())
-	
+
 	// Verify we can query the loaded index and get the same data
 	originalResults, err := suite.index.Get(ctx, []string{"load-test-0", "load-test-1"}, []string{"metadata"})
 	require.NoError(suite.T(), err)
-	
+
 	loadedResults, err := loadedIndex.Get(ctx, []string{"load-test-0", "load-test-1"}, []string{"metadata"})
 	require.NoError(suite.T(), err)
-	
+
 	require.Equal(suite.T(), len(originalResults.Results), len(loadedResults.Results))
 	if len(originalResults.Results) > 0 && len(loadedResults.Results) > 0 {
 		require.Equal(suite.T(), originalResults.Results[0].GetId(), loadedResults.Results[0].GetId())
@@ -388,17 +388,17 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryNoMetadata() {
 	suite.T().Run("QueryOptions_Single_Vector", func(t *testing.T) {
 		opts := &cyborgdb.QueryOptions{
 			QueryVectors: suite.testData[0],
-			TopK:        TopK,
-			NProbes:     NProbes,
-			Include:     []string{"distance", "metadata"},
-			Greedy:      false,
+			TopK:         TopK,
+			NProbes:      NProbes,
+			Include:      []string{"distance", "metadata"},
+			Greedy:       false,
 		}
 		response, err := suite.index.Query(context.Background(), opts)
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.NotNil(t, response.Results)
 		require.Greater(t, len(response.Results), 0)
-		
+
 		results := response.Results[0] // Single query result
 		require.Greater(t, len(results), 0)
 		recall := computeRecall(results, nil)
@@ -2090,7 +2090,7 @@ func TestGenerateKey(t *testing.T) {
 		key, err := cyborgdb.GenerateKey()
 		require.NoError(t, err)
 		require.Len(t, key, 32, "Generated key should be 32 bytes")
-		
+
 		// Generate another key to ensure they're different
 		key2, err := cyborgdb.GenerateKey()
 		require.NoError(t, err)
@@ -2113,14 +2113,14 @@ func TestOptionalSSLVerification(t *testing.T) {
 		require.NoError(t, defaultErr)
 		require.NotNil(t, defaultClient)
 	})
-	
+
 	t.Run("Without SSL verification", func(t *testing.T) {
 		// Test with SSL verification disabled
 		noSSLClient, noSSLErr := cyborgdb.NewClient(API_URL, apiKey, false)
 		require.NoError(t, noSSLErr)
 		require.NotNil(t, noSSLClient)
 	})
-	
+
 	t.Run("With SSL verification explicitly true", func(t *testing.T) {
 		// Test with SSL verification explicitly enabled
 		sslClient, sslErr := cyborgdb.NewClient(API_URL, apiKey, true)
@@ -2138,32 +2138,32 @@ func TestDeleteIndividualVectors(t *testing.T) {
 	}
 
 	ctx := context.Background()
-	
+
 	// Create a client
 	client, err := cyborgdb.NewClient(API_URL, apiKey, false)
 	require.NoError(t, err, "Failed to create CyborgDB client")
-	
+
 	// Test connection to server
 	_, err = client.GetHealth(ctx)
 	if err != nil {
 		t.Fatalf("CyborgDB server is not available at %s: %v", API_URL, err)
 	}
-	
+
 	// Generate a key and create an index
 	key, err := cyborgdb.GenerateKey()
 	require.NoError(t, err)
-	
+
 	indexName := generateTestIndexName(IndexTypeIVF)
 	indexConfig := &cyborgdb.IndexIVF{
 		Dimension: 128,
 		Metric:    "euclidean",
 		NLists:    10,
 	}
-	
+
 	index, err := client.CreateIndex(ctx, indexName, key, indexConfig, nil)
 	require.NoError(t, err, "Failed to create index")
 	require.NotNil(t, index)
-	
+
 	// Cleanup
 	defer func() {
 		err := index.DeleteIndex(ctx)
@@ -2171,31 +2171,31 @@ func TestDeleteIndividualVectors(t *testing.T) {
 			t.Logf("Error cleaning up index: %v", err)
 		}
 	}()
-	
+
 	// Upsert test vectors
 	testVectors := []cyborgdb.VectorItem{
 		{Id: "vec1", Vector: generateSyntheticData(1, 128)[0]},
 		{Id: "vec2", Vector: generateSyntheticData(1, 128)[0]},
 		{Id: "vec3", Vector: generateSyntheticData(1, 128)[0]},
 	}
-	
+
 	err = index.Upsert(ctx, testVectors)
 	require.NoError(t, err)
-	
+
 	// Delete specific vectors
 	err = index.Delete(ctx, []string{"vec1", "vec3"})
 	require.NoError(t, err)
-	
+
 	// Verify deletion by trying to get the vectors
 	getResult, err := index.Get(ctx, []string{"vec1", "vec2", "vec3"}, []string{"vector"})
 	require.NoError(t, err)
-	
+
 	// Check which vectors still exist
 	foundIds := make(map[string]bool)
 	for _, result := range getResult.Results {
 		foundIds[result.GetId()] = true
 	}
-	
+
 	// vec2 should still exist, vec1 and vec3 should not
 	require.True(t, foundIds["vec2"], "vec2 should still exist")
 	require.False(t, foundIds["vec1"], "vec1 should be deleted")

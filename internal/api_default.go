@@ -665,7 +665,7 @@ func (a *DefaultAPIService) ListIndexesExecute(r ApiListIndexesRequest) (*IndexL
 
 type ApiGetIndexInfoRequest struct {
 	ctx                   context.Context
-	ApiService           *DefaultAPIService
+	ApiService            *DefaultAPIService
 	indexOperationRequest *IndexOperationRequest
 }
 
@@ -712,7 +712,7 @@ func (a *DefaultAPIService) GetIndexInfoExecute(r ApiGetIndexInfoRequest) (*Inde
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
-	
+
 	if r.indexOperationRequest == nil {
 		return localVarReturnValue, nil, reportError("indexOperationRequest is required and must be specified")
 	}
@@ -734,10 +734,10 @@ func (a *DefaultAPIService) GetIndexInfoExecute(r ApiGetIndexInfoRequest) (*Inde
 	if localVarHTTPHeaderAccept != "" {
 		localVarHeaderParams["Accept"] = localVarHTTPHeaderAccept
 	}
-	
+
 	// Body params
 	localVarPostBody = r.indexOperationRequest
-	
+
 	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
 	if err != nil {
 		return localVarReturnValue, nil, err
@@ -831,7 +831,7 @@ func (a *DefaultAPIService) QueryVectorsExecute(r ApiQueryVectorsRequest) (*Quer
 	localVarHeaderParams := make(map[string]string)
 	localVarQueryParams := url.Values{}
 	localVarFormParams := url.Values{}
-	
+
 	if r.queryRequest == nil {
 		return localVarReturnValue, nil, reportError("queryRequest is required and must be specified")
 	}
@@ -853,7 +853,7 @@ func (a *DefaultAPIService) QueryVectorsExecute(r ApiQueryVectorsRequest) (*Quer
 	// Always serialize as the request type (matching TypeScript's ObjectSerializer.serialize approach)
 	localVarPostBody = r.queryRequest
 
-	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody, 
+	req, err := a.client.prepareRequest(r.ctx, localVarPath, localVarHTTPMethod, localVarPostBody,
 		localVarHeaderParams, localVarQueryParams, localVarFormParams, formFiles)
 	if err != nil {
 		return localVarReturnValue, nil, err

@@ -78,6 +78,7 @@ func NewClient(baseURL, apiKey string, verifySSL bool) (*Client, error) {
 		apiKey:    apiKey,
 	}, nil
 }
+
 // ListIndexes retrieves a list of all available encrypted index names stored in CyborgDB.
 //
 // This function calls the `/v1/indexes/list` endpoint of the CyborgDB API, which returns
@@ -222,7 +223,7 @@ func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byt
 		IndexName: indexName,
 		IndexKey:  keyHex,
 	}
-	
+
 	// Get index info from the server
 	indexInfo, _, err := c.apiClient.DefaultAPI.GetIndexInfo(ctx).
 		IndexOperationRequest(describeReq).
@@ -230,7 +231,7 @@ func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byt
 	if err != nil {
 		return nil, fmt.Errorf("failed to get index info: %w", err)
 	}
-	
+
 	// Create the EncryptedIndex with full information from server
 	encryptedIndex := &EncryptedIndex{
 		indexName: &indexInfo.IndexName,
@@ -240,8 +241,6 @@ func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byt
 		client:    c,
 		trained:   indexInfo.IsTrained,
 	}
-	
+
 	return encryptedIndex, nil
 }
-
-

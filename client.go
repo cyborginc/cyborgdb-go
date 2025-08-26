@@ -58,9 +58,10 @@ func GenerateKey() ([]byte, error) {
 //   - otherwise -> verifySSL = true
 //
 // Call patterns:
-//   NewClient(url, key)            // auto-detect
-//   NewClient(url, key, false)     // force off
-//   NewClient(url, key, true)      // force on
+//
+//	NewClient(url, key)            // auto-detect
+//	NewClient(url, key, false)     // force off
+//	NewClient(url, key, true)      // force on
 func NewClient(baseURL, apiKey string, verifySSL ...bool) (*Client, error) {
 	// Explicit override wins
 	if len(verifySSL) > 0 {
