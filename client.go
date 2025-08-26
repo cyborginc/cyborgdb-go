@@ -10,12 +10,17 @@ import (
 	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
+const (
+    // KeySize is the required size in bytes for encryption keys.
+    KeySize = 32
+)
+
 var (
-	// ErrInvalidKeyLength is returned when an index key is not 32 bytes.
+	// ErrInvalidKeyLength is returned when an index key is not 32 bytes
 	ErrInvalidKeyLength = fmt.Errorf("index key must be exactly 32 bytes")
-	// ErrKeyGeneration is returned when key generation fails.
+	// ErrKeyGeneration is returned when key generation fails
 	ErrKeyGeneration = fmt.Errorf("failed to generate key")
-	// ErrInvalidURL is returned when the base URL is invalid.
+	// ErrInvalidURL is returned when the base URL is invalid
 	ErrInvalidURL = fmt.Errorf("invalid base URL")
 )
 
@@ -42,7 +47,7 @@ type Client struct {
 //   - []byte: A 32-byte encryption key
 //   - error: Any error that occurred during key generation
 func GenerateKey() ([]byte, error) {
-	key := make([]byte, 32)
+	key := make([]byte, KeySize)
 	_, err := rand.Read(key)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrKeyGeneration, err)
@@ -58,10 +63,9 @@ func GenerateKey() ([]byte, error) {
 //   - otherwise -> verifySSL = true
 //
 // Call patterns:
-//
-//	NewClient(url, key)            // auto-detect
-//	NewClient(url, key, false)     // force off
-//	NewClient(url, key, true)      // force on
+//   NewClient(url, key)            // auto-detect
+//   NewClient(url, key, false)     // force off
+//   NewClient(url, key, true)      // force on
 func NewClient(baseURL, apiKey string, verifySSL ...bool) (*Client, error) {
 	// Explicit override wins
 	if len(verifySSL) > 0 {
@@ -168,7 +172,7 @@ func (c *Client) CreateIndex(
 // If the wrong key is provided, operations on the index will fail.
 func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byte) (*EncryptedIndex, error) {
 	// Validate the key length
-	if len(indexKey) != 32 {
+	if len(indexKey) != KeySize {
 		return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(indexKey))
 	}
 

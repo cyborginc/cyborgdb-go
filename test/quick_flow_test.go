@@ -22,7 +22,7 @@ import (
 
 // Test constants matching TypeScript/Python versions
 const (
-	API_URL   = "http://localhost:8000"
+	apiUrl   = "http://localhost:8000"
 	NLists    = 100
 	PqDim     = 32
 	PqBits    = 8
@@ -210,7 +210,7 @@ func (suite *CyborgDBIntegrationTestSuite) SetupSuite() {
 	}
 
 	// Initialize client
-	client, err := cyborgdb.NewClient(API_URL, apiKey, false)
+	client, err := cyborgdb.NewClient(apiUrl, apiKey, false)
 	require.NoError(suite.T(), err, "Failed to create CyborgDB client")
 	suite.client = client
 
@@ -218,7 +218,7 @@ func (suite *CyborgDBIntegrationTestSuite) SetupSuite() {
 	ctx := context.Background()
 	_, err = client.GetHealth(ctx)
 	if err != nil {
-		suite.T().Fatalf("CyborgDB server is not available at %s: %v", API_URL, err)
+		suite.T().Fatalf("CyborgDB server is not available at %s: %v", apiUrl, err)
 	}
 
 	// Load wiki data sample (similar to TypeScript beforeAll)
@@ -2109,21 +2109,21 @@ func TestOptionalSSLVerification(t *testing.T) {
 
 	t.Run("With SSL verification (default)", func(t *testing.T) {
 		// Test with default SSL verification (true)
-		defaultClient, defaultErr := cyborgdb.NewClient(API_URL, apiKey)
+		defaultClient, defaultErr := cyborgdb.NewClient(apiUrl, apiKey)
 		require.NoError(t, defaultErr)
 		require.NotNil(t, defaultClient)
 	})
 
 	t.Run("Without SSL verification", func(t *testing.T) {
 		// Test with SSL verification disabled
-		noSSLClient, noSSLErr := cyborgdb.NewClient(API_URL, apiKey, false)
+		noSSLClient, noSSLErr := cyborgdb.NewClient(apiUrl, apiKey, false)
 		require.NoError(t, noSSLErr)
 		require.NotNil(t, noSSLClient)
 	})
 
 	t.Run("With SSL verification explicitly true", func(t *testing.T) {
 		// Test with SSL verification explicitly enabled
-		sslClient, sslErr := cyborgdb.NewClient(API_URL, apiKey, true)
+		sslClient, sslErr := cyborgdb.NewClient(apiUrl, apiKey, true)
 		require.NoError(t, sslErr)
 		require.NotNil(t, sslClient)
 	})
@@ -2140,13 +2140,13 @@ func TestDeleteIndividualVectors(t *testing.T) {
 	ctx := context.Background()
 
 	// Create a client
-	client, err := cyborgdb.NewClient(API_URL, apiKey, false)
+	client, err := cyborgdb.NewClient(apiUrl, apiKey, false)
 	require.NoError(t, err, "Failed to create CyborgDB client")
 
 	// Test connection to server
 	_, err = client.GetHealth(ctx)
 	if err != nil {
-		t.Fatalf("CyborgDB server is not available at %s: %v", API_URL, err)
+		t.Fatalf("CyborgDB server is not available at %s: %v", apiUrl, err)
 	}
 
 	// Generate a key and create an index
@@ -2166,9 +2166,9 @@ func TestDeleteIndividualVectors(t *testing.T) {
 
 	// Cleanup
 	defer func() {
-		err := index.DeleteIndex(ctx)
-		if err != nil {
-			t.Logf("Error cleaning up index: %v", err)
+		deleteErr := index.DeleteIndex(ctx)  // Use a different variable name
+		if deleteErr != nil {
+			t.Logf("Error cleaning up index: %v", deleteErr)
 		}
 	}()
 
