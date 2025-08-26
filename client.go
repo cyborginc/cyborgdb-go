@@ -11,11 +11,11 @@ import (
 )
 
 var (
-	// ErrInvalidKeyLength is returned when an index key is not 32 bytes
+	// ErrInvalidKeyLength is returned when an index key is not 32 bytes.
 	ErrInvalidKeyLength = fmt.Errorf("index key must be exactly 32 bytes")
-	// ErrKeyGeneration is returned when key generation fails
+	// ErrKeyGeneration is returned when key generation fails.
 	ErrKeyGeneration = fmt.Errorf("failed to generate key")
-	// ErrInvalidURL is returned when the base URL is invalid
+	// ErrInvalidURL is returned when the base URL is invalid.
 	ErrInvalidURL = fmt.Errorf("invalid base URL")
 )
 

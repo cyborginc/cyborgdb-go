@@ -9,9 +9,9 @@ import (
 )
 
 var (
-	// ErrQueryVectorsInvalidType is returned when queryVectors has an invalid type
+	// ErrQueryVectorsInvalidType is returned when queryVectors has an invalid type.
 	ErrQueryVectorsInvalidType = fmt.Errorf("queryVectors must be []float32 for single vector queries or [][]float32 for batch queries")
-	// ErrMissingQueryInput is returned when neither queryVectors nor queryContents is provided
+	// ErrMissingQueryInput is returned when neither queryVectors nor queryContents is provided.
 	ErrMissingQueryInput = fmt.Errorf("either queryVectors or queryContents must be provided")
 )
 
