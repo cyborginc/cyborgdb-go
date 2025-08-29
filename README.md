@@ -2,13 +2,8 @@
 
 The **CyborgDB Go SDK** provides a comprehensive client library for interacting with [CyborgDB](https://www.cyborg.co), the first Confidential Vector Database. This SDK enables you to perform encrypted vector operations including ingestion, search, and retrieval while maintaining end-to-end encryption of your vector embeddings. Built with Go's strong typing system, it offers excellent performance and seamless integration into Go applications and microservices.
 
-This SDK provides an interface to `cyborgdb-service` which you will need to separately install and run in order to use the SDK. For more info, please see our [docs](https://docs.cyborg.co)
-
-**Why CyborgDB?**
-
-Vector Search powers critical AI applications like RAG systems, recommendation engines, and semantic search. The CyborgDB Go SDK brings confidential computing to your Go applications and services, ensuring vector embeddings remain encrypted throughout their entire lifecycle while providing fast, accurate search capabilities.
-
-**Key Features**
+This SDK provides an interface to [`cyborgdb-service`](https://pypi.org/project/cyborgdb-service/) which you will need to separately install and run in order to use the SDK. For more info, please see our [docs](https://docs.cyborg.co)
+## Key Features
 
 * **End-to-End Encryption**: All vector operations maintain encryption with client-side keys
 * **Full Go Type Safety**: Complete type definitions and compile-time safety
@@ -17,17 +12,30 @@ Vector Search powers critical AI applications like RAG systems, recommendation e
 * **Context Support**: Built-in support for Go's context package for cancellation and timeouts
 * **Performance Optimized**: Designed for high-performance Go applications
 
-**Installation**
+## Getting Started
+
+To get started in minutes, check out our [Quickstart Guide](https://docs.cyborg.co/quickstart).
+
+
+### Installation
 
 1. Install `cyborgdb-service`
 
-2. Install the CyborgDB Go SDK:
+```bash
+# Install the CyborgDB Service
+pip install cyborgdb-service
+
+# Or via Docker
+docker pull cyborginc/cyborgdb-service
+```
+
+2. Install `cyborgdb` SDK:
 
 ```bash
 go get github.com/cyborginc/cyborgdb-go
 ```
 
-**Usage**
+### Usage
 
 ```go
 package main
@@ -114,9 +122,9 @@ func stringPtr(s string) *string {
 }
 ```
 
-**Advanced Usage**
+### Advanced Usage
 
-**Batch Queries**
+#### Batch Queries
 
 ```go
 // Search with multiple query vectors simultaneously
@@ -131,29 +139,7 @@ if err != nil {
 }
 ```
 
-**Using QueryRequest for Complex Queries**
-
-```go
-// Search with metadata filters using QueryRequest
-queryReq := &cyborgdb.QueryRequest{
-    QueryVector: []float32{0.1, 0.2, 0.3}, // ... query vector
-    TopK:        10,
-    NProbes:     1,
-    Greedy:      &[]bool{false}[0],
-    Filters: map[string]interface{}{
-        "category": "greeting",
-        "language": "en",
-    },
-    Include: []string{"distance", "metadata", "contents"},
-}
-
-results, err := index.Query(context.Background(), queryReq)
-if err != nil {
-    log.Fatal(err)
-}
-```
-
-**Complex Metadata Filtering**
+#### Complex Metadata Filtering
 
 ```go
 // Advanced metadata filtering with operators
@@ -176,104 +162,10 @@ results, err := index.Query(
 )
 ```
 
-**Getting Vectors by ID**
+## Documentation
 
-```go
-// Retrieve specific vectors by their IDs
-ids := []string{"doc1", "doc2", "doc3"}
-response, err := index.Get(context.Background(), ids, []string{"vector", "metadata", "contents"})
-if err != nil {
-    log.Fatal(err)
-}
+For more information on CyborgDB, see the [Cyborg Docs](https://docs.cyborg.co).
 
-fmt.Printf("Retrieved %d vectors\n", response.GetResultCount())
-for _, result := range response.GetResults() {
-    fmt.Printf("ID: %s\n", result.GetId())
-    
-    if result.HasMetadata() {
-        fmt.Printf("  Metadata: %+v\n", result.GetMetadata())
-    }
-    
-    if result.HasContents() {
-        fmt.Printf("  Contents: %s\n", result.GetContents())
-    }
-    
-    fmt.Printf("  Vector dimension: %d\n", result.GetVectorDimension())
-}
-```
+## License
 
-**Index Training**
-
-```go
-// Train the index for better query performance (recommended for IVF indexes)
-err = index.Train(context.Background(), 2048, 100, 1e-6)
-if err != nil {
-    log.Fatal(err)
-}
-```
-
-**Error Handling**
-
-The Go SDK uses standard Go error handling patterns:
-
-```go
-// Always check for errors
-response, err := index.Query(context.Background(), queryVector, 10)
-if err != nil {
-    // Handle the error appropriately
-    log.Printf("Query failed: %v", err)
-    return
-}
-
-// Use the response
-fmt.Printf("Found %d result sets\n", len(response.Results))
-```
-
-**Context and Timeouts**
-
-All operations support Go's context package for cancellation and timeouts:
-
-```go
-// Create a context with timeout
-ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-defer cancel()
-
-// Use the context for operations
-response, err := index.Query(ctx, queryVector, 10)
-if err != nil {
-    if ctx.Err() == context.DeadlineExceeded {
-        log.Println("Query timed out")
-    } else {
-        log.Printf("Query failed: %v", err)
-    }
-    return
-}
-```
-
-**Health Checking**
-
-```go
-// Check the health of the CyborgDB service
-health, err := client.GetHealth(context.Background())
-if err != nil {
-    log.Printf("Health check failed: %v", err)
-    return
-}
-
-fmt.Printf("Service status: %s\n", *health.Status)
-```
-
-**Documentation**
-
-For more detailed documentation, visit:
-* [CyborgDB Documentation](https://docs.cyborg.co/)
-
-**License**
-
-The CyborgDB Go SDK is licensed under the MIT License - see the [LICENSE](./LICENSE) file for details.
-
-**About CyborgDB**
-
-CyborgDB is dedicated to making AI safe and secure through confidential computing. We develop solutions that enable organizations to leverage AI while maintaining the confidentiality and privacy of their data.
-
-[Visit our website](https://www.cyborg.co/) | [Contact Us](mailto:hello@cyborg.co)
+The CyborgDB Go SDK is licensed under the MIT License.
