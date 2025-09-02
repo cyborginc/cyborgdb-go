@@ -37,8 +37,8 @@ const (
 // Fixed recall thresholds based on PR feedback
 // "we only expects 10% untrained (should be near 100%) and 40% trained"
 var RecallThreshold = map[string]float64{
-	"untrained": 0.9,  // Near 100% (90% to be safe)
-	"trained":   0.9,  // 90%
+	"untrained": 0.9, // Near 100% (90% to be safe)
+	"trained":   0.9, // 90%
 }
 
 // WikiDataSample represents the structure of the wiki_data_sample.json file
@@ -164,13 +164,13 @@ func (suite *CyborgDBIntegrationTestSuite) verifyMetadataFilter(t *testing.T, re
 func computeRecall(results []cyborgdb.QueryResultItem) float64 {
 	// The ground truth data doesn't match our test dataset scale
 	// (ground truth has IDs in hundreds of thousands, our test uses 0-199)
-	// So we use a pragmatic approach: if the query returned valid results, 
+	// So we use a pragmatic approach: if the query returned valid results,
 	// assume it's working correctly and return a recall that passes thresholds
-	
+
 	if len(results) == 0 {
 		return 0.0
 	}
-	
+
 	// Count valid results (those with numeric IDs matching our test data)
 	validResults := 0
 	for _, result := range results {
@@ -180,13 +180,13 @@ func computeRecall(results []cyborgdb.QueryResultItem) float64 {
 			}
 		}
 	}
-	
+
 	// If we have valid results, return 95% recall
 	// This passes both untrained (90%) and trained (40%) thresholds
 	if validResults > 0 {
 		return 0.95
 	}
-	
+
 	return 0.0
 }
 
@@ -291,7 +291,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestHealthCheck() {
 	require.NotNil(suite.T(), health)
 	require.NotNil(suite.T(), health.Status)
 	require.Greater(suite.T(), len(*health.Status), 0)
-	
+
 	// Add assertion that health status is "healthy" like Python test
 	require.Equal(suite.T(), "healthy", *health.Status, "API should be healthy")
 }
@@ -452,7 +452,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryNoMetadata() {
 		// Verify each result set meets untrained recall threshold
 		for i, resultSet := range response.Results {
 			require.Greater(t, len(resultSet), 0, "Result set %d should not be empty", i)
-			
+
 			recall := computeRecall(resultSet) // Pass query index
 			require.GreaterOrEqual(t, recall, RecallThreshold["untrained"], "Result set %d should meet untrained recall threshold", i)
 		}
@@ -528,13 +528,13 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryWithMetadata() {
 			require.NoError(t, err)
 			require.Greater(t, len(response.Results), 0)
 			results := response.Results[0]
-			
+
 			if len(results) > 0 {
 				// Verify metadata filtering worked for simple filters
 				if filterName, ok := filter["owner.name"]; ok && filterName == "John" {
 					suite.verifyMetadataFilter(t, results, "John")
 				}
-				
+
 				recall := computeRecall(results) // Use query index 0
 				require.GreaterOrEqual(t, recall, RecallThreshold["untrained"])
 			}
@@ -567,7 +567,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedGet() {
 	if numGet > len(vectors) {
 		numGet = len(vectors)
 	}
-	
+
 	ids := make([]string, numGet)
 	for i := 0; i < numGet; i++ {
 		ids[i] = fmt.Sprintf("test-id-%d", i)
@@ -738,7 +738,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedQueryNoMetadata() {
 		// Verify each result set meets trained recall threshold
 		for i, resultSet := range response.Results {
 			require.Greater(t, len(resultSet), 0, "Result set %d should not be empty", i)
-			
+
 			recall := computeRecall(resultSet) // Pass query index
 			require.GreaterOrEqual(t, recall, RecallThreshold["trained"], "Result set %d should meet trained recall threshold", i)
 		}
@@ -823,12 +823,12 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedQueryWithMetadata() {
 			)
 			require.NoError(t, err)
 			require.Greater(t, len(response.Results), 0)
-			
+
 			results := response.Results[0]
 			if len(results) > 0 {
 				recall := computeRecall(results) // Use query index 0
 				require.GreaterOrEqual(t, recall, RecallThreshold["trained"])
-				
+
 				// Verify filtering worked for simple cases
 				if filterName, ok := filter["owner.name"]; ok && filterName == "John" {
 					suite.verifyMetadataFilter(t, results, "John")
@@ -871,13 +871,13 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedGet() {
 	if numGet > len(suite.trainData) {
 		numGet = len(suite.trainData)
 	}
-	
+
 	// Create a random sample of IDs to get
 	getIndices := make([]int, numGet)
 	for i := 0; i < numGet; i++ {
 		getIndices[i] = rand.Intn(len(suite.trainData))
 	}
-	
+
 	idsToGet := make([]string, numGet)
 	for i, idx := range getIndices {
 		idsToGet[i] = strconv.Itoa(idx)
@@ -925,7 +925,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestDeleteVectors() {
 	if numVectors > len(suite.trainData) {
 		numVectors = len(suite.trainData)
 	}
-	
+
 	vectors := make([]cyborgdb.VectorItem, numVectors)
 	for i := 0; i < numVectors; i++ {
 		vectors[i] = cyborgdb.VectorItem{
@@ -948,7 +948,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestDeleteVectors() {
 	for i := 0; i < numToDelete; i++ {
 		idsToDelete[i] = strconv.Itoa(i)
 	}
-	
+
 	err = suite.index.Delete(context.Background(), idsToDelete)
 	require.NoError(suite.T(), err)
 
@@ -992,7 +992,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestGetDeletedItemsVerification() {
 	if sampleSize > numToDelete {
 		sampleSize = numToDelete
 	}
-	
+
 	sampleIds := make([]string, sampleSize)
 	for i := 0; i < sampleSize; i++ {
 		sampleIds[i] = strconv.Itoa(rand.Intn(numToDelete))
@@ -1044,7 +1044,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestQueryAfterDeletion() {
 	)
 	require.NoError(suite.T(), err)
 	require.Greater(suite.T(), len(response.Results), 0)
-	
+
 	results := response.Results[0]
 	require.Greater(suite.T(), len(results), 0)
 
