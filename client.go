@@ -78,7 +78,6 @@ func NewClient(baseURL, apiKey string, verifySSL ...bool) (*Client, error) {
 		return &Client{internal: internalClient}, nil
 	}
 
-	// Auto-detect like TS
 	u, err := url.Parse(baseURL)
 	if err != nil {
 		return nil, fmt.Errorf("%w: %v", ErrInvalidURL, err)

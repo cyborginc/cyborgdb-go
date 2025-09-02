@@ -140,7 +140,16 @@ func (e *EncryptedIndex) Query(ctx context.Context, args ...interface{}) (*Query
 }
 
 // queryWithOptions handles queries using the QueryOptions struct.
-func (e *EncryptedIndex) queryWithOptions(ctx context.Context, opts *QueryOptions) (*QueryResponse, error) {
+func (e *EncryptedIndex) queryWithOptions(ctx context.Context, in *QueryOptions) (*QueryResponse, error) {
+	// Disallow nil options (you could also choose to treat nil as "empty defaults"
+	// but you still wouldn't know the query input, so erroring is clearer).
+	if in == nil {
+		return nil, fmt.Errorf("%w: QueryOptions is nil", ErrMissingQueryInput)
+	}
+
+	// Work on a copy so we don't mutate the caller's struct.
+	opts := *in
+
 	// Set defaults to match Python SDK
 	if opts.TopK == 0 {
 		opts.TopK = 100
@@ -152,8 +161,18 @@ func (e *EncryptedIndex) queryWithOptions(ctx context.Context, opts *QueryOption
 		opts.Include = []string{"distance", "metadata"}
 	}
 
+	// Optional: reject ambiguous input if both are provided
+	if opts.QueryVectors != nil && opts.QueryContents != "" {
+		return nil, fmt.Errorf("%w: specify either QueryVectors or QueryContents, not both", ErrMissingQueryInput)
+	}
+
 	// Build the request based on whether we have vectors or contents
 	var req interface{}
+
+	// Cache scalars so we can take addresses without depending on opts thereafter.
+	topK := opts.TopK
+	nProbes := opts.NProbes
+	greedy := opts.Greedy
 
 	// Handle query vectors
 	if opts.QueryVectors != nil {
@@ -162,9 +181,9 @@ func (e *EncryptedIndex) queryWithOptions(ctx context.Context, opts *QueryOption
 			// Single vector query
 			req = &QueryRequest{
 				QueryVector: v,
-				TopK:        opts.TopK,
-				NProbes:     opts.NProbes,
-				Greedy:      &opts.Greedy,
+				TopK:        topK,
+				NProbes:     nProbes,
+				Greedy:      &greedy,
 				Filters:     opts.Filters,
 				Include:     opts.Include,
 			}
@@ -172,9 +191,9 @@ func (e *EncryptedIndex) queryWithOptions(ctx context.Context, opts *QueryOption
 			// Batch query
 			req = &BatchQueryRequest{
 				QueryVectors: v,
-				TopK:         &opts.TopK,
-				NProbes:      &opts.NProbes,
-				Greedy:       &opts.Greedy,
+				TopK:         &topK,
+				NProbes:      &nProbes,
+				Greedy:       &greedy,
 				Filters:      opts.Filters,
 				Include:      opts.Include,
 			}
@@ -183,11 +202,12 @@ func (e *EncryptedIndex) queryWithOptions(ctx context.Context, opts *QueryOption
 		}
 	} else if opts.QueryContents != "" {
 		// Text-based query
+		qc := opts.QueryContents // take address of a stable local
 		req = &QueryRequest{
-			QueryContents: &opts.QueryContents,
-			TopK:          opts.TopK,
-			NProbes:       opts.NProbes,
-			Greedy:        &opts.Greedy,
+			QueryContents: &qc,
+			TopK:          topK,
+			NProbes:       nProbes,
+			Greedy:        &greedy,
 			Filters:       opts.Filters,
 			Include:       opts.Include,
 		}
@@ -195,7 +215,6 @@ func (e *EncryptedIndex) queryWithOptions(ctx context.Context, opts *QueryOption
 		return nil, ErrMissingQueryInput
 	}
 
-	// Use the internal Query method with the constructed request
 	return e.internal.Query(ctx, req)
 }
 
