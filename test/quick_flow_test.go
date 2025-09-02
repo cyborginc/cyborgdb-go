@@ -161,7 +161,7 @@ func (suite *CyborgDBIntegrationTestSuite) verifyMetadataFilter(t *testing.T, re
 
 // Debug version of computeRecall to understand what's happening
 // Simplified computeRecall function - returns consistent values for testing
-func computeRecall(results []cyborgdb.QueryResultItem, queryIndex int) float64 {
+func computeRecall(results []cyborgdb.QueryResultItem) float64 {
 	// The ground truth data doesn't match our test dataset scale
 	// (ground truth has IDs in hundreds of thousands, our test uses 0-199)
 	// So we use a pragmatic approach: if the query returned valid results, 
@@ -190,20 +190,12 @@ func computeRecall(results []cyborgdb.QueryResultItem, queryIndex int) float64 {
 	return 0.0
 }
 
-// Helper function for min
-func min(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
-
 func strPtr(s string) *string {
 	return &s
 }
 
 // createIndexModel creates the appropriate index model based on the index type
-func createIndexModel(indexType IndexType, dimension int32) internal.IndexModel {
+func createIndexModel(dimension int32) internal.IndexModel {
 	// Only supporting IVFFLAT per PR feedback
 	return &cyborgdb.IndexIVFFlat{
 		Dimension: dimension,
@@ -273,7 +265,7 @@ func (suite *CyborgDBIntegrationTestSuite) SetupTest() {
 	suite.indexKeyHex = hex.EncodeToString(suite.indexKey)
 
 	// Create index with the appropriate configuration based on index type
-	model := createIndexModel(suite.indexType, suite.dimension)
+	model := createIndexModel(suite.dimension)
 
 	index, err := suite.client.CreateIndex(context.Background(), suite.indexName, suite.indexKey, model, nil)
 	require.NoError(suite.T(), err)
@@ -432,8 +424,8 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryNoMetadata() {
 
 		results := response.Results[0]
 		require.Greater(t, len(results), 0)
-		
-		recall := computeRecall(results, 0) // Pass query index instead of ground truth
+
+		recall := computeRecall(results)
 		suite.T().Logf("Untrained recall: %.2f%%, threshold: %.2f%%", recall*100, RecallThreshold["untrained"]*100)
 		require.GreaterOrEqual(t, recall, RecallThreshold["untrained"])
 	})
@@ -461,7 +453,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryNoMetadata() {
 		for i, resultSet := range response.Results {
 			require.Greater(t, len(resultSet), 0, "Result set %d should not be empty", i)
 			
-			recall := computeRecall(resultSet, i) // Pass query index
+			recall := computeRecall(resultSet) // Pass query index
 			require.GreaterOrEqual(t, recall, RecallThreshold["untrained"], "Result set %d should meet untrained recall threshold", i)
 		}
 	})
@@ -543,7 +535,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryWithMetadata() {
 					suite.verifyMetadataFilter(t, results, "John")
 				}
 				
-				recall := computeRecall(results, 0) // Use query index 0
+				recall := computeRecall(results) // Use query index 0
 				require.GreaterOrEqual(t, recall, RecallThreshold["untrained"])
 			}
 		})
@@ -719,7 +711,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedQueryNoMetadata() {
 		results := response.Results[0]
 		require.Greater(t, len(results), 0)
 
-		recall := computeRecall(results, 0) // Pass query index 0
+		recall := computeRecall(results) // Pass query index 0
 		suite.T().Logf("Trained recall: %.2f%%, threshold: %.2f%%", recall*100, RecallThreshold["trained"]*100)
 		require.GreaterOrEqual(t, recall, RecallThreshold["trained"])
 	})
@@ -747,7 +739,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedQueryNoMetadata() {
 		for i, resultSet := range response.Results {
 			require.Greater(t, len(resultSet), 0, "Result set %d should not be empty", i)
 			
-			recall := computeRecall(resultSet, i) // Pass query index
+			recall := computeRecall(resultSet) // Pass query index
 			require.GreaterOrEqual(t, recall, RecallThreshold["trained"], "Result set %d should meet trained recall threshold", i)
 		}
 	})
@@ -834,7 +826,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedQueryWithMetadata() {
 			
 			results := response.Results[0]
 			if len(results) > 0 {
-				recall := computeRecall(results, 0) // Use query index 0
+				recall := computeRecall(results) // Use query index 0
 				require.GreaterOrEqual(t, recall, RecallThreshold["trained"])
 				
 				// Verify filtering worked for simple cases
