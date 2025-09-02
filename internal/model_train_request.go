@@ -1,8 +1,8 @@
 package internal
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -11,12 +11,12 @@ var _ MappedNullable = &TrainRequest{}
 
 // TrainRequest represents the payload to train an encrypted index
 type TrainRequest struct {
-	IndexKey   string   `json:"index_key"`             // Required: hex string
-	IndexName  string   `json:"index_name"`            // Required
-	BatchSize  *int32   `json:"batch_size,omitempty"`  // Optional, default: 2048
-	MaxIters   *int32   `json:"max_iters,omitempty"`   // Optional, default: 100
-	Tolerance  *float64 `json:"tolerance,omitempty"`   // Optional, default: 1e-6
-	MaxMemory  *int32   `json:"max_memory,omitempty"`  // Optional, default: 0
+	IndexKey  string   `json:"index_key"`            // Required: hex string
+	IndexName string   `json:"index_name"`           // Required
+	BatchSize *int32   `json:"batch_size,omitempty"` // Optional, default: 2048
+	MaxIters  *int32   `json:"max_iters,omitempty"`  // Optional, default: 100
+	Tolerance *float64 `json:"tolerance,omitempty"`  // Optional, default: 1e-6
+	MaxMemory *int32   `json:"max_memory,omitempty"` // Optional, default: 0
 }
 
 type _TrainRequest TrainRequest

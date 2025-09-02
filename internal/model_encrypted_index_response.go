@@ -1,7 +1,7 @@
 /*
 CyborgDB API
 
-CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks. 
+CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks.
 
 API version: 1.0.0
 */
@@ -19,9 +19,9 @@ var _ MappedNullable = &EncryptedIndexResponse{}
 
 // EncryptedIndexResponse struct for EncryptedIndexResponse
 type EncryptedIndexResponse struct {
-	IndexName *string `json:"index_name,omitempty"`
-	IndexType *string `json:"index_type,omitempty"`
-	Config *IndexConfig `json:"config,omitempty"`
+	IndexName *string      `json:"index_name,omitempty"`
+	IndexType *string      `json:"index_type,omitempty"`
+	Config    *IndexConfig `json:"config,omitempty"`
 }
 
 // NewEncryptedIndexResponse instantiates a new EncryptedIndexResponse object
@@ -138,7 +138,7 @@ func (o *EncryptedIndexResponse) SetConfig(v IndexConfig) {
 }
 
 func (o EncryptedIndexResponse) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -194,5 +194,3 @@ func (v *NullableEncryptedIndexResponse) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-
