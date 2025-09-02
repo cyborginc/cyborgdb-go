@@ -26,17 +26,17 @@ type GetRequest struct {
 	// IndexName specifies the name of the encrypted index from which to retrieve vectors.
 	// This must match exactly with an existing index name in the CyborgDB instance.
 	IndexName string `json:"index_name"`
-	
+
 	// IndexKey is the hexadecimal-encoded encryption key for the index.
 	// This key is required to decrypt and access the vectors stored in the encrypted index.
 	// The key must be a 64-character hexadecimal string representing 32 bytes of key data.
 	IndexKey string `json:"index_key"`
-	
+
 	// Ids contains the list of unique identifiers for the vectors to retrieve.
 	// Each ID should correspond to a vector that was previously upserted into the index.
 	// If an ID doesn't exist in the index, it will be silently ignored (no error will be returned).
 	Ids []string `json:"ids"`
-	
+
 	// Include specifies which fields to include in the response for each retrieved vector.
 	// This field is optional and allows for selective field retrieval to optimize response size.
 	// Available field options:
@@ -63,7 +63,8 @@ type _GetRequest GetRequest
 //   - *GetRequest: A pointer to the newly created GetRequest instance
 //
 // Example:
-//   request := NewGetRequest("my-index", "a1b2c3d4...", []string{"vec1", "vec2"})
+//
+//	request := NewGetRequest("my-index", "a1b2c3d4...", []string{"vec1", "vec2"})
 func NewGetRequest(indexName string, indexKey string, ids []string) *GetRequest {
 	this := GetRequest{}
 	this.IndexName = indexName
@@ -234,9 +235,10 @@ func (o *GetRequest) HasInclude() bool {
 //   - v: Slice of field names to include ("vector", "metadata", "contents")
 //
 // Example:
-//   request.SetInclude([]string{"vector", "metadata"})  // Include only vectors and metadata
-//   request.SetInclude([]string{"metadata"})            // Include only metadata
-//   request.SetInclude([]string{"vector", "metadata", "contents"}) // Include all fields
+//
+//	request.SetInclude([]string{"vector", "metadata"})  // Include only vectors and metadata
+//	request.SetInclude([]string{"metadata"})            // Include only metadata
+//	request.SetInclude([]string{"vector", "metadata", "contents"}) // Include all fields
 func (o *GetRequest) SetInclude(v []string) {
 	o.Include = v
 }
@@ -286,7 +288,7 @@ func (o *GetRequest) UnmarshalJSON(data []byte) (err error) {
 	// This validates that all required properties are included in the JSON object
 	requiredProperties := []string{
 		"index_name",
-		"index_key", 
+		"index_key",
 		"ids",
 	}
 

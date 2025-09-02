@@ -3,8 +3,16 @@ package cyborgdb
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/cyborginc/cyborgdb-go/internal"
+)
+
+var (
+	// ErrQueryVectorsInvalidType is returned when queryVectors has an invalid type.
+	ErrQueryVectorsInvalidType = fmt.Errorf("queryVectors must be []float32 for single vector queries or [][]float32 for batch queries")
+	// ErrMissingQueryInput is returned when neither queryVectors nor queryContents is provided.
+	ErrMissingQueryInput = fmt.Errorf("either queryVectors or queryContents must be provided")
 )
 
 // EncryptedIndex represents an encrypted vector index, similar to the TypeScript EncryptedIndex class.
@@ -81,9 +89,10 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 
 // Query searches for nearest neighbors in the encrypted index.
 // This method supports multiple calling patterns for flexibility and ease of use:
-// 1. Direct parameters: Query(ctx, queryVectors, topK, nProbes, greedy, filters, include)
+// 1. QueryOptions struct (recommended): Query(ctx, queryOptions)
 // 2. QueryRequest struct: Query(ctx, queryRequest)
 // 3. BatchQueryRequest struct: Query(ctx, batchQueryRequest)
+// 4. Direct parameters: Query(ctx, queryVectors, topK, nProbes, greedy, filters, include)
 //
 // The query performs similarity search using the index's configured distance metric
 // and returns the most similar vectors along with their distances and metadata.
@@ -96,16 +105,117 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 //   - *QueryResponse: Search results with nearest neighbors, distances, and metadata
 //   - error: nil on success, or an error describing what went wrong
 //
+// Example with QueryOptions (matches Python SDK):
+//
+//	opts := &QueryOptions{
+//	    QueryVectors: []float32{...}, // or [][]float32 for batch
+//	    QueryContents: "",             // or text to embed
+//	    TopK: 100,
+//	    NProbes: 1,
+//	    Filters: map[string]interface{}{"category": "science"},
+//	    Include: []string{"distance", "metadata"},
+//	    Greedy: false,
+//	}
+//	results, err := index.Query(ctx, opts)
+//
 // Query Parameters:
 //   - queryVectors: Single vector []float32 or batch [][]float32
+//   - queryContents: Text to embed and search (requires embedding model)
 //   - topK: Number of nearest neighbors to return (default: 100)
-//   - nProbes: Number of clusters to search (higher = more accurate, slower)
-//   - greedy: Use greedy search for potentially faster results
+//   - nProbes: Number of clusters to search (higher = more accurate, slower, default: 1)
+//   - greedy: Use greedy search for potentially faster results (default: false)
 //   - filters: Metadata filters for narrowing results
-//   - include: Fields to include in response ("metadata", "distance", "contents", "vector")
+//   - include: Fields to include in response (default: ["distance", "metadata"])
 func (e *EncryptedIndex) Query(ctx context.Context, args ...interface{}) (*QueryResponse, error) {
-	// Delegate to the internal implementation which has the full logic
+	// Check if the first argument is QueryOptions
+	if len(args) > 0 {
+		if opts, ok := args[0].(*QueryOptions); ok {
+			// Convert QueryOptions to the format expected by internal
+			return e.queryWithOptions(ctx, opts)
+		}
+	}
+
+	// Delegate to the internal implementation for other patterns
 	return e.internal.Query(ctx, args...)
+}
+
+// queryWithOptions handles queries using the QueryOptions struct.
+func (e *EncryptedIndex) queryWithOptions(ctx context.Context, in *QueryOptions) (*QueryResponse, error) {
+	// Disallow nil options (you could also choose to treat nil as "empty defaults"
+	// but you still wouldn't know the query input, so erroring is clearer).
+	if in == nil {
+		return nil, fmt.Errorf("%w: QueryOptions is nil", ErrMissingQueryInput)
+	}
+
+	// Work on a copy so we don't mutate the caller's struct.
+	opts := *in
+
+	// Set defaults to match Python SDK
+	if opts.TopK == 0 {
+		opts.TopK = 100
+	}
+	if opts.NProbes == 0 {
+		opts.NProbes = 1
+	}
+	if len(opts.Include) == 0 {
+		opts.Include = []string{"distance", "metadata"}
+	}
+
+	// Optional: reject ambiguous input if both are provided
+	if opts.QueryVectors != nil && opts.QueryContents != "" {
+		return nil, fmt.Errorf("%w: specify either QueryVectors or QueryContents, not both", ErrMissingQueryInput)
+	}
+
+	// Build the request based on whether we have vectors or contents
+	var req interface{}
+
+	// Cache scalars so we can take addresses without depending on opts thereafter.
+	topK := opts.TopK
+	nProbes := opts.NProbes
+	greedy := opts.Greedy
+
+	// Handle query vectors
+	if opts.QueryVectors != nil {
+		switch v := opts.QueryVectors.(type) {
+		case []float32:
+			// Single vector query
+			req = &QueryRequest{
+				QueryVector: v,
+				TopK:        topK,
+				NProbes:     nProbes,
+				Greedy:      &greedy,
+				Filters:     opts.Filters,
+				Include:     opts.Include,
+			}
+		case [][]float32:
+			// Batch query
+			req = &BatchQueryRequest{
+				QueryVectors: v,
+				TopK:         &topK,
+				NProbes:      &nProbes,
+				Greedy:       &greedy,
+				Filters:      opts.Filters,
+				Include:      opts.Include,
+			}
+		default:
+			return nil, fmt.Errorf("%w, got %T", ErrQueryVectorsInvalidType, v)
+		}
+	} else if opts.QueryContents != "" {
+		// Text-based query
+		qc := opts.QueryContents // take address of a stable local
+		req = &QueryRequest{
+			QueryContents: &qc,
+			TopK:          topK,
+			NProbes:       nProbes,
+			Greedy:        &greedy,
+			Filters:       opts.Filters,
+			Include:       opts.Include,
+		}
+	} else {
+		return nil, ErrMissingQueryInput
+	}
+
+	return e.internal.Query(ctx, req)
 }
 
 // Get retrieves specific vectors from the encrypted index by their IDs.

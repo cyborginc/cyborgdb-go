@@ -123,14 +123,15 @@ func (o *GetResponse) GetResultCount() int {
 //   - bool: true if the item was found, false otherwise
 //
 // Example:
-//   if result, found := response.GetResultByID("vector-123"); found {
-//       fmt.Printf("Found vector: %s\n", result.GetId())
-//   }
+//
+//	if result, found := response.GetResultByID("vector-123"); found {
+//	    fmt.Printf("Found vector: %s\n", result.GetId())
+//	}
 func (o *GetResponse) GetResultByID(id string) (*GetResultItemModel, bool) {
 	if o == nil || o.Results == nil {
 		return nil, false
 	}
-	
+
 	for i := range o.Results {
 		if o.Results[i].GetId() == id {
 			return &o.Results[i], true
@@ -146,13 +147,14 @@ func (o *GetResponse) GetResultByID(id string) (*GetResultItemModel, bool) {
 //   - []string: Slice of all vector IDs in the results
 //
 // Example:
-//   ids := response.GetAllIDs()
-//   fmt.Printf("Retrieved %d vectors with IDs: %v\n", len(ids), ids)
+//
+//	ids := response.GetAllIDs()
+//	fmt.Printf("Retrieved %d vectors with IDs: %v\n", len(ids), ids)
 func (o *GetResponse) GetAllIDs() []string {
 	if o == nil || o.Results == nil {
 		return nil
 	}
-	
+
 	ids := make([]string, len(o.Results))
 	for i, result := range o.Results {
 		ids[i] = result.GetId()
@@ -274,17 +276,17 @@ type GetResultItemModel struct {
 	// Id is the unique identifier of the vector item.
 	// This field is always present and matches the ID that was used when the vector was originally upserted.
 	Id string `json:"id"`
-	
+
 	// Vector contains the high-dimensional vector data as an array of float32 values.
 	// This field is included only if "vector" was specified in the include parameter of the get request.
 	// For IVFPQ indexes, the returned vector may be compressed and have different dimensions than the original.
 	Vector []float32 `json:"vector,omitempty"`
-	
+
 	// Metadata contains additional structured data associated with the vector.
 	// This field is included only if "metadata" was specified in the include parameter of the get request.
 	// The metadata can contain arbitrary key-value pairs that were stored with the vector.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
-	
+
 	// Contents contains text or binary content associated with the vector.
 	// This field is included only if "contents" was specified in the include parameter of the get request.
 	// The content is stored as a string and may represent text data or base64-encoded binary data.
@@ -515,9 +517,10 @@ func (o *GetResultItemModel) GetVectorDimension() int {
 //   - bool: true if the key exists in the metadata, false otherwise
 //
 // Example:
-//   if value, exists := item.GetMetadataValue("category"); exists {
-//       fmt.Printf("Category: %v\n", value)
-//   }
+//
+//	if value, exists := item.GetMetadataValue("category"); exists {
+//	    fmt.Printf("Category: %v\n", value)
+//	}
 func (o *GetResultItemModel) GetMetadataValue(key string) (interface{}, bool) {
 	if o == nil || o.Metadata == nil {
 		return nil, false
