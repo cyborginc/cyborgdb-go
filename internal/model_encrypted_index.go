@@ -388,20 +388,10 @@ func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 	return nil
 }
 
-// Train optimizes the encrypted index for better search performance using machine learning techniques.
-// Training is typically performed after upserting a significant number of vectors and improves
-// query speed and accuracy. The training process uses clustering algorithms to organize vectors
-// for more efficient similarity searches.
-//
-// Parameters:
-//   - ctx: Context for controlling the request lifecycle (timeouts, cancellation, etc.)
-//   - batchSize: Number of vectors to process in each training batch (affects memory usage)
-//   - maxIters: Maximum number of training iterations to perform
-//   - tolerance: Convergence tolerance for training (smaller values = more precise training)
-//
-// Returns:
-//   - error: nil on success, or an error describing what went wrong
-func (e *EncryptedIndex) Train(ctx context.Context, batchSize int32, maxIters int32, tolerance float64) error {
+// Train executes a training operation for the index using the provided request.
+// If IndexName or IndexKey are not populated in req, they will be filled from the
+// current EncryptedIndex instance.
+func (e *EncryptedIndex) Train(ctx context.Context, req *TrainRequest) error {
 	if e.client == nil {
 		return fmt.Errorf("cannot train index: client reference is nil")
 	}
@@ -411,53 +401,50 @@ func (e *EncryptedIndex) Train(ctx context.Context, batchSize int32, maxIters in
 	if e.indexKey == "" {
 		return fmt.Errorf("index key is required")
 	}
-	if len(e.indexKey) != 64 {
-		return fmt.Errorf("index key must be 64-character hex string (32 bytes), got %d", len(e.indexKey))
+	if req == nil {
+		return fmt.Errorf("train request is required")
 	}
 
-	// Prepare the train request
-	trainReq := TrainRequest{
-		IndexName: *e.indexName,
-		IndexKey:  e.indexKey,
-		BatchSize: &batchSize,
-		MaxIters:  &maxIters,
-		Tolerance: &tolerance,
+	// Backfill missing fields from the bound index.
+	if req.IndexName == "" {
+		req.IndexName = *e.indexName
+	}
+	if req.IndexKey == "" {
+		req.IndexKey = e.indexKey
 	}
 
-	// Call the low-level API
-	_, err := e.client.apiClient.DefaultAPI.
-		TrainIndex(ctx, *e.indexName).
-		XIndexKey(e.indexKey).
-		TrainRequest(trainReq).
+	// Validate key format (hex-encoded 32 bytes).
+	if len(req.IndexKey) != 64 {
+		return fmt.Errorf("index key must be 64-character hex string (32 bytes), got %d", len(req.IndexKey))
+	}
+
+	// Invoke API.
+	_, err := e.client.apiClient.
+		DefaultAPI.
+		TrainIndex(ctx, req.IndexName).
+		XIndexKey(req.IndexKey).
+		TrainRequest(*req).
 		Execute()
-
 	if err != nil {
-		return fmt.Errorf("failed to train index '%s': %w", *e.indexName, err)
+		return fmt.Errorf("failed to train index '%s': %w", req.IndexName, err)
 	}
 
 	return nil
 }
 
-// Query searches for the nearest neighbors to the given query vector(s) in the encrypted index.
-// This method performs similarity search using the specified distance metric and returns
-// the most similar vectors along with their distances and metadata.
+// Query executes a similarity search using a single request object.
 //
-// This method supports multiple calling patterns:
-// 1. Direct parameters: Query(ctx, queryVectors, topK, nProbes, greedy, filters, include)
-// 2. QueryRequest struct: Query(ctx, queryRequest)
-// 3. BatchQueryRequest struct: Query(ctx, batchQueryRequest)
+// Decision:
+//   - If req.BatchQueryVectors is provided and non-empty -> batch query
+//   - Else -> single-vector or contents-based query
 //
-// Parameters:
-//   - ctx: Context for controlling the request lifecycle (timeouts, cancellation, etc.)
-//   - args: Variable arguments supporting multiple patterns:
-//   - (queryVectors, topK, nProbes, greedy, filters, include) - Direct parameter style
-//   - (QueryRequest) - Single query request struct
-//   - (BatchQueryRequest) - Batch query request struct
+// IndexName/IndexKey are auto-filled from the bound EncryptedIndex if missing.
+// Include defaults to ["distance", "metadata"] when omitted.
 //
 // Returns:
-//   - *QueryResponse: Contains the search results with nearest neighbors, distances, and metadata
-//   - error: nil on success, or an error describing what went wrong
-func (e *EncryptedIndex) Query(ctx context.Context, args ...interface{}) (*QueryResponse, error) {
+//   - *QueryResponse on success
+//   - error on failure
+func (e *EncryptedIndex) Query(ctx context.Context, req *QueryRequest) (*QueryResponse, error) {
 	if e.client == nil {
 		return nil, fmt.Errorf("cannot query index: client reference is nil")
 	}
@@ -467,29 +454,69 @@ func (e *EncryptedIndex) Query(ctx context.Context, args ...interface{}) (*Query
 	if e.indexKey == "" {
 		return nil, fmt.Errorf("index key is required")
 	}
-
-	if len(args) == 0 {
-		return nil, fmt.Errorf("at least one argument is required")
+	if req == nil {
+		return nil, fmt.Errorf("query request is required")
 	}
 
-	// Convert the binary indexKey to hex (matching TypeScript: Buffer.from(this.indexKey).toString('hex'))
-	keyHex := e.indexKey
-
-	// Handle different argument patterns
-	switch req := args[0].(type) {
-	case *QueryRequest:
-		// Convert QueryRequest to BatchQueryRequest (like TypeScript does)
-		return e.executeUnifiedQuery(ctx, keyHex, convertQueryRequestToBatch(req))
-	case QueryRequest:
-		return e.executeUnifiedQuery(ctx, keyHex, convertQueryRequestToBatch(&req))
-	case *BatchQueryRequest:
-		return e.executeUnifiedQuery(ctx, keyHex, req)
-	case BatchQueryRequest:
-		return e.executeUnifiedQuery(ctx, keyHex, &req)
-	default:
-		// Handle direct parameter style - convert to BatchQueryRequest
-		return e.executeDirectQueryAsBatch(ctx, keyHex, args...)
+	// Backfill index identifiers if missing.
+	if req.IndexName == "" {
+		req.IndexName = *e.indexName
 	}
+	if req.IndexKey == "" {
+		req.IndexKey = e.indexKey
+	}
+
+	hasBatch := req.BatchQueryVectors != nil && len(req.BatchQueryVectors) > 0
+	hasSingle := req.QueryVector != nil && len(req.QueryVector) > 0
+	hasContents := req.QueryContents != nil && *req.QueryContents != ""
+
+	if !hasBatch && !hasSingle && !hasContents {
+		return nil, fmt.Errorf("query must include QueryVector, BatchQueryVectors, or QueryContents")
+	}
+
+	if req.Include == nil || len(req.Include) == 0 {
+		req.Include = []string{"distance", "metadata"}
+	}
+
+	if hasBatch {
+		// Map to BatchQueryRequest.
+		topK := req.TopK
+		batch := BatchQueryRequest{
+			IndexName:    req.IndexName,
+			IndexKey:     req.IndexKey,
+			QueryVectors: req.BatchQueryVectors,
+			TopK:         &topK,
+			Filters:      req.Filters,
+			Include:      req.Include,
+		}
+		if req.NProbes != nil {
+			batch.NProbes = req.NProbes
+		}
+		if req.Greedy != nil {
+			batch.Greedy = req.Greedy
+		}
+
+		resp, _, err := e.client.apiClient.
+			DefaultAPI.
+			QueryVectors(ctx).
+			BatchQueryRequest(batch).
+			Execute()
+		if err != nil {
+			return nil, fmt.Errorf("failed to query (batch) index '%s': %w", req.IndexName, err)
+		}
+		return resp, nil
+	}
+
+	// Single-vector or contents query: send QueryRequest directly.
+	resp, _, err := e.client.apiClient.
+		DefaultAPI.
+		QueryVectors(ctx).
+		QueryRequest(*req).
+		Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to query (single) index '%s': %w", req.IndexName, err)
+	}
+	return resp, nil
 }
 
 // convertQueryRequestToBatch converts a QueryRequest to BatchQueryRequest format.
@@ -507,20 +534,24 @@ func convertQueryRequestToBatch(req *QueryRequest) *BatchQueryRequest {
 		IndexKey:  req.IndexKey,
 		Filters:   req.Filters,
 		Include:   req.Include,
+		TopK:      &req.TopK,
 	}
 
-	// Convert single vector to batch format
+	// Only set NProbes if provided
+	if req.NProbes != nil {
+		batch.NProbes = req.NProbes
+	}
+
+	// Copy greedy if provided
+	if req.Greedy != nil {
+		batch.Greedy = req.Greedy
+	}
+
+	// Convert vectors
 	if req.QueryVector != nil && len(req.QueryVector) > 0 {
 		batch.QueryVectors = [][]float32{req.QueryVector}
 	} else if req.QueryVectors != nil && len(req.QueryVectors) > 0 {
 		batch.QueryVectors = req.QueryVectors
-	}
-
-	// Handle TopK, NProbes, Greedy - convert from direct values to pointers
-	batch.TopK = &req.TopK
-	batch.NProbes = &req.NProbes
-	if req.Greedy != nil {
-		batch.Greedy = req.Greedy
 	}
 
 	return batch
@@ -544,11 +575,11 @@ func (e *EncryptedIndex) executeUnifiedQuery(ctx context.Context, keyHex string,
 		return nil, fmt.Errorf("QueryVectors is required")
 	}
 
-	// Ensure index name and key are set
+	// Ensure index identity set from bound index instance
 	req.IndexName = *e.indexName
-	req.IndexKey = keyHex
+	req.IndexKey  = keyHex
 
-	// Set defaults (matching TypeScript defaults)
+	// Set defaults if not provided
 	if req.TopK == nil {
 		defaultTopK := int32(100)
 		req.TopK = &defaultTopK
@@ -565,12 +596,11 @@ func (e *EncryptedIndex) executeUnifiedQuery(ctx context.Context, keyHex string,
 		req.Include = []string{"distance", "metadata"}
 	}
 
-	// IMPORTANT: Always use BatchQueryRequest method like TypeScript does
-	resp, _, err := e.client.apiClient.DefaultAPI.
+	resp, _, err := e.client.apiClient.
+		DefaultAPI.
 		QueryVectors(ctx).
 		BatchQueryRequest(*req).
 		Execute()
-
 	if err != nil {
 		return nil, fmt.Errorf("failed to query index '%s': %w", *e.indexName, err)
 	}

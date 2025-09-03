@@ -5,26 +5,23 @@ package internal
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 )
 
-// IndexIVFFlatModel struct for configuring an IVFFlat (Inverted File with Flat quantization) index.
+// IndexIVFFlatModel configures an IVFFlat (Inverted File with Flat quantization) index.
+// Changes:
+// - Removed metric and n_lists
+// - Dimension remains optional
 type IndexIVFFlatModel struct {
-	Dimension int32  `json:"dimension,omitempty"`
-	NLists    int32  `json:"n_lists"`
-	Metric    string `json:"metric,omitempty"`
+	Dimension *int32 `json:"dimension,omitempty"`
 	Type      string `json:"type"` // default: "ivfflat"
 }
 
 type _IndexIVFFlatModel IndexIVFFlatModel
 
-// NewIndexIVFFlatModel creates a new IVFFlat index model with required fields.
-func NewIndexIVFFlatModel(dimension int32, metric string, nLists int32) *IndexIVFFlatModel {
+// NewIndexIVFFlatModel creates a new IVFFlat index model with default type set.
+func NewIndexIVFFlatModel() *IndexIVFFlatModel {
 	return &IndexIVFFlatModel{
-		Dimension: dimension,
-		Metric:    metric,
-		NLists:    nLists,
-		Type:      "ivfflat",
+		Type: "ivfflat",
 	}
 }
 
@@ -33,6 +30,33 @@ func NewIndexIVFFlatModelWithDefaults() *IndexIVFFlatModel {
 	return &IndexIVFFlatModel{
 		Type: "ivfflat",
 	}
+}
+
+// GetDimension returns the Dimension value if set, zero value otherwise.
+func (o *IndexIVFFlatModel) GetDimension() int32 {
+	if o == nil || o.Dimension == nil {
+		var ret int32
+		return ret
+	}
+	return *o.Dimension
+}
+
+// GetDimensionOk returns a tuple with the Dimension field value (if set) and a boolean.
+func (o *IndexIVFFlatModel) GetDimensionOk() (*int32, bool) {
+	if o == nil || o.Dimension == nil {
+		return nil, false
+	}
+	return o.Dimension, true
+}
+
+// HasDimension checks if Dimension was set.
+func (o *IndexIVFFlatModel) HasDimension() bool {
+	return o != nil && o.Dimension != nil
+}
+
+// SetDimension assigns the given int32 to Dimension.
+func (o *IndexIVFFlatModel) SetDimension(v int32) {
+	o.Dimension = &v
 }
 
 func (o IndexIVFFlatModel) MarshalJSON() ([]byte, error) {
@@ -44,35 +68,22 @@ func (o IndexIVFFlatModel) MarshalJSON() ([]byte, error) {
 }
 
 func (o IndexIVFFlatModel) ToMap() (map[string]interface{}, error) {
-	return map[string]interface{}{
-		"dimension": o.Dimension,
-		"n_lists":   o.NLists,
-		"metric":    o.Metric,
-		"type":      o.Type,
-	}, nil
+	m := map[string]interface{}{
+		"type": o.Type,
+	}
+	if o.Dimension != nil {
+		m["dimension"] = *o.Dimension
+	}
+	return m, nil
 }
 
 func (o *IndexIVFFlatModel) UnmarshalJSON(data []byte) error {
-	requiredProps := []string{"dimension", "metric", "n_lists"}
-	var allProps map[string]interface{}
-	err := json.Unmarshal(data, &allProps)
-	if err != nil {
-		return err
-	}
-	for _, prop := range requiredProps {
-		if _, found := allProps[prop]; !found {
-			return fmt.Errorf("required field %s is missing", prop)
-		}
-	}
-
 	var temp _IndexIVFFlatModel
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&temp)
-	if err != nil {
+	if err := decoder.Decode(&temp); err != nil {
 		return err
 	}
-
 	*o = IndexIVFFlatModel(temp)
 
 	if o.Type == "" {

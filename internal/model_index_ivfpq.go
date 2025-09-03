@@ -9,10 +9,12 @@ import (
 )
 
 // IndexIVFPQModel configures an IVFPQ (Inverted File with Product Quantization) index.
+// Changes:
+// - Removed metric and n_lists
+// - Made dimension optional
+// - pq_dim and pq_bits remain required
 type IndexIVFPQModel struct {
-	Dimension int32  `json:"dimension,omitempty"`
-	NLists    int32  `json:"n_lists"`
-	Metric    string `json:"metric,omitempty"`
+	Dimension *int32 `json:"dimension,omitempty"`
 	Type      string `json:"type"`    // default: "ivfpq"
 	PqDim     int32  `json:"pq_dim"`  // required
 	PqBits    int32  `json:"pq_bits"` // required
@@ -21,14 +23,12 @@ type IndexIVFPQModel struct {
 type _IndexIVFPQModel IndexIVFPQModel
 
 // NewIndexIVFPQModel instantiates a new IVFPQ index model with required fields.
-func NewIndexIVFPQModel(nLists int32, pqDim int32, pqBits int32) *IndexIVFPQModel {
-	model := IndexIVFPQModel{
-		NLists: nLists,
+func NewIndexIVFPQModel(pqDim int32, pqBits int32) *IndexIVFPQModel {
+	return &IndexIVFPQModel{
 		Type:   "ivfpq",
 		PqDim:  pqDim,
 		PqBits: pqBits,
 	}
-	return &model
 }
 
 // NewIndexIVFPQModelWithDefaults instantiates a new IVFPQ model with only default values.
@@ -36,6 +36,33 @@ func NewIndexIVFPQModelWithDefaults() *IndexIVFPQModel {
 	return &IndexIVFPQModel{
 		Type: "ivfpq",
 	}
+}
+
+// GetDimension returns the Dimension value if set, zero value otherwise.
+func (o *IndexIVFPQModel) GetDimension() int32 {
+	if o == nil || o.Dimension == nil {
+		var ret int32
+		return ret
+	}
+	return *o.Dimension
+}
+
+// GetDimensionOk returns a tuple with the Dimension field value (if set) and a boolean.
+func (o *IndexIVFPQModel) GetDimensionOk() (*int32, bool) {
+	if o == nil || o.Dimension == nil {
+		return nil, false
+	}
+	return o.Dimension, true
+}
+
+// HasDimension checks if Dimension was set.
+func (o *IndexIVFPQModel) HasDimension() bool {
+	return o != nil && o.Dimension != nil
+}
+
+// SetDimension assigns the given int32 to Dimension.
+func (o *IndexIVFPQModel) SetDimension(v int32) {
+	o.Dimension = &v
 }
 
 func (o IndexIVFPQModel) MarshalJSON() ([]byte, error) {
@@ -47,24 +74,23 @@ func (o IndexIVFPQModel) MarshalJSON() ([]byte, error) {
 }
 
 func (o IndexIVFPQModel) ToMap() (map[string]interface{}, error) {
-	return map[string]interface{}{
-		"dimension": o.Dimension,
-		"n_lists":   o.NLists,
-		"metric":    o.Metric,
-		"type":      o.Type,
-		"pq_dim":    o.PqDim,
-		"pq_bits":   o.PqBits,
-	}, nil
+	m := map[string]interface{}{
+		"type":    o.Type,
+		"pq_dim":  o.PqDim,
+		"pq_bits": o.PqBits,
+	}
+	if o.Dimension != nil {
+		m["dimension"] = *o.Dimension
+	}
+	return m, nil
 }
 
 func (o *IndexIVFPQModel) UnmarshalJSON(data []byte) error {
-	requiredProps := []string{"n_lists", "pq_dim", "pq_bits"}
+	requiredProps := []string{"pq_dim", "pq_bits"}
 	var allProps map[string]interface{}
-	err := json.Unmarshal(data, &allProps)
-	if err != nil {
+	if err := json.Unmarshal(data, &allProps); err != nil {
 		return err
 	}
-
 	for _, prop := range requiredProps {
 		if _, found := allProps[prop]; !found {
 			return fmt.Errorf("required field %s is missing", prop)
@@ -74,8 +100,7 @@ func (o *IndexIVFPQModel) UnmarshalJSON(data []byte) error {
 	var temp _IndexIVFPQModel
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&temp)
-	if err != nil {
+	if err := decoder.Decode(&temp); err != nil {
 		return err
 	}
 
@@ -85,7 +110,6 @@ func (o *IndexIVFPQModel) UnmarshalJSON(data []byte) error {
 	if o.Type == "" {
 		o.Type = "ivfpq"
 	}
-
 	return nil
 }
 

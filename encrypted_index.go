@@ -9,310 +9,67 @@ import (
 )
 
 var (
-	// ErrQueryVectorsInvalidType is returned when queryVectors has an invalid type.
+	// ErrQueryVectorsInvalidType is returned when QueryOptions.QueryVectors has an invalid type.
 	ErrQueryVectorsInvalidType = fmt.Errorf("queryVectors must be []float32 for single vector queries or [][]float32 for batch queries")
-	// ErrMissingQueryInput is returned when neither queryVectors nor queryContents is provided.
+	// ErrMissingQueryInput is returned when neither QueryVectors nor QueryContents is provided.
 	ErrMissingQueryInput = fmt.Errorf("either queryVectors or queryContents must be provided")
 )
 
-// EncryptedIndex represents an encrypted vector index, similar to the TypeScript EncryptedIndex class.
-// It provides methods for vector operations like upsert, query, get, delete, and train.
+// EncryptedIndex is the public handle for an encrypted vector index.
+// It wraps the internal implementation and exposes friendly methods.
 type EncryptedIndex struct {
-	internal *internal.EncryptedIndex // Embedded internal implementation
+	internal *internal.EncryptedIndex
 }
 
-// GetIndexName returns the name of the encrypted index.
-// This corresponds to the TypeScript method: index.getIndexName()
-//
-// Returns:
-//   - string: The index name
-func (e *EncryptedIndex) GetIndexName() string {
-	return e.internal.GetIndexName()
-}
+// GetIndexName returns the index name.
+func (e *EncryptedIndex) GetIndexName() string { return e.internal.GetIndexName() }
 
-// GetIndexType returns the type of the encrypted index.
-//
-// The index type determines the underlying algorithm used for similarity search:
-//   - "ivf": Inverted File index (good balance of speed and accuracy)
-//   - "ivfpq": IVF with Product Quantization (memory efficient, compressed vectors)
-//   - "ivfflat": IVF with flat vectors (highest accuracy, more memory usage)
-//
-// Returns:
-//   - string: The index type ("ivf", "ivfpq", or "ivfflat")
-func (e *EncryptedIndex) GetIndexType() string {
-	return e.internal.GetIndexType()
-}
+// GetIndexType returns the index type ("ivf", "ivfpq", or "ivfflat").
+func (e *EncryptedIndex) GetIndexType() string { return e.internal.GetIndexType() }
 
-// GetIndexConfig returns the configuration of the encrypted index.
-//
-// The configuration includes parameters like dimension, metric, number of lists,
-// and type-specific settings such as PQ parameters for IVFPQ indexes.
-//
-// Returns:
-//   - internal.IndexConfig: The complete index configuration
-func (e *EncryptedIndex) GetIndexConfig() internal.IndexConfig {
-	return e.internal.GetIndexConfig()
-}
+// GetIndexConfig returns the full index configuration.
+func (e *EncryptedIndex) GetIndexConfig() internal.IndexConfig { return e.internal.GetIndexConfig() }
 
-// IsTrained returns whether the index has been trained.
-//
-// Training optimizes the index structure for better query performance, especially
-// for large datasets. Trained indexes typically provide faster and more accurate
-// similarity searches.
-//
-// Returns:
-//   - bool: true if the index has been trained, false otherwise
-func (e *EncryptedIndex) IsTrained() bool {
-	return e.internal.IsTrained()
-}
+// IsTrained reports whether the index has been trained.
+func (e *EncryptedIndex) IsTrained() bool { return e.internal.IsTrained() }
 
-// Upsert adds or updates vectors in the encrypted index.
-//
-// Vectors with the same ID will be updated, while new IDs will be inserted.
-// All vector data is encrypted before storage. Each vector can include:
-//   - Vector: The high-dimensional embedding (required)
-//   - Metadata: Structured data for filtering and retrieval
-//   - Contents: Text or binary content associated with the vector
-//
-// Parameters:
-//   - ctx: Context for request cancellation, timeouts, and tracing
-//   - items: Slice of VectorItem structs containing vectors and associated data
-//
-// Returns:
-//   - error: nil on success, or an error describing what went wrong
-//
-// Note: Vector dimensions must match the index configuration.
-// Large batches are more efficient than individual upserts.
+// Upsert inserts or updates vectors (IDs that already exist will be updated).
 func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 	return e.internal.Upsert(ctx, items)
 }
 
-// Query searches for nearest neighbors in the encrypted index.
-// This method supports multiple calling patterns for flexibility and ease of use:
-// 1. QueryOptions struct (recommended): Query(ctx, queryOptions)
-// 2. QueryRequest struct: Query(ctx, queryRequest)
-// 3. BatchQueryRequest struct: Query(ctx, batchQueryRequest)
-// 4. Direct parameters: Query(ctx, queryVectors, topK, nProbes, greedy, filters, include)
+// Query performs a similarity search.
 //
-// The query performs similarity search using the index's configured distance metric
-// and returns the most similar vectors along with their distances and metadata.
+// Provide a single request object:
+//   - *internal.QueryRequest
 //
-// Parameters:
-//   - ctx: Context for request cancellation, timeouts, and tracing
-//   - args: Variable arguments supporting multiple patterns (see examples below)
+// Behavior:
+//   - If req.BatchQueryVectors is non-empty, a batch query is executed.
+//   - Otherwise, a single-vector or contents-based query is executed.
 //
 // Returns:
-//   - *QueryResponse: Search results with nearest neighbors, distances, and metadata
-//   - error: nil on success, or an error describing what went wrong
-//
-// Example with QueryOptions (matches Python SDK):
-//
-//	opts := &QueryOptions{
-//	    QueryVectors: []float32{...}, // or [][]float32 for batch
-//	    QueryContents: "",             // or text to embed
-//	    TopK: 100,
-//	    NProbes: 1,
-//	    Filters: map[string]interface{}{"category": "science"},
-//	    Include: []string{"distance", "metadata"},
-//	    Greedy: false,
-//	}
-//	results, err := index.Query(ctx, opts)
-//
-// Query Parameters:
-//   - queryVectors: Single vector []float32 or batch [][]float32
-//   - queryContents: Text to embed and search (requires embedding model)
-//   - topK: Number of nearest neighbors to return (default: 100)
-//   - nProbes: Number of clusters to search (higher = more accurate, slower, default: 1)
-//   - greedy: Use greedy search for potentially faster results (default: false)
-//   - filters: Metadata filters for narrowing results
-//   - include: Fields to include in response (default: ["distance", "metadata"])
-func (e *EncryptedIndex) Query(ctx context.Context, args ...interface{}) (*QueryResponse, error) {
-	// Check if the first argument is QueryOptions
-	if len(args) > 0 {
-		if opts, ok := args[0].(*QueryOptions); ok {
-			// Convert QueryOptions to the format expected by internal
-			return e.queryWithOptions(ctx, opts)
-		}
-	}
-
-	// Delegate to the internal implementation for other patterns
-	return e.internal.Query(ctx, args...)
-}
-
-// queryWithOptions handles queries using the QueryOptions struct.
-func (e *EncryptedIndex) queryWithOptions(ctx context.Context, in *QueryOptions) (*QueryResponse, error) {
-	// Disallow nil options (you could also choose to treat nil as "empty defaults"
-	// but you still wouldn't know the query input, so erroring is clearer).
-	if in == nil {
-		return nil, fmt.Errorf("%w: QueryOptions is nil", ErrMissingQueryInput)
-	}
-
-	// Work on a copy so we don't mutate the caller's struct.
-	opts := *in
-
-	// Set defaults to match Python SDK
-	if opts.TopK == 0 {
-		opts.TopK = 100
-	}
-	if opts.NProbes == 0 {
-		opts.NProbes = 1
-	}
-	if len(opts.Include) == 0 {
-		opts.Include = []string{"distance", "metadata"}
-	}
-
-	// Optional: reject ambiguous input if both are provided
-	if opts.QueryVectors != nil && opts.QueryContents != "" {
-		return nil, fmt.Errorf("%w: specify either QueryVectors or QueryContents, not both", ErrMissingQueryInput)
-	}
-
-	// Build the request based on whether we have vectors or contents
-	var req interface{}
-
-	// Cache scalars so we can take addresses without depending on opts thereafter.
-	topK := opts.TopK
-	nProbes := opts.NProbes
-	greedy := opts.Greedy
-
-	// Handle query vectors
-	if opts.QueryVectors != nil {
-		switch v := opts.QueryVectors.(type) {
-		case []float32:
-			// Single vector query
-			req = &QueryRequest{
-				QueryVector: v,
-				TopK:        topK,
-				NProbes:     nProbes,
-				Greedy:      &greedy,
-				Filters:     opts.Filters,
-				Include:     opts.Include,
-			}
-		case [][]float32:
-			// Batch query
-			req = &BatchQueryRequest{
-				QueryVectors: v,
-				TopK:         &topK,
-				NProbes:      &nProbes,
-				Greedy:       &greedy,
-				Filters:      opts.Filters,
-				Include:      opts.Include,
-			}
-		default:
-			return nil, fmt.Errorf("%w, got %T", ErrQueryVectorsInvalidType, v)
-		}
-	} else if opts.QueryContents != "" {
-		// Text-based query
-		qc := opts.QueryContents // take address of a stable local
-		req = &QueryRequest{
-			QueryContents: &qc,
-			TopK:          topK,
-			NProbes:       nProbes,
-			Greedy:        &greedy,
-			Filters:       opts.Filters,
-			Include:       opts.Include,
-		}
-	} else {
-		return nil, ErrMissingQueryInput
-	}
-
+//   - *QueryResponse with nearest neighbors, distances, and metadata
+//   - error on failure
+func (e *EncryptedIndex) Query(ctx context.Context, req *internal.QueryRequest) (*QueryResponse, error) {
 	return e.internal.Query(ctx, req)
 }
 
-// Get retrieves specific vectors from the encrypted index by their IDs.
-//
-// This method allows you to fetch vectors by their unique identifiers and specify
-// which fields to include in the response. It's useful for retrieving known vectors
-// or getting full details after a similarity search.
-//
-// Parameters:
-//   - ctx: Context for request cancellation, timeouts, and tracing
-//   - ids: Slice of string IDs identifying the vectors to retrieve
-//   - include: Fields to include in response (e.g., ["vector", "metadata", "contents"])
-//
-// Returns:
-//
-//   - *GetResponse: Response containing retrieved vectors with requested fields
-//
-//   - error: nil on success, or an error describing what went wrong
-//
-//     // Retrieve only metadata for efficiency
-//     metadataOnly, err := index.Get(ctx, ids, []string{"metadata"})
-//
-// Available include fields:
-//   - "vector": The vector embeddings
-//   - "metadata": Associated metadata
-//   - "contents": Text/binary content
-//
-// Note: If a requested ID doesn't exist, it won't appear in the results.
-// For trained IVFPQ indexes, retrieved vectors may be compressed.
+// Get fetches vectors by ID with selected fields.
 func (e *EncryptedIndex) Get(ctx context.Context, ids []string, include []string) (*GetResponse, error) {
 	return e.internal.Get(ctx, ids, include)
 }
 
-// Delete removes specific vectors from the encrypted index by their IDs.
-//
-// This operation permanently removes the specified vectors and all their associated
-// data (metadata, contents) from the index. The deletion cannot be undone.
-//
-// Parameters:
-//   - ctx: Context for request cancellation, timeouts, and tracing
-//   - ids: Slice of string IDs identifying the vectors to delete
-//
-// Returns:
-//   - error: nil on success, or an error describing what went wrong
-//
-// Note: Deleting non-existent IDs will not cause an error.
-// Large batches are more efficient than individual deletions.
+// Delete removes vectors by ID.
 func (e *EncryptedIndex) Delete(ctx context.Context, ids []string) error {
 	return e.internal.Delete(ctx, ids)
 }
 
-// Train optimizes the encrypted index for better search performance.
-//
-// Training uses machine learning techniques to analyze the vector distribution and
-// optimize the index structure. This typically improves query speed and accuracy,
-// especially for large datasets. Training is recommended when you have a significant
-// number of vectors (typically 10x the number of clusters).
-//
-// Parameters:
-//   - ctx: Context for request cancellation, timeouts, and tracing
-//   - batchSize: Number of vectors to process in each training batch (affects memory usage)
-//   - maxIters: Maximum number of training iterations to perform
-//   - tolerance: Convergence tolerance for training (smaller = more precise training)
-//
-// Returns:
-//   - error: nil on success, or an error describing what went wrong
-//
-// Training Guidelines:
-//   - Recommended after upserting significant amounts of data
-//   - Larger batchSize = more memory usage but potentially faster training
-//   - More maxIters = potentially better optimization but longer training time
-//   - Smaller tolerance = more precise but longer training
-//   - Training time scales with dataset size and index complexity
-//
-// Note: Training is resource-intensive and may take considerable time for large datasets.
-// The index remains available for queries during training, but performance may vary.
-func (e *EncryptedIndex) Train(ctx context.Context, batchSize int32, maxIters int32, tolerance float64) error {
-	return e.internal.Train(ctx, batchSize, maxIters, tolerance)
+// Train optimizes the index (see internal.TrainRequest for options).
+func (e *EncryptedIndex) Train(ctx context.Context, req *internal.TrainRequest) error {
+	return e.internal.Train(ctx, req)
 }
 
-// DeleteIndex permanently removes the entire encrypted index from CyborgDB.
-//
-// This operation is irreversible and will delete ALL vectors, metadata, and
-// configuration associated with the index. Use with extreme caution as there
-// is no way to recover the data once the index is deleted.
-//
-// Parameters:
-//   - ctx: Context for request cancellation, timeouts, and tracing
-//
-// Returns:
-//   - error: nil on success, or an error describing what went wrong
-//
-// WARNING: This operation cannot be undone. All data in the index will be permanently lost.
-// Consider exporting important data before deletion if recovery might be needed.
-//
-// Note: After successful deletion, this EncryptedIndex instance should not be used
-// for further operations as the underlying index no longer exists.
+// DeleteIndex permanently removes the index.
 func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 	return e.internal.DeleteIndex(ctx)
 }

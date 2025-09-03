@@ -20,84 +20,60 @@ import (
 var _ MappedNullable = &IndexConfig{}
 
 // IndexConfig struct for IndexConfig
+// Notes:
+// - metric removed
+// - n_lists removed
+// - dimension is now optional
 type IndexConfig struct {
-	Dimension int32  `json:"dimension"`
-	Metric    string `json:"metric"`
+	Dimension *int32 `json:"dimension,omitempty"`
 	IndexType string `json:"index_type"`
-	NLists    int32  `json:"n_lists"`
 	PqDim     *int32 `json:"pq_dim,omitempty"`
 	PqBits    *int32 `json:"pq_bits,omitempty"`
 }
 
 type _IndexConfig IndexConfig
 
-// NewIndexConfig instantiates a new IndexConfig object
-// This constructor will assign default values to properties that have it defined,
-// and makes sure properties required by API are set, but the set of arguments
-// will change when the set of required properties is changed
-func NewIndexConfig(dimension int32, metric string, indexType string, nLists int32) *IndexConfig {
+// NewIndexConfig instantiates a new IndexConfig object with required fields only.
+// Since dimension is optional now, it is not a constructor parameter.
+func NewIndexConfig(indexType string) *IndexConfig {
 	this := IndexConfig{}
-	this.Dimension = dimension
-	this.Metric = metric
 	this.IndexType = indexType
-	this.NLists = nLists
 	return &this
 }
 
 // NewIndexConfigWithDefaults instantiates a new IndexConfig object
-// This constructor will only assign default values to properties that have it defined,
-// but it doesn't guarantee that properties required by API are set
+// assigning only default values (no required fields are guaranteed to be set).
 func NewIndexConfigWithDefaults() *IndexConfig {
 	this := IndexConfig{}
 	return &this
 }
 
-// GetDimension returns the Dimension field value
+// GetDimension returns the Dimension field value if set, zero value otherwise.
 func (o *IndexConfig) GetDimension() int32 {
-	if o == nil {
+	if o == nil || IsNil(o.Dimension) {
 		var ret int32
 		return ret
 	}
-
-	return o.Dimension
+	return *o.Dimension
 }
 
-// GetDimensionOk returns a tuple with the Dimension field value
+// GetDimensionOk returns a tuple with the Dimension field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *IndexConfig) GetDimensionOk() (*int32, bool) {
-	if o == nil {
+	if o == nil || IsNil(o.Dimension) {
 		return nil, false
 	}
-	return &o.Dimension, true
+	return o.Dimension, true
 }
 
-// SetDimension sets field value
+// HasDimension returns a boolean if the Dimension field has been set.
+func (o *IndexConfig) HasDimension() bool {
+	return o != nil && !IsNil(o.Dimension)
+}
+
+// SetDimension gets a reference to the given int32 and assigns it to the Dimension field.
 func (o *IndexConfig) SetDimension(v int32) {
-	o.Dimension = v
-}
-
-// GetMetric returns the Metric field value
-func (o *IndexConfig) GetMetric() string {
-	if o == nil {
-		var ret string
-		return ret
-	}
-
-	return o.Metric
-}
-
-// GetMetricOk returns a tuple with the Metric field value
-// and a boolean to check if the value has been set.
-func (o *IndexConfig) GetMetricOk() (*string, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.Metric, true
-}
-
-// SetMetric sets field value
-func (o *IndexConfig) SetMetric(v string) {
-	o.Metric = v
+	o.Dimension = &v
 }
 
 // GetIndexType returns the IndexType field value
@@ -106,7 +82,6 @@ func (o *IndexConfig) GetIndexType() string {
 		var ret string
 		return ret
 	}
-
 	return o.IndexType
 }
 
@@ -122,30 +97,6 @@ func (o *IndexConfig) GetIndexTypeOk() (*string, bool) {
 // SetIndexType sets field value
 func (o *IndexConfig) SetIndexType(v string) {
 	o.IndexType = v
-}
-
-// GetNLists returns the NLists field value
-func (o *IndexConfig) GetNLists() int32 {
-	if o == nil {
-		var ret int32
-		return ret
-	}
-
-	return o.NLists
-}
-
-// GetNListsOk returns a tuple with the NLists field value
-// and a boolean to check if the value has been set.
-func (o *IndexConfig) GetNListsOk() (*int32, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return &o.NLists, true
-}
-
-// SetNLists sets field value
-func (o *IndexConfig) SetNLists(v int32) {
-	o.NLists = v
 }
 
 // GetPqDim returns the PqDim field value if set, zero value otherwise.
@@ -168,11 +119,7 @@ func (o *IndexConfig) GetPqDimOk() (*int32, bool) {
 
 // HasPqDim returns a boolean if a field has been set.
 func (o *IndexConfig) HasPqDim() bool {
-	if o != nil && !IsNil(o.PqDim) {
-		return true
-	}
-
-	return false
+	return o != nil && !IsNil(o.PqDim)
 }
 
 // SetPqDim gets a reference to the given int32 and assigns it to the PqDim field.
@@ -200,11 +147,7 @@ func (o *IndexConfig) GetPqBitsOk() (*int32, bool) {
 
 // HasPqBits returns a boolean if a field has been set.
 func (o *IndexConfig) HasPqBits() bool {
-	if o != nil && !IsNil(o.PqBits) {
-		return true
-	}
-
-	return false
+	return o != nil && !IsNil(o.PqBits)
 }
 
 // SetPqBits gets a reference to the given int32 and assigns it to the PqBits field.
@@ -213,14 +156,14 @@ func (o *IndexConfig) SetPqBits(v int32) {
 }
 
 func (cfg IndexConfig) MarshalJSON() ([]byte, error) {
-	// Create a map with type first
+	// API payload uses "type" (for index type)
 	data := map[string]interface{}{
-		"type":      cfg.IndexType,
-		"dimension": cfg.Dimension,
-		"metric":    cfg.Metric,
-		"n_lists":   cfg.NLists,
+		"type": cfg.IndexType,
 	}
 
+	if cfg.Dimension != nil {
+		data["dimension"] = *cfg.Dimension
+	}
 	if cfg.PqDim != nil {
 		data["pq_dim"] = *cfg.PqDim
 	}
@@ -233,10 +176,10 @@ func (cfg IndexConfig) MarshalJSON() ([]byte, error) {
 
 func (o IndexConfig) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	toSerialize["dimension"] = o.Dimension
-	toSerialize["metric"] = o.Metric
+	if !IsNil(o.Dimension) {
+		toSerialize["dimension"] = o.Dimension
+	}
 	toSerialize["index_type"] = o.IndexType
-	toSerialize["n_lists"] = o.NLists
 	if !IsNil(o.PqDim) {
 		toSerialize["pq_dim"] = o.PqDim
 	}
@@ -247,21 +190,13 @@ func (o IndexConfig) ToMap() (map[string]interface{}, error) {
 }
 
 func (o *IndexConfig) UnmarshalJSON(data []byte) (err error) {
-	// This validates that all required properties are included in the JSON object
-	// by unmarshalling the object into a generic map with string keys and checking
-	// that every required field exists as a key in the generic map.
+	// Validate that required properties are present.
 	requiredProperties := []string{
-		"dimension",
-		"metric",
 		"index_type",
-		"n_lists",
 	}
 
 	allProperties := make(map[string]interface{})
-
-	err = json.Unmarshal(data, &allProperties)
-
-	if err != nil {
+	if err = json.Unmarshal(data, &allProperties); err != nil {
 		return err
 	}
 
@@ -272,18 +207,14 @@ func (o *IndexConfig) UnmarshalJSON(data []byte) (err error) {
 	}
 
 	varIndexConfig := _IndexConfig{}
-
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	decoder.DisallowUnknownFields()
-	err = decoder.Decode(&varIndexConfig)
-
-	if err != nil {
+	if err = decoder.Decode(&varIndexConfig); err != nil {
 		return err
 	}
 
 	*o = IndexConfig(varIndexConfig)
-
-	return err
+	return nil
 }
 
 type NullableIndexConfig struct {
