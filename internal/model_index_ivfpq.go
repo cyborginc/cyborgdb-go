@@ -151,3 +151,30 @@ func (v *NullableIndexIVFPQModel) UnmarshalJSON(src []byte) error {
 }
 
 func (m *IndexIVFPQModel) isIndexModel() {}
+
+func (m *IndexIVFPQModel) GetType() string {
+	return m.Type
+}
+
+func (m *IndexIVFPQModel) GetDimension() int {
+	if m.Dimension == nil {
+		return 0
+	}
+	return int(*m.Dimension)
+}
+
+func (m *IndexIVFPQModel) ToIndexConfig() *IndexConfig {
+	return &IndexConfig{
+		IndexType: m.Type,
+		Dimension: m.Dimension,
+		PqDim:     &m.PqDim,
+		PqBits:    &m.PqBits,
+	}
+}
+
+// User-friendly constructor
+func IndexIVFPQ(dimension, pqDim, pqBits int) *IndexIVFPQModel {
+	model := NewIndexIVFPQModel(int32(pqDim), int32(pqBits))
+	model.SetDimension(int32(dimension))
+	return model
+}

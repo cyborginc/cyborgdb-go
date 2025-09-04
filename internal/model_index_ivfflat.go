@@ -129,3 +129,28 @@ func (v *NullableIndexIVFFlatModel) UnmarshalJSON(src []byte) error {
 }
 
 func (m *IndexIVFFlatModel) isIndexModel() {}
+
+func (m *IndexIVFFlatModel) GetType() string {
+	return m.Type
+}
+
+func (m *IndexIVFFlatModel) GetDimension() int {
+	if m.Dimension == nil {
+		return 0
+	}
+	return int(*m.Dimension)
+}
+
+func (m *IndexIVFFlatModel) ToIndexConfig() *IndexConfig {
+	return &IndexConfig{
+		IndexType: m.Type,
+		Dimension: m.Dimension,
+	}
+}
+
+// User-friendly constructor
+func IndexIVFFlat(dimension int) *IndexIVFFlatModel {
+	model := NewIndexIVFFlatModel()
+	model.SetDimension(int32(dimension))
+	return model
+}

@@ -135,12 +135,11 @@ func (c *Client) CreateIndex(
 	ctx context.Context,
 	req *internal.CreateIndexRequest,
 ) (*EncryptedIndex, error) {
-	internalIndex, err := c.internal.CreateIndex(ctx, req)
+	encryptedIndex, err := c.internal.CreateIndex(ctx, req)
 	if err != nil {
 		return nil, err
 	}
-
-	return &EncryptedIndex{internal: internalIndex}, nil
+	return encryptedIndex, nil
 }
 
 // LoadIndex loads an existing encrypted index by name and key.

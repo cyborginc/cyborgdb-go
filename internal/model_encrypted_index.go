@@ -391,7 +391,7 @@ func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 // Train executes a training operation for the index using the provided request.
 // If IndexName or IndexKey are not populated in req, they will be filled from the
 // current EncryptedIndex instance.
-func (e *EncryptedIndex) Train(ctx context.Context, req *TrainRequest) error {
+func (e *EncryptedIndex) Train(ctx context.Context, params TrainParams) error {
 	if e.client == nil {
 		return fmt.Errorf("cannot train index: client reference is nil")
 	}
@@ -401,34 +401,31 @@ func (e *EncryptedIndex) Train(ctx context.Context, req *TrainRequest) error {
 	if e.indexKey == "" {
 		return fmt.Errorf("index key is required")
 	}
-	if req == nil {
-		return fmt.Errorf("train request is required")
+
+	// Create internal TrainRequest from TrainParams
+	req := &internal.TrainRequest{
+		IndexName: *e.indexName,  // From EncryptedIndex
+		IndexKey:  e.indexKey,    // From EncryptedIndex
+		BatchSize: params.BatchSize,
+		MaxIters:  params.MaxIters,
+		Tolerance: params.Tolerance,
+		MaxMemory: params.MaxMemory,
+		NLists:    params.NLists,
 	}
 
-	// Backfill missing fields from the bound index.
-	if req.IndexName == "" {
-		req.IndexName = *e.indexName
-	}
-	if req.IndexKey == "" {
-		req.IndexKey = e.indexKey
-	}
-
-	// Validate key format (hex-encoded 32 bytes).
-	if len(req.IndexKey) != 64 {
-		return fmt.Errorf("index key must be 64-character hex string (32 bytes), got %d", len(req.IndexKey))
-	}
-
-	// Invoke API.
-	_, err := e.client.apiClient.
-		DefaultAPI.
-		TrainIndex(ctx, req.IndexName).
-		XIndexKey(req.IndexKey).
+	// Call internal API
+	_, _, err := e.client.apiClient.DefaultAPI.
+		TrainIndex(ctx, *e.indexName).
+		XIndexKey(e.indexKey).
 		TrainRequest(*req).
 		Execute()
+
 	if err != nil {
-		return fmt.Errorf("failed to train index '%s': %w", req.IndexName, err)
+		return fmt.Errorf("failed to train index '%s': %w", *e.indexName, err)
 	}
 
+	// Mark as trained
+	e.trained = true
 	return nil
 }
 
@@ -444,7 +441,7 @@ func (e *EncryptedIndex) Train(ctx context.Context, req *TrainRequest) error {
 // Returns:
 //   - *QueryResponse on success
 //   - error on failure
-func (e *EncryptedIndex) Query(ctx context.Context, req *QueryRequest) (*QueryResponse, error) {
+func (e *EncryptedIndex) Query(ctx context.Context, params QueryParams) (*QueryResponse, error) {
 	if e.client == nil {
 		return nil, fmt.Errorf("cannot query index: client reference is nil")
 	}
@@ -454,67 +451,70 @@ func (e *EncryptedIndex) Query(ctx context.Context, req *QueryRequest) (*QueryRe
 	if e.indexKey == "" {
 		return nil, fmt.Errorf("index key is required")
 	}
-	if req == nil {
-		return nil, fmt.Errorf("query request is required")
-	}
 
-	// Backfill index identifiers if missing.
-	if req.IndexName == "" {
-		req.IndexName = *e.indexName
-	}
-	if req.IndexKey == "" {
-		req.IndexKey = e.indexKey
-	}
-
-	hasBatch := req.BatchQueryVectors != nil && len(req.BatchQueryVectors) > 0
-	hasSingle := req.QueryVector != nil && len(req.QueryVector) > 0
-	hasContents := req.QueryContents != nil && *req.QueryContents != ""
+	// Validate query input - at least one query type must be provided
+	hasBatch := params.BatchQueryVectors != nil && len(params.BatchQueryVectors) > 0
+	hasSingle := params.QueryVector != nil && len(params.QueryVector) > 0
+	hasContents := params.QueryContents != nil && *params.QueryContents != ""
 
 	if !hasBatch && !hasSingle && !hasContents {
 		return nil, fmt.Errorf("query must include QueryVector, BatchQueryVectors, or QueryContents")
 	}
 
-	if req.Include == nil || len(req.Include) == 0 {
-		req.Include = []string{"distance", "metadata"}
+	// Set default Include if not provided
+	include := params.Include
+	if include == nil || len(include) == 0 {
+		include = []string{"distance", "metadata"}
 	}
 
+	// Route to BatchQueryRequest if BatchQueryVectors is defined
 	if hasBatch {
-		// Map to BatchQueryRequest.
-		topK := req.TopK
-		batch := BatchQueryRequest{
-			IndexName:    req.IndexName,
-			IndexKey:     req.IndexKey,
-			QueryVectors: req.BatchQueryVectors,
-			TopK:         &topK,
-			Filters:      req.Filters,
-			Include:      req.Include,
-		}
-		if req.NProbes != nil {
-			batch.NProbes = req.NProbes
-		}
-		if req.Greedy != nil {
-			batch.Greedy = req.Greedy
+		// Use BatchQueryRequest for batch queries
+		batch := &internal.BatchQueryRequest{
+			IndexName:    *e.indexName,  // From EncryptedIndex
+			IndexKey:     e.indexKey,    // From EncryptedIndex
+			QueryVectors: params.BatchQueryVectors,
+			TopK:         &params.TopK,
+			NProbes:      params.NProbes,
+			Greedy:       params.Greedy,
+			Filters:      params.Filters,
+			Include:      include,
 		}
 
-		resp, _, err := e.client.apiClient.
-			DefaultAPI.
+		resp, _, err := e.client.apiClient.DefaultAPI.
 			QueryVectors(ctx).
-			BatchQueryRequest(batch).
+			BatchQueryRequest(*batch).
 			Execute()
 		if err != nil {
-			return nil, fmt.Errorf("failed to query (batch) index '%s': %w", req.IndexName, err)
+			return nil, fmt.Errorf("failed to query (batch) index '%s': %w", *e.indexName, err)
 		}
 		return resp, nil
 	}
 
-	// Single-vector or contents query: send QueryRequest directly.
-	resp, _, err := e.client.apiClient.
-		DefaultAPI.
+	// Use QueryRequest for single vector or content queries
+	nProbesValue := int32(1) // Default value
+	if params.NProbes != nil {
+		nProbesValue = *params.NProbes
+	}
+
+	req := &internal.QueryRequest{
+		IndexName:     *e.indexName,  // From EncryptedIndex
+		IndexKey:      e.indexKey,    // From EncryptedIndex
+		QueryVector:   params.QueryVector,
+		QueryContents: params.QueryContents,
+		TopK:          params.TopK,
+		NProbes:       nProbesValue, // QueryRequest requires int32, not *int32
+		Greedy:        params.Greedy,
+		Filters:       params.Filters,
+		Include:       include,
+	}
+
+	resp, _, err := e.client.apiClient.DefaultAPI.
 		QueryVectors(ctx).
 		QueryRequest(*req).
 		Execute()
 	if err != nil {
-		return nil, fmt.Errorf("failed to query (single) index '%s': %w", req.IndexName, err)
+		return nil, fmt.Errorf("failed to query index '%s': %w", *e.indexName, err)
 	}
 	return resp, nil
 }

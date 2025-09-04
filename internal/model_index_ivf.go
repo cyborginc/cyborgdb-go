@@ -130,3 +130,27 @@ func (v *NullableIndexIVFModel) UnmarshalJSON(src []byte) error {
 }
 
 func (m *IndexIVFModel) isIndexModel() {}
+
+func (m *IndexIVFModel) GetType() string {
+	return m.Type
+}
+
+func (m *IndexIVFModel) GetDimension() int {
+	if m.Dimension == nil {
+		return 0
+	}
+	return int(*m.Dimension)
+}
+
+func (m *IndexIVFModel) ToIndexConfig() *IndexConfig {
+	return &IndexConfig{
+		IndexType: m.Type,
+		Dimension: m.Dimension,
+	}
+}
+
+func IndexIVF(dimension int) *IndexIVFModel {
+	model := NewIndexIVFModel()
+	model.SetDimension(int32(dimension))
+	return model
+}

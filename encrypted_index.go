@@ -50,8 +50,8 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 // Returns:
 //   - *QueryResponse with nearest neighbors, distances, and metadata
 //   - error on failure
-func (e *EncryptedIndex) Query(ctx context.Context, req *internal.QueryRequest) (*QueryResponse, error) {
-	return e.internal.Query(ctx, req)
+func (e *EncryptedIndex) Query(ctx context.Context, params QueryParams) (*QueryResponse, error) {
+	return e.internal.Query(ctx, params)
 }
 
 // Get fetches vectors by ID with selected fields.
@@ -65,8 +65,8 @@ func (e *EncryptedIndex) Delete(ctx context.Context, ids []string) error {
 }
 
 // Train optimizes the index (see internal.TrainRequest for options).
-func (e *EncryptedIndex) Train(ctx context.Context, req *internal.TrainRequest) error {
-	return e.internal.Train(ctx, req)
+func (e *EncryptedIndex) Train(ctx context.Context, params TrainParams) error {
+	return e.internal.Train(ctx, params)
 }
 
 // DeleteIndex permanently removes the index.
