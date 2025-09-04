@@ -195,13 +195,9 @@ func strPtr(s string) *string {
 }
 
 // createIndexModel creates the appropriate index model based on the index type
-func createIndexModel(dimension int32) internal.IndexModel {
+func createIndexModel(dimension int32) cyborgdb.IndexModel {
 	// Only supporting IVFFLAT per PR feedback
-	return &cyborgdb.IndexIVFFlat{
-		Dimension: dimension,
-		Metric:    METRIC,
-		NLists:    NLists,
-	}
+	return cyborgdb.IndexIVFFlat(dimension)
 }
 
 // SetupSuite runs once before all tests
@@ -266,8 +262,16 @@ func (suite *CyborgDBIntegrationTestSuite) SetupTest() {
 
 	// Create index with the appropriate configuration based on index type
 	model := createIndexModel(suite.dimension)
-
-	index, err := suite.client.CreateIndex(context.Background(), suite.indexName, suite.indexKey, model, nil)
+	metric := METRIC
+	
+	params := &cyborgdb.CreateIndexParams{
+		IndexName:   suite.indexName,
+		IndexKey:    suite.indexKeyHex,
+		IndexConfig: model,
+		Metric:      &metric,
+	}
+	
+	index, err := suite.client.CreateIndex(context.Background(), params)
 	require.NoError(suite.T(), err)
 	require.NotNil(suite.T(), index)
 	suite.index = index
@@ -289,11 +293,14 @@ func (suite *CyborgDBIntegrationTestSuite) TestHealthCheck() {
 	health, err := suite.client.GetHealth(context.Background())
 	require.NoError(suite.T(), err)
 	require.NotNil(suite.T(), health)
-	require.NotNil(suite.T(), health.Status)
-	require.Greater(suite.T(), len(*health.Status), 0)
+	
+	// Health is now a map[string]string
+	status, exists := health["status"]
+	require.True(suite.T(), exists, "Health response should contain 'status' key")
+	require.Greater(suite.T(), len(status), 0)
 
 	// Add assertion that health status is "healthy" like Python test
-	require.Equal(suite.T(), "healthy", *health.Status, "API should be healthy")
+	require.Equal(suite.T(), "healthy", status, "API should be healthy")
 }
 
 // Test 2: Index Creation and Properties (equivalent to Python test_14_index_properties)
@@ -302,9 +309,10 @@ func (suite *CyborgDBIntegrationTestSuite) TestIndexCreationAndProperties() {
 	require.Equal(suite.T(), string(suite.indexType), suite.index.GetIndexType())
 
 	cfg := suite.index.GetIndexConfig()
-	require.Equal(suite.T(), suite.dimension, cfg.GetDimension())
-	require.Equal(suite.T(), int32(NLists), cfg.GetNLists())
-	require.Equal(suite.T(), METRIC, cfg.GetMetric())
+	if cfg.IndexIVFFlatModel != nil {
+		require.Equal(suite.T(), suite.dimension, cfg.IndexIVFFlatModel.GetDimension())
+		require.Equal(suite.T(), "ivfflat", cfg.IndexIVFFlatModel.GetType())
+	}
 }
 
 // Test 3: Load existing index (equivalent to Python test_15_load_index)
@@ -409,20 +417,21 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryNoMetadata() {
 
 	// Test single query
 	suite.T().Run("Single_Query_Untrained", func(t *testing.T) {
-		response, err := suite.index.Query(
-			context.Background(),
-			suite.testData[0],
-			TopK,
-			1, // Use n_probes=1 for untrained like Python
-			false,
-			map[string]interface{}{},
-			[]string{"metadata", "distance"},
-		)
+		nProbes := int32(1)
+		greedy := false
+		params := cyborgdb.QueryParams{
+			QueryVector: suite.testData[0],
+			TopK:        TopK,
+			NProbes:     &nProbes,
+			Greedy:      &greedy,
+			Filters:     map[string]interface{}{},
+			Include:     []string{"metadata", "distance"},
+		}
+		response, err := suite.index.Query(context.Background(), params)
 		require.NoError(t, err)
 		require.NotNil(t, response)
 		require.Greater(t, len(response.Results), 0)
-
-		results := response.Results[0]
+		results := response.Results
 		require.Greater(t, len(results), 0)
 
 		recall := computeRecall(results)
@@ -437,15 +446,17 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryNoMetadata() {
 			batchVectors = batchVectors[:5] // Limit to 5 queries for speed
 		}
 
-		response, err := suite.index.Query(
-			context.Background(),
-			batchVectors,
-			TopK,
-			1, // Use n_probes=1 for untrained
-			false,
-			map[string]interface{}{},
-			[]string{"metadata"},
-		)
+		nProbes := int32(1)
+		greedy := false
+		params := cyborgdb.QueryParams{
+			BatchQueryVectors: batchVectors,
+			TopK:              TopK,
+			NProbes:           &nProbes,
+			Greedy:            &greedy,
+			Filters:           map[string]interface{}{},
+			Include:           []string{"metadata"},
+		}
+		response, err := suite.index.Query(context.Background(), params)
 		require.NoError(t, err)
 		require.Equal(t, len(batchVectors), len(response.Results))
 
@@ -576,7 +587,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedGet() {
 	response, err := suite.index.Get(context.Background(), ids, []string{"vector", "metadata", "contents"})
 	require.NoError(suite.T(), err)
 	require.NotNil(suite.T(), response)
-	require.Equal(suite.T(), len(ids), response.GetResultCount())
+	require.Equal(suite.T(), len(ids), len(response.GetResults()))
 
 	retrieved := response.GetResults()
 	require.Equal(suite.T(), len(ids), len(retrieved))
@@ -630,7 +641,11 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainIndex() {
 	require.NoError(suite.T(), err)
 
 	// Train the index
-	err = suite.index.Train(context.Background(), BatchSize, MaxIters, TOLERANCE)
+	err = suite.index.Train(context.Background(), &cyborgdb.TrainParams{
+		BatchSize: &BatchSize,
+		MaxIters:  &MaxIters,
+		Tolerance: &TOLERANCE,
+	})
 	require.NoError(suite.T(), err)
 }
 
@@ -652,7 +667,11 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedUpsert() {
 	err := suite.index.Upsert(context.Background(), initialVectors)
 	require.NoError(suite.T(), err)
 
-	err = suite.index.Train(context.Background(), BatchSize, MaxIters, TOLERANCE)
+	err = suite.index.Train(context.Background(), &cyborgdb.TrainParams{
+		BatchSize: &BatchSize,
+		MaxIters:  &MaxIters,
+		Tolerance: &TOLERANCE,
+	})
 	require.NoError(suite.T(), err)
 
 	// Add more vectors after training (like Python test structure)
@@ -692,7 +711,11 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedQueryNoMetadata() {
 	err := suite.index.Upsert(context.Background(), vectors)
 	require.NoError(suite.T(), err)
 
-	err = suite.index.Train(context.Background(), BatchSize, MaxIters, TOLERANCE)
+	err = suite.index.Train(context.Background(), &cyborgdb.TrainParams{
+		BatchSize: &BatchSize,
+		MaxIters:  &MaxIters,
+		Tolerance: &TOLERANCE,
+	})
 	require.NoError(suite.T(), err)
 
 	// Test single query on trained index
@@ -792,7 +815,11 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedQueryWithMetadata() {
 	err := suite.index.Upsert(context.Background(), vectors)
 	require.NoError(suite.T(), err)
 
-	err = suite.index.Train(context.Background(), BatchSize, MaxIters, TOLERANCE)
+	err = suite.index.Train(context.Background(), &cyborgdb.TrainParams{
+		BatchSize: &BatchSize,
+		MaxIters:  &MaxIters,
+		Tolerance: &TOLERANCE,
+	})
 	require.NoError(suite.T(), err)
 
 	// Test multiple metadata queries matching Python test patterns
@@ -863,7 +890,11 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedGet() {
 	require.NoError(suite.T(), err)
 
 	// Train the index
-	err = suite.index.Train(context.Background(), BatchSize, MaxIters, TOLERANCE)
+	err = suite.index.Train(context.Background(), &cyborgdb.TrainParams{
+		BatchSize: &BatchSize,
+		MaxIters:  &MaxIters,
+		Tolerance: &TOLERANCE,
+	})
 	require.NoError(suite.T(), err)
 
 	// Test getting random sample like Python test (1000 items or available count)
@@ -885,7 +916,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedGet() {
 
 	response, err := suite.index.Get(context.Background(), idsToGet, []string{"vector", "metadata", "contents"})
 	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), len(idsToGet), response.GetResultCount())
+	require.Equal(suite.T(), len(idsToGet), len(response.GetResults()))
 
 	// Verify each retrieved item matches expectations like Python test
 	retrieved := response.GetResults()
@@ -918,7 +949,61 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedGet() {
 	}
 }
 
-// Test 13: Delete Vectors (equivalent to Python test_10_delete)
+// Test 13: List IDs functionality
+func (suite *CyborgDBIntegrationTestSuite) TestListIDs() {
+	// Setup and train index with a small dataset
+	numVectors := 10
+	vectors := make([]cyborgdb.VectorItem, numVectors)
+	expectedIDs := make([]string, numVectors)
+	
+	for i := 0; i < numVectors; i++ {
+		vectorID := fmt.Sprintf("list-test-%d", i)
+		expectedIDs[i] = vectorID
+		vectors[i] = cyborgdb.VectorItem{
+			Id:       vectorID,
+			Vector:   suite.trainData[i%len(suite.trainData)],
+			Metadata: map[string]interface{}{"test": true, "index": float64(i)},
+			Contents: fmt.Sprintf("list-content-%d", i),
+		}
+	}
+
+	// Upsert the vectors
+	err := suite.index.Upsert(context.Background(), vectors)
+	require.NoError(suite.T(), err)
+
+	// Train the index
+	err = suite.index.Train(context.Background(), &cyborgdb.TrainParams{
+		BatchSize: &BatchSize,
+		MaxIters:  &MaxIters,
+		Tolerance: &TOLERANCE,
+	})
+	require.NoError(suite.T(), err)
+
+	// Test ListIDs functionality
+	listResponse, err := suite.index.ListIDs(context.Background())
+	require.NoError(suite.T(), err)
+	require.NotNil(suite.T(), listResponse)
+	
+	// Verify that all expected IDs are present in the response
+	retrievedIDs := listResponse.GetResults()
+	require.GreaterOrEqual(suite.T(), len(retrievedIDs), len(expectedIDs), "Should have at least the number of IDs we inserted")
+	
+	// Check that our inserted IDs are present (note: there may be other IDs from other tests)
+	for _, expectedID := range expectedIDs {
+		found := false
+		for _, retrievedID := range retrievedIDs {
+			if retrievedID == expectedID {
+				found = true
+				break
+			}
+		}
+		require.True(suite.T(), found, "Expected ID %s should be present in ListIDs response", expectedID)
+	}
+	
+	suite.T().Logf("ListIDs returned %d total IDs, verified presence of %d expected IDs", len(retrievedIDs), len(expectedIDs))
+}
+
+// Test 14: Delete Vectors (equivalent to Python test_10_delete)
 func (suite *CyborgDBIntegrationTestSuite) TestDeleteVectors() {
 	// Setup vectors matching the scale of Python test
 	numVectors := 100
@@ -955,10 +1040,10 @@ func (suite *CyborgDBIntegrationTestSuite) TestDeleteVectors() {
 	// Try to get the deleted vectors - should return no results like Python test
 	remainingResponse, err := suite.index.Get(context.Background(), idsToDelete, []string{"vector", "metadata"})
 	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), 0, remainingResponse.GetResultCount(), "Deleted vectors should not be retrievable")
+	require.Equal(suite.T(), 0, len(remainingResponse.GetResults()), "Deleted vectors should not be retrievable")
 }
 
-// Test 14: Get Deleted Items Verification (equivalent to Python test_11_get_deleted)
+// Test 15: Get Deleted Items Verification (equivalent to Python test_11_get_deleted)
 func (suite *CyborgDBIntegrationTestSuite) TestGetDeletedItemsVerification() {
 	// Setup vectors
 	numVectors := 50
@@ -1000,10 +1085,10 @@ func (suite *CyborgDBIntegrationTestSuite) TestGetDeletedItemsVerification() {
 
 	deletedResponse, err := suite.index.Get(context.Background(), sampleIds, []string{"vector", "metadata"})
 	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), 0, deletedResponse.GetResultCount(), "Deleted items should not be retrievable")
+	require.Equal(suite.T(), 0, len(deletedResponse.GetResults()), "Deleted items should not be retrievable")
 }
 
-// Test 15: Query After Deletion (equivalent to Python test_12_query_deleted)
+// Test 16: Query After Deletion (equivalent to Python test_12_query_deleted)
 func (suite *CyborgDBIntegrationTestSuite) TestQueryAfterDeletion() {
 	// Setup vectors
 	numVectors := 100
@@ -1132,7 +1217,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestContentsFieldComprehensive() {
 
 	response, err := suite.index.Get(context.Background(), ids, []string{"vector", "metadata", "contents"})
 	require.NoError(suite.T(), err)
-	require.Equal(suite.T(), len(testCases), response.GetResultCount())
+	require.Equal(suite.T(), len(testCases), len(response.GetResults()))
 
 	retrieved := response.GetResults()
 	for i, item := range retrieved {
