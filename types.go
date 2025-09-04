@@ -6,16 +6,30 @@ import (
 
 // type Client = internal.Client
 
-type GetResponse = internal.GetResponse
+type GetResponse = internal.GetResponseModel
 type VectorItem = internal.VectorItem
 type QueryResponse = internal.QueryResponse
-type QueryResultItem = internal.QueryResult
+type QueryResultItem = internal.QueryResultItem
 type CreateIndexRequest = internal.CreateIndexRequest
+type ListIDsResponse = internal.ListIDsResponse
 
 type IndexModel interface {
-    GetType() string
-    GetDimension() int
     ToIndexConfig() *internal.IndexConfig
+}
+
+// CreateIndexParams is the public-facing type for creating an index.
+// Similar to CreateIndexRequest but accepts IndexModel types for IndexConfig.
+type CreateIndexParams struct {
+	// Unique index name
+	IndexName string `json:"index_name"`
+	// 64-char hex string of 32-byte encryption key
+	IndexKey string `json:"index_key"`
+	// Index configuration - can be IndexIVF, IndexIVFFlat, or IndexIVFPQ
+	IndexConfig IndexModel `json:"index_config,omitempty"`
+	// Distance metric (e.g., "euclidean", "cosine")
+	Metric *string `json:"metric,omitempty"`
+	// Embedding model name to associate
+	EmbeddingModel *string `json:"embedding_model,omitempty"`
 }
 
 type TrainParams struct {
@@ -37,8 +51,28 @@ type QueryParams struct {
 	Include           []string               `json:"include"`                  // Required
 }
 
-var (
-	IndexIVF     = internal.IndexIVF
-	IndexIVFFlat = internal.IndexIVFFlat  
-	IndexIVFPQ   = internal.IndexIVFPQ
-)
+// Index model type aliases for convenience
+type IndexIVF = internal.IndexIVFModel
+type IndexIVFFlat = internal.IndexIVFFlatModel
+type IndexIVFPQ = internal.IndexIVFPQModel
+
+// ToIndexConfig converts IndexIVF to IndexConfig
+func (m *IndexIVF) ToIndexConfig() *internal.IndexConfig {
+	return &internal.IndexConfig{
+		IndexIVFModel: m,
+	}
+}
+
+// ToIndexConfig converts IndexIVFFlat to IndexConfig
+func (m *IndexIVFFlat) ToIndexConfig() *internal.IndexConfig {
+	return &internal.IndexConfig{
+		IndexIVFFlatModel: m,
+	}
+}
+
+// ToIndexConfig converts IndexIVFPQ to IndexConfig
+func (m *IndexIVFPQ) ToIndexConfig() *internal.IndexConfig {
+	return &internal.IndexConfig{
+		IndexIVFPQModel: m,
+	}
+}

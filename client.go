@@ -118,10 +118,10 @@ func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 //
 // Parameters:
 //   - ctx: Context for cancellation/timeouts
-//   - req: Complete payload containing:
+//   - params: Complete payload containing:
 //       • IndexName (required): unique index name
 //       • IndexKey  (required): 64-char hex of a 32-byte key
-//       • IndexConfig (optional): index configuration (type, dimension, PQ params)
+//       • IndexConfig (optional): index configuration (IndexIVF, IndexIVFFlat, or IndexIVFPQ)
 //       • Metric (optional): distance metric (e.g., "euclidean", "cosine")
 //       • EmbeddingModel (optional): embedding model name to associate
 //
@@ -133,13 +133,49 @@ func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 // Creating with an existing name will fail.
 func (c *Client) CreateIndex(
 	ctx context.Context,
-	req *internal.CreateIndexRequest,
+	params *CreateIndexParams,
 ) (*EncryptedIndex, error) {
-	encryptedIndex, err := c.internal.CreateIndex(ctx, req)
+	// Convert CreateIndexParams to internal.CreateIndexRequest
+	var indexConfig internal.IndexConfig
+	if params.IndexConfig != nil {
+		indexConfig = *params.IndexConfig.ToIndexConfig()
+	}
+	
+	req := internal.CreateIndexRequest{
+		IndexName:      params.IndexName,
+		IndexKey:       params.IndexKey,
+		IndexConfig:    indexConfig,
+		Metric:         params.Metric,
+		EmbeddingModel: params.EmbeddingModel,
+	}
+	
+	// Call internal CreateIndex
+	_, _, err := c.internal.APIClient.DefaultAPI.CreateIndexV1IndexesCreatePost(ctx).
+		CreateIndexRequest(req).
+		Execute()
 	if err != nil {
 		return nil, err
 	}
-	return encryptedIndex, nil
+	
+	// Build the EncryptedIndex handle
+	idx := &EncryptedIndex{
+		indexName: params.IndexName,
+		indexKey:  params.IndexKey,
+		client:    c.internal,
+		config:    &indexConfig,
+		trained:   false,
+	}
+	
+	// Set index type if available
+	if indexConfig.IndexIVFModel != nil && indexConfig.IndexIVFModel.Type != nil {
+		idx.indexType = *indexConfig.IndexIVFModel.Type
+	} else if indexConfig.IndexIVFFlatModel != nil && indexConfig.IndexIVFFlatModel.Type != nil {
+		idx.indexType = *indexConfig.IndexIVFFlatModel.Type
+	} else if indexConfig.IndexIVFPQModel != nil && indexConfig.IndexIVFPQModel.Type != nil {
+		idx.indexType = *indexConfig.IndexIVFPQModel.Type
+	}
+	
+	return idx, nil
 }
 
 // LoadIndex loads an existing encrypted index by name and key.
@@ -161,12 +197,28 @@ func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byt
 		return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(indexKey))
 	}
 
-	internalIndex, err := c.internal.LoadIndex(ctx, indexName, indexKey)
-	if err != nil {
-		return nil, err
+	keyHex := fmt.Sprintf("%x", indexKey)
+	
+	describeReq := internal.IndexOperationRequest{
+		IndexName: indexName,
+		IndexKey:  keyHex,
 	}
 
-	return &EncryptedIndex{internal: internalIndex}, nil
+	indexInfo, _, err := c.internal.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
+		IndexOperationRequest(describeReq).
+		Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get index info: %w", err)
+	}
+
+	return &EncryptedIndex{
+		indexName: indexInfo.IndexName,
+		indexKey:  keyHex,
+		indexType: indexInfo.IndexType,
+		config:    &indexInfo.IndexConfig,
+		client:    c.internal,
+		trained:   indexInfo.IsTrained,
+	}, nil
 }
 
 // GetHealth checks the health status of the CyborgDB service.
@@ -177,8 +229,8 @@ func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byt
 //   - ctx: Context for cancellation/timeouts
 //
 // Returns:
-//   - *internal.HealthResponse: Health status from the server
+//   - map[string]string: Health status from the server
 //   - error: Any error encountered
-func (c *Client) GetHealth(ctx context.Context) (*internal.HealthResponse, error) {
+func (c *Client) GetHealth(ctx context.Context) (map[string]string, error) {
 	return c.internal.GetHealth(ctx)
 }
