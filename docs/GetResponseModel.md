@@ -1,46 +1,46 @@
-# QueryResponse
+# GetResponseModel
 
 ## Properties
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Results** | [**Results**](Results.md) |  | 
+**Results** | [**[]GetResultItemModel**](GetResultItemModel.md) |  | 
 
 ## Methods
 
-### NewQueryResponse
+### NewGetResponseModel
 
-`func NewQueryResponse(results Results, ) *QueryResponse`
+`func NewGetResponseModel(results []GetResultItemModel, ) *GetResponseModel`
 
-NewQueryResponse instantiates a new QueryResponse object
+NewGetResponseModel instantiates a new GetResponseModel object
 This constructor will assign default values to properties that have it defined,
 and makes sure properties required by API are set, but the set of arguments
 will change when the set of required properties is changed
 
-### NewQueryResponseWithDefaults
+### NewGetResponseModelWithDefaults
 
-`func NewQueryResponseWithDefaults() *QueryResponse`
+`func NewGetResponseModelWithDefaults() *GetResponseModel`
 
-NewQueryResponseWithDefaults instantiates a new QueryResponse object
+NewGetResponseModelWithDefaults instantiates a new GetResponseModel object
 This constructor will only assign default values to properties that have it defined,
 but it doesn't guarantee that properties required by API are set
 
 ### GetResults
 
-`func (o *QueryResponse) GetResults() Results`
+`func (o *GetResponseModel) GetResults() []GetResultItemModel`
 
 GetResults returns the Results field if non-nil, zero value otherwise.
 
 ### GetResultsOk
 
-`func (o *QueryResponse) GetResultsOk() (*Results, bool)`
+`func (o *GetResponseModel) GetResultsOk() (*[]GetResultItemModel, bool)`
 
 GetResultsOk returns a tuple with the Results field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetResults
 
-`func (o *QueryResponse) SetResults(v Results)`
+`func (o *GetResponseModel) SetResults(v []GetResultItemModel)`
 
 SetResults sets Results field to given value.
 

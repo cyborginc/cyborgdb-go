@@ -1,119 +1,129 @@
-# IndexConfig
+# IndexIVFPQModel
 
 ## Properties
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Dimension** | Pointer to **int32** |  | [optional] 
-**Type** | Pointer to **string** |  | [optional] [default to "ivfflat"]
+**Dimension** | Pointer to **NullableInt32** |  | [optional] 
+**Type** | Pointer to **string** |  | [optional] [default to "ivfpq"]
 **PqDim** | **int32** |  | 
 **PqBits** | **int32** |  | 
 
 ## Methods
 
-### NewIndexConfig
+### NewIndexIVFPQModel
 
-`func NewIndexConfig(pqDim int32, pqBits int32, ) *IndexConfig`
+`func NewIndexIVFPQModel(pqDim int32, pqBits int32, ) *IndexIVFPQModel`
 
-NewIndexConfig instantiates a new IndexConfig object
+NewIndexIVFPQModel instantiates a new IndexIVFPQModel object
 This constructor will assign default values to properties that have it defined,
 and makes sure properties required by API are set, but the set of arguments
 will change when the set of required properties is changed
 
-### NewIndexConfigWithDefaults
+### NewIndexIVFPQModelWithDefaults
 
-`func NewIndexConfigWithDefaults() *IndexConfig`
+`func NewIndexIVFPQModelWithDefaults() *IndexIVFPQModel`
 
-NewIndexConfigWithDefaults instantiates a new IndexConfig object
+NewIndexIVFPQModelWithDefaults instantiates a new IndexIVFPQModel object
 This constructor will only assign default values to properties that have it defined,
 but it doesn't guarantee that properties required by API are set
 
 ### GetDimension
 
-`func (o *IndexConfig) GetDimension() int32`
+`func (o *IndexIVFPQModel) GetDimension() int32`
 
 GetDimension returns the Dimension field if non-nil, zero value otherwise.
 
 ### GetDimensionOk
 
-`func (o *IndexConfig) GetDimensionOk() (*int32, bool)`
+`func (o *IndexIVFPQModel) GetDimensionOk() (*int32, bool)`
 
 GetDimensionOk returns a tuple with the Dimension field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetDimension
 
-`func (o *IndexConfig) SetDimension(v int32)`
+`func (o *IndexIVFPQModel) SetDimension(v int32)`
 
 SetDimension sets Dimension field to given value.
 
 ### HasDimension
 
-`func (o *IndexConfig) HasDimension() bool`
+`func (o *IndexIVFPQModel) HasDimension() bool`
 
 HasDimension returns a boolean if a field has been set.
 
+### SetDimensionNil
+
+`func (o *IndexIVFPQModel) SetDimensionNil(b bool)`
+
+ SetDimensionNil sets the value for Dimension to be an explicit nil
+
+### UnsetDimension
+`func (o *IndexIVFPQModel) UnsetDimension()`
+
+UnsetDimension ensures that no value is present for Dimension, not even an explicit nil
 ### GetType
 
-`func (o *IndexConfig) GetType() string`
+`func (o *IndexIVFPQModel) GetType() string`
 
 GetType returns the Type field if non-nil, zero value otherwise.
 
 ### GetTypeOk
 
-`func (o *IndexConfig) GetTypeOk() (*string, bool)`
+`func (o *IndexIVFPQModel) GetTypeOk() (*string, bool)`
 
 GetTypeOk returns a tuple with the Type field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetType
 
-`func (o *IndexConfig) SetType(v string)`
+`func (o *IndexIVFPQModel) SetType(v string)`
 
 SetType sets Type field to given value.
 
 ### HasType
 
-`func (o *IndexConfig) HasType() bool`
+`func (o *IndexIVFPQModel) HasType() bool`
 
 HasType returns a boolean if a field has been set.
 
 ### GetPqDim
 
-`func (o *IndexConfig) GetPqDim() int32`
+`func (o *IndexIVFPQModel) GetPqDim() int32`
 
 GetPqDim returns the PqDim field if non-nil, zero value otherwise.
 
 ### GetPqDimOk
 
-`func (o *IndexConfig) GetPqDimOk() (*int32, bool)`
+`func (o *IndexIVFPQModel) GetPqDimOk() (*int32, bool)`
 
 GetPqDimOk returns a tuple with the PqDim field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetPqDim
 
-`func (o *IndexConfig) SetPqDim(v int32)`
+`func (o *IndexIVFPQModel) SetPqDim(v int32)`
 
 SetPqDim sets PqDim field to given value.
 
 
 ### GetPqBits
 
-`func (o *IndexConfig) GetPqBits() int32`
+`func (o *IndexIVFPQModel) GetPqBits() int32`
 
 GetPqBits returns the PqBits field if non-nil, zero value otherwise.
 
 ### GetPqBitsOk
 
-`func (o *IndexConfig) GetPqBitsOk() (*int32, bool)`
+`func (o *IndexIVFPQModel) GetPqBitsOk() (*int32, bool)`
 
 GetPqBitsOk returns a tuple with the PqBits field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetPqBits
 
-`func (o *IndexConfig) SetPqBits(v int32)`
+`func (o *IndexIVFPQModel) SetPqBits(v int32)`
 
 SetPqBits sets PqBits field to given value.
 
