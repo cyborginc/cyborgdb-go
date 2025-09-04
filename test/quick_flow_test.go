@@ -34,6 +34,13 @@ const (
 	DIMENSION = 768 // Default dimension for synthetic data
 )
 
+// Variables for taking addresses
+var (
+	batchSizePtr  = int32(BatchSize)
+	maxItersPtr   = int32(MaxIters)
+	tolerancePtr  = float64(TOLERANCE)
+)
+
 // Fixed recall thresholds based on PR feedback
 // "we only expects 10% untrained (should be near 100%) and 40% trained"
 var RecallThreshold = map[string]float64{
@@ -46,6 +53,31 @@ type WikiDataSample struct {
 	Train     [][]float32 `json:"train"`
 	Test      [][]float32 `json:"test"`
 	Neighbors [][]int     `json:"neighbors"`
+}
+
+// Helper functions to extract results from union types
+func extractSingleResults(results internal.Results) []cyborgdb.QueryResultItem {
+	if results.ArrayOfQueryResultItem != nil {
+		return *results.ArrayOfQueryResultItem
+	}
+	return nil
+}
+
+func extractBatchResults(results internal.Results) [][]cyborgdb.QueryResultItem {
+	if results.ArrayOfArrayOfQueryResultItem != nil {
+		return *results.ArrayOfArrayOfQueryResultItem
+	}
+	return nil
+}
+
+func resultsLength(results internal.Results) int {
+	if results.ArrayOfQueryResultItem != nil {
+		return len(*results.ArrayOfQueryResultItem)
+	}
+	if results.ArrayOfArrayOfQueryResultItem != nil {
+		return len(*results.ArrayOfArrayOfQueryResultItem)
+	}
+	return 0
 }
 
 // Global variable to store loaded data (similar to TypeScript sharedData)
@@ -192,6 +224,15 @@ func computeRecall(results []cyborgdb.QueryResultItem) float64 {
 
 func strPtr(s string) *string {
 	return &s
+}
+
+func stringToNullableContents(s string) internal.NullableContents {
+	contents := internal.Contents{
+		String: &s,
+	}
+	var nullableContents internal.NullableContents
+	nullableContents.Set(&contents)
+	return nullableContents
 }
 
 // createIndexModel creates the appropriate index model based on the index type
@@ -430,8 +471,8 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryNoMetadata() {
 		response, err := suite.index.Query(context.Background(), params)
 		require.NoError(t, err)
 		require.NotNil(t, response)
-		require.Greater(t, len(response.Results), 0)
-		results := response.Results
+		require.Greater(t, resultsLength(response.Results), 0)
+		results := extractSingleResults(response.Results)
 		require.Greater(t, len(results), 0)
 
 		recall := computeRecall(results)
@@ -458,10 +499,11 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryNoMetadata() {
 		}
 		response, err := suite.index.Query(context.Background(), params)
 		require.NoError(t, err)
-		require.Equal(t, len(batchVectors), len(response.Results))
+		batchResults := extractBatchResults(response.Results)
+		require.Equal(t, len(batchVectors), len(batchResults))
 
 		// Verify each result set meets untrained recall threshold
-		for i, resultSet := range response.Results {
+		for i, resultSet := range batchResults {
 			require.Greater(t, len(resultSet), 0, "Result set %d should not be empty", i)
 
 			recall := computeRecall(resultSet) // Pass query index
@@ -527,18 +569,20 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryWithMetadata() {
 
 	for filterIdx, filter := range testFilters {
 		suite.T().Run(fmt.Sprintf("Metadata_Filter_%d", filterIdx+1), func(t *testing.T) {
-			response, err := suite.index.Query(
-				context.Background(),
-				suite.testData[0],
-				TopK,
-				1, // Use n_probes=1 for untrained
-				false,
-				filter,
-				[]string{"metadata"},
-			)
+			nProbes := int32(1)
+			greedy := false
+			params := cyborgdb.QueryParams{
+				QueryVector: suite.testData[0],
+				TopK:        TopK,
+				NProbes:     &nProbes,
+				Greedy:      &greedy,
+				Filters:     filter,
+				Include:     []string{"metadata"},
+			}
+			response, err := suite.index.Query(context.Background(), params)
 			require.NoError(t, err)
-			require.Greater(t, len(response.Results), 0)
-			results := response.Results[0]
+			require.Greater(t, resultsLength(response.Results), 0)
+			results := extractSingleResults(response.Results)
 
 			if len(results) > 0 {
 				// Verify metadata filtering worked for simple filters
@@ -566,7 +610,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedGet() {
 				"index_type": string(suite.indexType),
 				"category":   "untrained-get",
 			},
-			Contents: strPtr(fmt.Sprintf("test-content-%d", i)),
+			Contents: stringToNullableContents(fmt.Sprintf("test-content-%d", i)),
 		}
 	}
 
@@ -641,10 +685,10 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainIndex() {
 	require.NoError(suite.T(), err)
 
 	// Train the index
-	err = suite.index.Train(context.Background(), &cyborgdb.TrainParams{
-		BatchSize: &BatchSize,
-		MaxIters:  &MaxIters,
-		Tolerance: &TOLERANCE,
+	err = suite.index.Train(context.Background(), cyborgdb.TrainParams{
+		BatchSize: &batchSizePtr,
+		MaxIters:  &maxItersPtr,
+		Tolerance: &tolerancePtr,
 	})
 	require.NoError(suite.T(), err)
 }
@@ -667,10 +711,10 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedUpsert() {
 	err := suite.index.Upsert(context.Background(), initialVectors)
 	require.NoError(suite.T(), err)
 
-	err = suite.index.Train(context.Background(), &cyborgdb.TrainParams{
-		BatchSize: &BatchSize,
-		MaxIters:  &MaxIters,
-		Tolerance: &TOLERANCE,
+	err = suite.index.Train(context.Background(), cyborgdb.TrainParams{
+		BatchSize: &batchSizePtr,
+		MaxIters:  &maxItersPtr,
+		Tolerance: &tolerancePtr,
 	})
 	require.NoError(suite.T(), err)
 
@@ -711,27 +755,29 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedQueryNoMetadata() {
 	err := suite.index.Upsert(context.Background(), vectors)
 	require.NoError(suite.T(), err)
 
-	err = suite.index.Train(context.Background(), &cyborgdb.TrainParams{
-		BatchSize: &BatchSize,
-		MaxIters:  &MaxIters,
-		Tolerance: &TOLERANCE,
+	err = suite.index.Train(context.Background(), cyborgdb.TrainParams{
+		BatchSize: &batchSizePtr,
+		MaxIters:  &maxItersPtr,
+		Tolerance: &tolerancePtr,
 	})
 	require.NoError(suite.T(), err)
 
 	// Test single query on trained index
 	suite.T().Run("Single_Query_Trained", func(t *testing.T) {
-		response, err := suite.index.Query(
-			context.Background(),
-			suite.testData[0],
-			TopK,
-			24, // Use n_probes=24 for trained like Python
-			false,
-			map[string]interface{}{},
-			[]string{"metadata"},
-		)
+		nProbes := int32(24)
+		greedy := false
+		params := cyborgdb.QueryParams{
+			QueryVector: suite.testData[0],
+			TopK:        TopK,
+			NProbes:     &nProbes,
+			Greedy:      &greedy,
+			Filters:     map[string]interface{}{},
+			Include:     []string{"metadata"},
+		}
+		response, err := suite.index.Query(context.Background(), params)
 		require.NoError(t, err)
-		require.Greater(t, len(response.Results), 0)
-		results := response.Results[0]
+		require.Greater(t, resultsLength(response.Results), 0)
+		results := extractSingleResults(response.Results)
 		require.Greater(t, len(results), 0)
 
 		recall := computeRecall(results) // Pass query index 0
@@ -746,20 +792,23 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedQueryNoMetadata() {
 			batchVectors = batchVectors[:5] // Limit for performance
 		}
 
-		response, err := suite.index.Query(
-			context.Background(),
-			batchVectors,
-			TopK,
-			24, // Use n_probes=24 for trained
-			false,
-			map[string]interface{}{},
-			[]string{"metadata"},
-		)
+		nProbes := int32(24)
+		greedy := false
+		params := cyborgdb.QueryParams{
+			BatchQueryVectors: batchVectors,
+			TopK:              TopK,
+			NProbes:           &nProbes,
+			Greedy:            &greedy,
+			Filters:           map[string]interface{}{},
+			Include:           []string{"metadata"},
+		}
+		response, err := suite.index.Query(context.Background(), params)
 		require.NoError(t, err)
-		require.Equal(t, len(batchVectors), len(response.Results))
+		batchResults := extractBatchResults(response.Results)
+		require.Equal(t, len(batchVectors), len(batchResults))
 
 		// Verify each result set meets trained recall threshold
-		for i, resultSet := range response.Results {
+		for i, resultSet := range batchResults {
 			require.Greater(t, len(resultSet), 0, "Result set %d should not be empty", i)
 
 			recall := computeRecall(resultSet) // Pass query index
@@ -815,10 +864,10 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedQueryWithMetadata() {
 	err := suite.index.Upsert(context.Background(), vectors)
 	require.NoError(suite.T(), err)
 
-	err = suite.index.Train(context.Background(), &cyborgdb.TrainParams{
-		BatchSize: &BatchSize,
-		MaxIters:  &MaxIters,
-		Tolerance: &TOLERANCE,
+	err = suite.index.Train(context.Background(), cyborgdb.TrainParams{
+		BatchSize: &batchSizePtr,
+		MaxIters:  &maxItersPtr,
+		Tolerance: &tolerancePtr,
 	})
 	require.NoError(suite.T(), err)
 
@@ -839,19 +888,21 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedQueryWithMetadata() {
 
 	for queryIdx, filter := range metadataQueries {
 		suite.T().Run(fmt.Sprintf("Trained_Metadata_Query_%d", queryIdx+1), func(t *testing.T) {
-			response, err := suite.index.Query(
-				context.Background(),
-				suite.testData[0],
-				TopK,
-				24, // Use n_probes=24 for trained
-				false,
-				filter,
-				[]string{"metadata"},
-			)
+			nProbes := int32(24)
+			greedy := false
+			params := cyborgdb.QueryParams{
+				QueryVector: suite.testData[0],
+				TopK:        TopK,
+				NProbes:     &nProbes,
+				Greedy:      &greedy,
+				Filters:     filter,
+				Include:     []string{"metadata"},
+			}
+			response, err := suite.index.Query(context.Background(), params)
 			require.NoError(t, err)
-			require.Greater(t, len(response.Results), 0)
+			require.Greater(t, resultsLength(response.Results), 0)
 
-			results := response.Results[0]
+			results := extractSingleResults(response.Results)
 			if len(results) > 0 {
 				recall := computeRecall(results) // Use query index 0
 				require.GreaterOrEqual(t, recall, RecallThreshold["trained"])
@@ -883,17 +934,17 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedGet() {
 					"pets_owned": (i % 3) + 1,
 				},
 			},
-			Contents: strPtr(fmt.Sprintf("trained-content-%d", i)),
+			Contents: stringToNullableContents(fmt.Sprintf("trained-content-%d", i)),
 		}
 	}
 	err := suite.index.Upsert(context.Background(), initialVectors)
 	require.NoError(suite.T(), err)
 
 	// Train the index
-	err = suite.index.Train(context.Background(), &cyborgdb.TrainParams{
-		BatchSize: &BatchSize,
-		MaxIters:  &MaxIters,
-		Tolerance: &TOLERANCE,
+	err = suite.index.Train(context.Background(), cyborgdb.TrainParams{
+		BatchSize: &batchSizePtr,
+		MaxIters:  &maxItersPtr,
+		Tolerance: &tolerancePtr,
 	})
 	require.NoError(suite.T(), err)
 
@@ -963,7 +1014,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestListIDs() {
 			Id:       vectorID,
 			Vector:   suite.trainData[i%len(suite.trainData)],
 			Metadata: map[string]interface{}{"test": true, "index": float64(i)},
-			Contents: fmt.Sprintf("list-content-%d", i),
+			Contents: stringToNullableContents(fmt.Sprintf("list-content-%d", i)),
 		}
 	}
 
@@ -972,10 +1023,10 @@ func (suite *CyborgDBIntegrationTestSuite) TestListIDs() {
 	require.NoError(suite.T(), err)
 
 	// Train the index
-	err = suite.index.Train(context.Background(), &cyborgdb.TrainParams{
-		BatchSize: &BatchSize,
-		MaxIters:  &MaxIters,
-		Tolerance: &TOLERANCE,
+	err = suite.index.Train(context.Background(), cyborgdb.TrainParams{
+		BatchSize: &batchSizePtr,
+		MaxIters:  &maxItersPtr,
+		Tolerance: &tolerancePtr,
 	})
 	require.NoError(suite.T(), err)
 
@@ -985,7 +1036,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestListIDs() {
 	require.NotNil(suite.T(), listResponse)
 	
 	// Verify that all expected IDs are present in the response
-	retrievedIDs := listResponse.GetResults()
+	retrievedIDs := listResponse.Ids
 	require.GreaterOrEqual(suite.T(), len(retrievedIDs), len(expectedIDs), "Should have at least the number of IDs we inserted")
 	
 	// Check that our inserted IDs are present (note: there may be other IDs from other tests)
@@ -1118,19 +1169,21 @@ func (suite *CyborgDBIntegrationTestSuite) TestQueryAfterDeletion() {
 	require.NoError(suite.T(), err)
 
 	// Query the index and verify deleted IDs don't appear
-	response, err := suite.index.Query(
-		context.Background(),
-		suite.testData[0],
-		TopK,
-		24, // Use n_probes=24 for consistency
-		false,
-		map[string]interface{}{},
-		[]string{"metadata"},
-	)
+	nProbes := int32(24)
+	greedy := false
+	params := cyborgdb.QueryParams{
+		QueryVector: suite.testData[0],
+		TopK:        TopK,
+		NProbes:     &nProbes,
+		Greedy:      &greedy,
+		Filters:     map[string]interface{}{},
+		Include:     []string{"metadata"},
+	}
+	response, err := suite.index.Query(context.Background(), params)
 	require.NoError(suite.T(), err)
-	require.Greater(suite.T(), len(response.Results), 0)
+	require.Greater(suite.T(), resultsLength(response.Results), 0)
 
-	results := response.Results[0]
+	results := extractSingleResults(response.Results)
 	require.Greater(suite.T(), len(results), 0)
 
 	// Verify that deleted IDs don't appear in results
@@ -1202,7 +1255,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestContentsFieldComprehensive() {
 				"index_type":     string(suite.indexType),
 				"content_length": len(tc.content),
 			},
-			Contents: strPtr(tc.content),
+			Contents: stringToNullableContents(tc.content),
 		}
 	}
 

@@ -48,7 +48,7 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 	req := internal.UpsertRequest{
 		IndexName: e.indexName,
 		IndexKey:  e.indexKey,
-		Vectors:   items,
+		Items:     items,
 	}
 	_, _, err := e.client.APIClient.DefaultAPI.UpsertVectorsV1VectorsUpsertPost(ctx).
 		UpsertRequest(req).
@@ -70,19 +70,45 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 //   - error on failure
 func (e *EncryptedIndex) Query(ctx context.Context, params QueryParams) (*QueryResponse, error) {
 	req := internal.QueryRequest{
-		IndexName:         e.indexName,
-		IndexKey:          e.indexKey,
-		QueryVector:       params.QueryVector,
-		BatchQueryVectors: params.BatchQueryVectors,
-		QueryContents:     params.QueryContents,
-		TopK:              params.TopK,
-		NProbes:           params.NProbes,
-		Greedy:            params.Greedy,
-		Filters:           params.Filters,
-		Include:           params.Include,
+		IndexName: e.indexName,
+		IndexKey:  e.indexKey,
+		Filters:   params.Filters,
+		Include:   params.Include,
+	}
+	
+	// Handle query vectors - merge single and batch into single field
+	if len(params.BatchQueryVectors) > 0 {
+		// Flatten batch query vectors into single slice
+		var allVectors []float32
+		for _, batch := range params.BatchQueryVectors {
+			allVectors = append(allVectors, batch...)
+		}
+		req.QueryVectors = allVectors
+	} else if params.QueryVector != nil {
+		req.QueryVectors = params.QueryVector
+	}
+	
+	// Handle nullable fields
+	if params.QueryContents != nil {
+		req.QueryContents = *internal.NewNullableString(params.QueryContents)
+	}
+	
+	if params.TopK != 0 {
+		req.TopK = *internal.NewNullableInt32(&params.TopK)
+	}
+	
+	if params.NProbes != nil {
+		req.NProbes = *internal.NewNullableInt32(params.NProbes)
+	}
+	
+	if params.Greedy != nil {
+		req.Greedy = *internal.NewNullableBool(params.Greedy)
+	}
+	request := internal.Request{
+		QueryRequest: &req,
 	}
 	result, _, err := e.client.APIClient.DefaultAPI.QueryVectorsV1VectorsQueryPost(ctx).
-		QueryRequest(req).
+		Request(request).
 		Execute()
 	return result, err
 }
@@ -123,11 +149,27 @@ func (e *EncryptedIndex) Train(ctx context.Context, params TrainParams) error {
 	req := internal.TrainRequest{
 		IndexName: e.indexName,
 		IndexKey:  e.indexKey,
-		BatchSize: params.BatchSize,
-		MaxIters:  params.MaxIters,
-		Tolerance: params.Tolerance,
-		MaxMemory: params.MaxMemory,
-		NLists:    params.NLists,
+	}
+	
+	if params.BatchSize != nil {
+		req.BatchSize = *internal.NewNullableInt32(params.BatchSize)
+	}
+	
+	if params.MaxIters != nil {
+		req.MaxIters = *internal.NewNullableInt32(params.MaxIters)
+	}
+	
+	if params.Tolerance != nil {
+		tolerance32 := float32(*params.Tolerance)
+		req.Tolerance = *internal.NewNullableFloat32(&tolerance32)
+	}
+	
+	if params.MaxMemory != nil {
+		req.MaxMemory = *internal.NewNullableInt32(params.MaxMemory)
+	}
+	
+	if params.NLists != nil {
+		req.NLists = *internal.NewNullableInt32(params.NLists)
 	}
 	_, _, err := e.client.APIClient.DefaultAPI.TrainIndexV1IndexesTrainPost(ctx).
 		TrainRequest(req).

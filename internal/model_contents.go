@@ -19,7 +19,7 @@ import (
 
 // Contents struct for Contents
 type Contents struct {
-	*OsFile **os.File
+	OsFile **os.File
 	String *string
 }
 
@@ -31,17 +31,17 @@ func (dst *Contents) UnmarshalJSON(data []byte) error {
 		return nil
 	}
 
-	// try to unmarshal JSON data into *OsFile
-	err = json.Unmarshal(data, &dst.*OsFile);
+	// try to unmarshal JSON data into OsFile
+	err = json.Unmarshal(data, &dst.OsFile);
 	if err == nil {
-		json*OsFile, _ := json.Marshal(dst.*OsFile)
-		if string(json*OsFile) == "{}" { // empty struct
-			dst.*OsFile = nil
+		jsonOsFile, _ := json.Marshal(dst.OsFile)
+		if string(jsonOsFile) == "{}" { // empty struct
+			dst.OsFile = nil
 		} else {
-			return nil // data stored in dst.*OsFile, return on the first match
+			return nil // data stored in dst.OsFile, return on the first match
 		}
 	} else {
-		dst.*OsFile = nil
+		dst.OsFile = nil
 	}
 
 	// try to unmarshal JSON data into String
@@ -62,8 +62,8 @@ func (dst *Contents) UnmarshalJSON(data []byte) error {
 
 // Marshal data from the first non-nil pointers in the struct to JSON
 func (src Contents) MarshalJSON() ([]byte, error) {
-	if src.*OsFile != nil {
-		return json.Marshal(&src.*OsFile)
+	if src.OsFile != nil {
+		return json.Marshal(&src.OsFile)
 	}
 
 	if src.String != nil {

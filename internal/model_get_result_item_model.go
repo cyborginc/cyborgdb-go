@@ -12,7 +12,6 @@ package internal
 
 import (
 	"encoding/json"
-	"os"
 	"bytes"
 	"fmt"
 )
@@ -24,7 +23,7 @@ var _ MappedNullable = &GetResultItemModel{}
 type GetResultItemModel struct {
 	Id string `json:"id"`
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
-	Contents Nullable*os.File `json:"contents,omitempty"`
+	Contents NullableContents `json:"contents,omitempty"`
 	Vector []float32 `json:"vector,omitempty"`
 }
 
@@ -106,18 +105,18 @@ func (o *GetResultItemModel) SetMetadata(v map[string]interface{}) {
 }
 
 // GetContents returns the Contents field value if set, zero value otherwise (both if not set or set to explicit null).
-func (o *GetResultItemModel) GetContents() *os.File {
+func (o *GetResultItemModel) GetContents() *Contents {
 	if o == nil || IsNil(o.Contents.Get()) {
-		var ret *os.File
+		var ret *Contents
 		return ret
 	}
-	return *o.Contents.Get()
+	return o.Contents.Get()
 }
 
 // GetContentsOk returns a tuple with the Contents field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 // NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *GetResultItemModel) GetContentsOk() (**os.File, bool) {
+func (o *GetResultItemModel) GetContentsOk() (*Contents, bool) {
 	if o == nil {
 		return nil, false
 	}
@@ -133,9 +132,9 @@ func (o *GetResultItemModel) HasContents() bool {
 	return false
 }
 
-// SetContents gets a reference to the given Nullable*os.File and assigns it to the Contents field.
-func (o *GetResultItemModel) SetContents(v *os.File) {
-	o.Contents.Set(&v)
+// SetContents gets a reference to the given NullableContents and assigns it to the Contents field.
+func (o *GetResultItemModel) SetContents(v *Contents) {
+	o.Contents.Set(v)
 }
 // SetContentsNil sets the value for Contents to be an explicit nil
 func (o *GetResultItemModel) SetContentsNil() {

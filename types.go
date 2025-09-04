@@ -51,17 +51,25 @@ type QueryParams struct {
 	Include           []string               `json:"include"`                  // Required
 }
 
-// Index model type aliases (unexported)
-type indexIVF = internal.IndexIVFModel
-type indexIVFFlat = internal.IndexIVFFlatModel
-type indexIVFPQ = internal.IndexIVFPQModel
+// Index model wrapper types
+type indexIVF struct {
+	*internal.IndexIVFModel
+}
+
+type indexIVFFlat struct {
+	*internal.IndexIVFFlatModel
+}
+
+type indexIVFPQ struct {
+	*internal.IndexIVFPQModel
+}
 
 // IndexIVF creates a new IVF index configuration
 func IndexIVF(dimension int32) *indexIVF {
 	model := &internal.IndexIVFModel{}
 	model.SetDimension(dimension)
 	model.SetType("ivf") // Hardcoded type
-	return model
+	return &indexIVF{IndexIVFModel: model}
 }
 
 // IndexIVFFlat creates a new IVFFlat index configuration
@@ -69,7 +77,7 @@ func IndexIVFFlat(dimension int32) *indexIVFFlat {
 	model := &internal.IndexIVFFlatModel{}
 	model.SetDimension(dimension)
 	model.SetType("ivfflat") // Hardcoded type
-	return model
+	return &indexIVFFlat{IndexIVFFlatModel: model}
 }
 
 // IndexIVFPQ creates a new IVFPQ index configuration
@@ -80,26 +88,26 @@ func IndexIVFPQ(dimension int32, pqDim int32, pqBits int32) *indexIVFPQ {
 	}
 	model.SetDimension(dimension)
 	model.SetType("ivfpq") // Hardcoded type
-	return model
+	return &indexIVFPQ{IndexIVFPQModel: model}
 }
 
 // ToIndexConfig converts indexIVF to IndexConfig
 func (m *indexIVF) ToIndexConfig() *internal.IndexConfig {
 	return &internal.IndexConfig{
-		IndexIVFModel: m,
+		IndexIVFModel: m.IndexIVFModel,
 	}
 }
 
 // ToIndexConfig converts indexIVFFlat to IndexConfig
 func (m *indexIVFFlat) ToIndexConfig() *internal.IndexConfig {
 	return &internal.IndexConfig{
-		IndexIVFFlatModel: m,
+		IndexIVFFlatModel: m.IndexIVFFlatModel,
 	}
 }
 
 // ToIndexConfig converts indexIVFPQ to IndexConfig
 func (m *indexIVFPQ) ToIndexConfig() *internal.IndexConfig {
 	return &internal.IndexConfig{
-		IndexIVFPQModel: m,
+		IndexIVFPQModel: m.IndexIVFPQModel,
 	}
 }
