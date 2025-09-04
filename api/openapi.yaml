@@ -1,1696 +1,1282 @@
-{
-  "openapi": "3.1.0",
-  "info": {
-    "title": "CyborgDB Service",
-    "description": "REST API for CyborgDB: The Confidential Vector Database",
-    "version": "0.12.0"
-  },
-  "paths": {
-    "/v1/health": {
-      "get": {
-        "summary": "Health check endpoint",
-        "description": "Check if the API is running.",
-        "operationId": "health_check_v1_health_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "additionalProperties": {
-                    "type": "string"
-                  },
-                  "type": "object",
-                  "title": "Response Health Check V1 Health Get"
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/indexes/list": {
-      "get": {
-        "summary": "List Encrypted Indexes",
-        "description": "List all available indexes.",
-        "operationId": "list_indexes_v1_indexes_list_get",
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IndexListResponseModel"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Permission denied from license issue",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/v1/indexes/create": {
-      "post": {
-        "summary": "Create Encrypted Index",
-        "description": "Create a new encrypted index with the provided configuration.",
-        "operationId": "create_index_v1_indexes_create_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/CreateIndexRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/cyborgdb_service__api__schemas__index__SuccessResponseModel"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Permission denied from license issue",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "409": {
-            "description": "Conflict for index name",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/v1/indexes/describe": {
-      "post": {
-        "summary": "Describe Encrypted Index",
-        "description": "Get information about a specific index.",
-        "operationId": "get_index_info_v1_indexes_describe_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IndexOperationRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/IndexInfoResponseModel"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Permission denied from license issue",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not able to find index",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/v1/indexes/delete": {
-      "post": {
-        "summary": "Delete Encrypted Index",
-        "description": "Delete a specific index.",
-        "operationId": "delete_index_v1_indexes_delete_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IndexOperationRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/cyborgdb_service__api__schemas__index__SuccessResponseModel"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Permission denied from license issue",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "404": {
-            "description": "Not able to find index",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/v1/indexes/train": {
-      "post": {
-        "summary": "Train Encrypted index",
-        "description": "Train the index for efficient querying.\n\nNote: This endpoint triggers manual training. Automatic training is also\ntriggered based on vector count thresholds after upserts.",
-        "operationId": "train_index_v1_indexes_train_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/TrainRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/cyborgdb_service__api__schemas__index__SuccessResponseModel"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Permission denied from license issue",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/v1/indexes/training-status": {
-      "get": {
-        "summary": "Get Training Status",
-        "description": "Get the current training status including indexes being trained\nand the retrain threshold configuration.\n\nReturns:\n    dict: Training status information including:\n        - training_indexes: List of index names currently being trained\n        - retrain_threshold: The multiplier used for the retraining threshold",
-        "operationId": "get_training_status_v1_indexes_training_status_get",
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
+openapi: 3.1.0
+info:
+  description: "REST API for CyborgDB: The Confidential Vector Database"
+  title: CyborgDB Service
+  version: 0.12.0
+servers:
+- url: /
+paths:
+  /v1/health:
+    get:
+      description: Check if the API is running.
+      operationId: health_check_v1_health_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                additionalProperties:
+                  type: string
+                title: Response Health Check V1 Health Get
+          description: Successful Response
+      summary: Health check endpoint
+  /v1/indexes/list:
+    get:
+      description: List all available indexes.
+      operationId: list_indexes_v1_indexes_list_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexListResponseModel'
+          description: Successful response
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Permission denied from license issue
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Unexpected server error
+      security:
+      - APIKeyHeader: []
+      summary: List Encrypted Indexes
+  /v1/indexes/create:
+    post:
+      description: Create a new encrypted index with the provided configuration.
+      operationId: create_index_v1_indexes_create_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateIndexRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/cyborgdb_service__api__schemas__index__SuccessResponseModel'
+          description: Successful response
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Permission denied from license issue
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Unexpected server error
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Conflict for index name
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      security:
+      - APIKeyHeader: []
+      summary: Create Encrypted Index
+  /v1/indexes/describe:
+    post:
+      description: Get information about a specific index.
+      operationId: get_index_info_v1_indexes_describe_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndexOperationRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IndexInfoResponseModel'
+          description: Successful response
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Permission denied from license issue
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Unexpected server error
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Not able to find index
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      security:
+      - APIKeyHeader: []
+      summary: Describe Encrypted Index
+  /v1/indexes/delete:
+    post:
+      description: Delete a specific index.
+      operationId: delete_index_v1_indexes_delete_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndexOperationRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/cyborgdb_service__api__schemas__index__SuccessResponseModel'
+          description: Successful response
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Permission denied from license issue
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Unexpected server error
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Not able to find index
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      security:
+      - APIKeyHeader: []
+      summary: Delete Encrypted Index
+  /v1/indexes/train:
+    post:
+      description: |-
+        Train the index for efficient querying.
 
-                }
-              }
-            }
-          }
-        }
-      }
-    },
-    "/v1/vectors/upsert": {
-      "post": {
-        "summary": "Add Items to Encrypted Index",
-        "description": "Add or update vectors in the index.\n\nAfter upserting, checks if the index needs training/retraining based on the\nnumber of vectors and triggers automatic training if needed.",
-        "operationId": "upsert_vectors_v1_vectors_upsert_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/UpsertRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/cyborgdb_service__api__schemas__vectors__SuccessResponseModel"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Permission denied from license issue",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/v1/vectors/query": {
-      "post": {
-        "summary": "Query Encrypted Index",
-        "description": "Search for nearest neighbors in the index.",
-        "operationId": "query_vectors_v1_vectors_query_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "anyOf": [
-                  {
-                    "$ref": "#/components/schemas/QueryRequest"
-                  },
-                  {
-                    "$ref": "#/components/schemas/BatchQueryRequest"
-                  }
-                ],
-                "title": "Request"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/QueryResponse"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Permission denied from license issue",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/v1/vectors/get": {
-      "post": {
-        "summary": "Get Items from Encrypted Index",
-        "description": "Retrieve vectors by their IDs.",
-        "operationId": "get_vectors_v1_vectors_get_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/GetRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/GetResponseModel"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Permission denied from license issue",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/v1/vectors/delete": {
-      "post": {
-        "summary": "Delete Items from Encrypted Index",
-        "description": "Delete vectors by their IDs.",
-        "operationId": "delete_vectors_v1_vectors_delete_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/DeleteRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/cyborgdb_service__api__schemas__vectors__SuccessResponseModel"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Unable to find item to delete",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/v1/vectors/list_ids": {
-      "post": {
-        "summary": "List all IDs in an index",
-        "description": "List all item IDs currently stored in the index.\n\nReturns a list of all IDs and the total count.",
-        "operationId": "list_ids_v1_vectors_list_ids_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/ListIDsRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful Response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ListIDsResponse"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    },
-    "/v1/vectors/num_vectors": {
-      "post": {
-        "summary": "Get the number of vectors in an index",
-        "description": "Get the number of vectors stored in an index",
-        "operationId": "get_index_size_v1_vectors_num_vectors_post",
-        "requestBody": {
-          "content": {
-            "application/json": {
-              "schema": {
-                "$ref": "#/components/schemas/IndexOperationRequest"
-              }
-            }
-          },
-          "required": true
-        },
-        "responses": {
-          "200": {
-            "description": "Successful response",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/cyborgdb_service__api__schemas__vectors__SuccessResponseModel"
-                }
-              }
-            }
-          },
-          "401": {
-            "description": "Permission denied from license issue",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "500": {
-            "description": "Unexpected server error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            }
-          },
-          "422": {
-            "description": "Validation Error",
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/HTTPValidationError"
-                }
-              }
-            }
-          }
-        },
-        "security": [
-          {
-            "APIKeyHeader": []
-          }
-        ]
-      }
-    }
-  },
-  "components": {
-    "schemas": {
-      "BatchQueryRequest": {
-        "properties": {
-          "index_key": {
-            "type": "string",
-            "title": "Index Key",
-            "description": "32-byte encryption key as hex string"
-          },
-          "index_name": {
-            "type": "string",
-            "title": "Index Name",
-            "description": "ID name"
-          },
-          "query_vectors": {
-            "items": {
-              "items": {
-                "type": "number"
-              },
-              "type": "array"
-            },
-            "type": "array",
-            "title": "Query Vectors"
-          },
-          "top_k": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Top K"
-          },
-          "n_probes": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Probes"
-          },
-          "greedy": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Greedy"
-          },
-          "filters": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Filters",
-            "default": {
+        Note: This endpoint triggers manual training. Automatic training is also
+        triggered based on vector count thresholds after upserts.
+      operationId: train_index_v1_indexes_train_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TrainRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/cyborgdb_service__api__schemas__index__SuccessResponseModel'
+          description: Successful response
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Permission denied from license issue
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Unexpected server error
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      security:
+      - APIKeyHeader: []
+      summary: Train Encrypted index
+  /v1/indexes/training-status:
+    get:
+      description: |-
+        Get the current training status including indexes being trained
+        and the retrain threshold configuration.
 
-            }
-          },
-          "include": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Include",
-            "default": [
-              "distance",
-              "metadata"
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "index_key",
-          "index_name",
-          "query_vectors"
-        ],
-        "title": "BatchQueryRequest",
-        "description": "Request model for batch similarity search.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    query_vectors (List[List[float]]): List of vectors to search for in batch mode.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    filters (Optional[Dict[str, Any]]): JSON-like dictionary specifying metadata filters. Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[\"distance\", \"metadata\"]`."
-      },
-      "CreateIndexRequest": {
-        "properties": {
-          "index_config": {
-            "anyOf": [
-              {
-                "$ref": "#/components/schemas/IndexIVFModel"
-              },
-              {
-                "$ref": "#/components/schemas/IndexIVFPQModel"
-              },
-              {
-                "$ref": "#/components/schemas/IndexIVFFlatModel"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Index Config"
-          },
-          "index_key": {
-            "type": "string",
-            "title": "Index Key",
-            "description": "32-byte encryption key as hex string"
-          },
-          "index_name": {
-            "type": "string",
-            "title": "Index Name",
-            "description": "ID name"
-          },
-          "embedding_model": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Embedding Model"
-          },
-          "metric": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Metric"
-          }
-        },
-        "type": "object",
-        "required": [
-          "index_key",
-          "index_name"
-        ],
-        "title": "CreateIndexRequest",
-        "description": "Request model for creating a new encrypted index.\n\nAttributes:\n    index_config (Optional[Union[IndexIVFModel, IndexIVFPQModel, IndexIVFFlatModel]]): \n        Optional configuration model for the index.\n    index_key (str): A 32-byte encryption key as a hex string.\n    index_name (str): The name/identifier of the index.\n    embedding_model (Optional[str]): Optional embedding model name.\n    metric (Optional[str]): Optional distance metric."
-      },
-      "DeleteRequest": {
-        "properties": {
-          "index_key": {
-            "type": "string",
-            "title": "Index Key",
-            "description": "32-byte encryption key as hex string"
-          },
-          "index_name": {
-            "type": "string",
-            "title": "Index Name",
-            "description": "ID name"
-          },
-          "ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Ids"
-          }
-        },
-        "type": "object",
-        "required": [
-          "index_key",
-          "index_name",
-          "ids"
-        ],
-        "title": "DeleteRequest",
-        "description": "Request model for deleting vectors from the encrypted index.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    ids (List[str]): List of vector item IDs to be deleted."
-      },
-      "ErrorResponseModel": {
-        "properties": {
-          "status_code": {
-            "type": "integer",
-            "title": "Status Code"
-          },
-          "detail": {
-            "type": "string",
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "required": [
-          "status_code",
-          "detail"
-        ],
-        "title": "ErrorResponseModel",
-        "description": "Standard error response model.\n\nAttributes:\n    status_code (int): HTTP status code of the error.\n    detail (str): A detailed message describing the error."
-      },
-      "GetRequest": {
-        "properties": {
-          "index_key": {
-            "type": "string",
-            "title": "Index Key",
-            "description": "32-byte encryption key as hex string"
-          },
-          "index_name": {
-            "type": "string",
-            "title": "Index Name",
-            "description": "ID name"
-          },
-          "ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Ids"
-          },
-          "include": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Include",
-            "default": [
-              "vector",
-              "contents",
-              "metadata"
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "index_key",
-          "index_name",
-          "ids"
-        ],
-        "title": "GetRequest",
-        "description": "Request model for retrieving specific vectors from the index.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    ids (List[str]): List of vector item IDs to retrieve.\n    include (List[str]): List of fields to include in the response. \n        Defaults to `[\"vector\", \"contents\", \"metadata\"]`."
-      },
-      "GetResponseModel": {
-        "properties": {
-          "results": {
-            "items": {
-              "$ref": "#/components/schemas/GetResultItemModel"
-            },
-            "type": "array",
-            "title": "Results"
-          }
-        },
-        "type": "object",
-        "required": [
-          "results"
-        ],
-        "title": "GetResponseModel",
-        "description": "Response model for retrieving multiple encrypted index items.\n\nAttributes:\n    results (List[GetResultItem]): A list of retrieved items with requested fields."
-      },
-      "GetResultItemModel": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "metadata": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Metadata"
-          },
-          "contents": {
-            "anyOf": [
-              {
-                "type": "string",
-                "format": "binary"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Contents"
-          },
-          "vector": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Vector"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id"
-        ],
-        "title": "GetResultItemModel",
-        "description": "Represents an individual item retrieved from the encrypted index.\n\nAttributes:\n    id (str): The unique identifier of the item.\n    metadata (Optional[Dict[str, Any]]): Additional metadata associated with the item.\n    contents (Optional[bytes]): The raw byte contents of the item.\n    vector (Optional[List[float]]): The vector representation of the item."
-      },
-      "HTTPValidationError": {
-        "properties": {
-          "detail": {
-            "items": {
-              "$ref": "#/components/schemas/ValidationError"
-            },
-            "type": "array",
-            "title": "Detail"
-          }
-        },
-        "type": "object",
-        "title": "HTTPValidationError"
-      },
-      "IndexIVFFlatModel": {
-        "properties": {
-          "dimension": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dimension"
-          },
-          "type": {
-            "type": "string",
-            "title": "Type",
-            "default": "ivfflat"
-          }
-        },
-        "type": "object",
-        "title": "IndexIVFFlatModel",
-        "description": "Model for configuring an IVFFlat (Inverted File with Flat quantization) index.\n\nAttributes:\n    type (str): Index type identifier. Defaults to \"ivfflat\"."
-      },
-      "IndexIVFModel": {
-        "properties": {
-          "dimension": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dimension"
-          },
-          "type": {
-            "type": "string",
-            "title": "Type",
-            "default": "ivf"
-          }
-        },
-        "type": "object",
-        "title": "IndexIVFModel",
-        "description": "Model for configuring an IVF (Inverted File) index.\n\nAttributes:\n    type (str): Index type identifier. Defaults to \"ivf\"."
-      },
-      "IndexIVFPQModel": {
-        "properties": {
-          "dimension": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Dimension"
-          },
-          "type": {
-            "type": "string",
-            "title": "Type",
-            "default": "ivfpq"
-          },
-          "pq_dim": {
-            "type": "integer",
-            "title": "Pq Dim"
-          },
-          "pq_bits": {
-            "type": "integer",
-            "title": "Pq Bits"
-          }
-        },
-        "type": "object",
-        "required": [
-          "pq_dim",
-          "pq_bits"
-        ],
-        "title": "IndexIVFPQModel",
-        "description": "Model for configuring an IVFPQ (Inverted File with Product Quantization) index.\n\nAttributes:\n    type (str): Index type identifier. Defaults to \"ivfpq\".\n    pq_dim (int): Dimensionality of PQ codes.\n    pq_bits (int): Number of bits per quantizer."
-      },
-      "IndexInfoResponseModel": {
-        "properties": {
-          "index_name": {
-            "type": "string",
-            "title": "Index Name"
-          },
-          "index_type": {
-            "type": "string",
-            "title": "Index Type"
-          },
-          "is_trained": {
-            "type": "boolean",
-            "title": "Is Trained"
-          },
-          "index_config": {
-            "additionalProperties": true,
-            "type": "object",
-            "title": "Index Config"
-          }
-        },
-        "type": "object",
-        "required": [
-          "index_name",
-          "index_type",
-          "is_trained",
-          "index_config"
-        ],
-        "title": "IndexInfoResponseModel",
-        "description": "Response model for retrieving information about an index.\n\nAttributes:\n    index_name (str): The name of the index.\n    index_type (str): The type of index (e.g., IVF, IVFFlat, IVFPQ).\n    is_trained (bool): Indicates whether the index has been trained.\n    index_config (Dict[str, Any]): The full configuration details of the index."
-      },
-      "IndexListResponseModel": {
-        "properties": {
-          "indexes": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Indexes"
-          }
-        },
-        "type": "object",
-        "required": [
-          "indexes"
-        ],
-        "title": "IndexListResponseModel",
-        "description": "Response model for listing all indexes.\n\nAttributes:\n    indexes (List[str]): List of available index names."
-      },
-      "IndexOperationRequest": {
-        "properties": {
-          "index_key": {
-            "type": "string",
-            "title": "Index Key",
-            "description": "32-byte encryption key as hex string"
-          },
-          "index_name": {
-            "type": "string",
-            "title": "Index Name",
-            "description": "ID name"
-          }
-        },
-        "type": "object",
-        "required": [
-          "index_key",
-          "index_name"
-        ],
-        "title": "IndexOperationRequest",
-        "description": "Request model for performing operations on an existing index (e.g., delete, describe).\n\nAttributes:\n    index_key (str): A 32-byte encryption key as a hex string.\n    index_name (str): The name/identifier of the index."
-      },
-      "ListIDsRequest": {
-        "properties": {
-          "index_key": {
-            "type": "string",
-            "title": "Index Key",
-            "description": "32-byte encryption key as hex string"
-          },
-          "index_name": {
-            "type": "string",
-            "title": "Index Name",
-            "description": "ID name"
-          }
-        },
-        "type": "object",
-        "required": [
-          "index_key",
-          "index_name"
-        ],
-        "title": "ListIDsRequest",
-        "description": "Request model for listing all IDs in the index.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`."
-      },
-      "ListIDsResponse": {
-        "properties": {
-          "ids": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Ids"
-          },
-          "count": {
-            "type": "integer",
-            "title": "Count"
-          }
-        },
-        "type": "object",
-        "required": [
-          "ids",
-          "count"
-        ],
-        "title": "ListIDsResponse",
-        "description": "Response model for listing all IDs in the index.\n\nAttributes:\n    ids (List[str]): List of all item IDs in the index.\n    count (int): Total number of IDs in the index."
-      },
-      "QueryRequest": {
-        "properties": {
-          "index_key": {
-            "type": "string",
-            "title": "Index Key",
-            "description": "32-byte encryption key as hex string"
-          },
-          "index_name": {
-            "type": "string",
-            "title": "Index Name",
-            "description": "ID name"
-          },
-          "query_vectors": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Query Vectors"
-          },
-          "query_contents": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Query Contents"
-          },
-          "top_k": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Top K"
-          },
-          "n_probes": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Probes"
-          },
-          "greedy": {
-            "anyOf": [
-              {
-                "type": "boolean"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Greedy"
-          },
-          "filters": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Filters",
-            "default": {
+        Returns:
+            dict: Training status information including:
+                - training_indexes: List of index names currently being trained
+                - retrain_threshold: The multiplier used for the retraining threshold
+      operationId: get_training_status_v1_indexes_training_status_get
+      responses:
+        "200":
+          content:
+            application/json:
+              schema: {}
+          description: Successful Response
+      summary: Get Training Status
+  /v1/vectors/upsert:
+    post:
+      description: |-
+        Add or update vectors in the index.
 
-            }
-          },
-          "include": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Include",
-            "default": [
-              "distance",
-              "metadata"
-            ]
-          }
-        },
-        "type": "object",
-        "required": [
-          "index_key",
-          "index_name"
-        ],
-        "title": "QueryRequest",
-        "description": "Request model for performing a similarity search in the encrypted index.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    query_vectors (Optional[List[float]]): The vector used for the similarity search.\n    query_contents (Optional[str]): Text-based content used for semantic search.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    filters (Optional[Dict[str, Any]]): JSON-like dictionary specifying metadata filters. Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[\"distance\", \"metadata\"]`."
-      },
-      "QueryResponse": {
-        "properties": {
-          "results": {
-            "anyOf": [
-              {
-                "items": {
-                  "$ref": "#/components/schemas/QueryResultItem"
-                },
-                "type": "array"
-              },
-              {
-                "items": {
-                  "items": {
-                    "$ref": "#/components/schemas/QueryResultItem"
-                  },
-                  "type": "array"
-                },
-                "type": "array"
-              }
-            ],
-            "title": "Results"
-          }
-        },
-        "type": "object",
-        "required": [
-          "results"
-        ],
-        "title": "QueryResponse",
-        "description": "Response model for similarity search queries.\n\nAttributes:\n    results (List[QueryResultItem]): List of search results."
-      },
-      "QueryResultItem": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "distance": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Distance"
-          },
-          "metadata": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Metadata"
-          },
-          "vector": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Vector"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id"
-        ],
-        "title": "QueryResultItem",
-        "description": "Represents a single result from a similarity search.\n\nAttributes:\n    id (str): The identifier of the retrieved item.\n    distance (Optional[float]): Distance from the query vector (smaller = more similar).\n    metadata (Optional[Dict[str, Any]]): Additional metadata for the result.\n    vector (Optional[List[float]]): The retrieved vector (if included in response)."
-      },
-      "TrainRequest": {
-        "properties": {
-          "index_key": {
-            "type": "string",
-            "title": "Index Key",
-            "description": "32-byte encryption key as hex string"
-          },
-          "index_name": {
-            "type": "string",
-            "title": "Index Name",
-            "description": "ID name"
-          },
-          "n_lists": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "N Lists"
-          },
-          "batch_size": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Batch Size"
-          },
-          "max_iters": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Iters"
-          },
-          "tolerance": {
-            "anyOf": [
-              {
-                "type": "number"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Tolerance"
-          },
-          "max_memory": {
-            "anyOf": [
-              {
-                "type": "integer"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Max Memory"
-          }
-        },
-        "type": "object",
-        "required": [
-          "index_key",
-          "index_name"
-        ],
-        "title": "TrainRequest",
-        "description": "Request model for training an index.\n\nAttributes:\n    n_lists (Optional[int]): Number of lists/clusters for the index. Default is auto.\n    batch_size (Optional[int]): Size of each batch for training. Default is 2048.\n    max_iters (Optional[int]): Maximum iterations for training. Default is 100.\n    tolerance (Optional[float]): Convergence tolerance for training. Default is 1e-6.\n    max_memory (Optional[int]): Maximum memory (MB) usage during training. Default is 0 (no limit)."
-      },
-      "UpsertRequest": {
-        "properties": {
-          "index_key": {
-            "type": "string",
-            "title": "Index Key",
-            "description": "32-byte encryption key as hex string"
-          },
-          "index_name": {
-            "type": "string",
-            "title": "Index Name",
-            "description": "ID name"
-          },
-          "items": {
-            "items": {
-              "$ref": "#/components/schemas/VectorItem"
-            },
-            "type": "array",
-            "title": "Items"
-          }
-        },
-        "type": "object",
-        "required": [
-          "index_key",
-          "index_name",
-          "items"
-        ],
-        "title": "UpsertRequest",
-        "description": "Request model for adding or updating vectors in an encrypted index.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    items (List[VectorItem]): List of vector items to be inserted or updated."
-      },
-      "ValidationError": {
-        "properties": {
-          "loc": {
-            "items": {
-              "anyOf": [
-                {
-                  "type": "string"
-                },
-                {
-                  "type": "integer"
-                }
-              ]
-            },
-            "type": "array",
-            "title": "Location"
-          },
-          "msg": {
-            "type": "string",
-            "title": "Message"
-          },
-          "type": {
-            "type": "string",
-            "title": "Error Type"
-          }
-        },
-        "type": "object",
-        "required": [
-          "loc",
-          "msg",
-          "type"
-        ],
-        "title": "ValidationError"
-      },
-      "VectorItem": {
-        "properties": {
-          "id": {
-            "type": "string",
-            "title": "Id"
-          },
-          "vector": {
-            "anyOf": [
-              {
-                "items": {
-                  "type": "number"
-                },
-                "type": "array"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Vector"
-          },
-          "contents": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "string",
-                "format": "binary"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Contents"
-          },
-          "metadata": {
-            "anyOf": [
-              {
-                "additionalProperties": true,
-                "type": "object"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Metadata"
-          }
-        },
-        "type": "object",
-        "required": [
-          "id"
-        ],
-        "title": "VectorItem",
-        "description": "Represents a vectorized item for storage in the encrypted index.\n\nAttributes:\n    id (str): Unique identifier for the vector item.\n    vector (Optional[List[float]]): The vector representation of the item.\n    contents (Optional[Union[str, bytes]]): The original text or associated content (can be string or bytes).\n    metadata (Optional[Dict[str, Any]]): Additional metadata associated with the item."
-      },
-      "cyborgdb_service__api__schemas__index__SuccessResponseModel": {
-        "properties": {
-          "status": {
-            "type": "string",
-            "title": "Status",
-            "default": "success"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          }
-        },
-        "type": "object",
-        "required": [
-          "message"
-        ],
-        "title": "SuccessResponseModel",
-        "description": "Standard success response model.\n\nAttributes:\n    status (str): The status of the response. Defaults to \"success\".\n    message (str): A success message."
-      },
-      "cyborgdb_service__api__schemas__vectors__SuccessResponseModel": {
-        "properties": {
-          "status": {
-            "type": "string",
-            "title": "Status",
-            "default": "success"
-          },
-          "message": {
-            "type": "string",
-            "title": "Message"
-          }
-        },
-        "type": "object",
-        "required": [
-          "message"
-        ],
-        "title": "SuccessResponseModel",
-        "description": "Standard success response model for operations like upsert and delete.\n\nAttributes:\n    status (str): Operation status. Defaults to `\"success\"`.\n    message (str): Descriptive success message."
-      }
-    },
-    "securitySchemes": {
-      "APIKeyHeader": {
-        "type": "apiKey",
-        "in": "header",
-        "name": "X-API-Key"
-      }
-    }
-  }
-}
+        After upserting, checks if the index needs training/retraining based on the
+        number of vectors and triggers automatic training if needed.
+      operationId: upsert_vectors_v1_vectors_upsert_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/cyborgdb_service__api__schemas__vectors__SuccessResponseModel'
+          description: Successful response
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Permission denied from license issue
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Unexpected server error
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      security:
+      - APIKeyHeader: []
+      summary: Add Items to Encrypted Index
+  /v1/vectors/query:
+    post:
+      description: Search for nearest neighbors in the index.
+      operationId: query_vectors_v1_vectors_query_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Request'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QueryResponse'
+          description: Successful response
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Permission denied from license issue
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Unexpected server error
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      security:
+      - APIKeyHeader: []
+      summary: Query Encrypted Index
+  /v1/vectors/get:
+    post:
+      description: Retrieve vectors by their IDs.
+      operationId: get_vectors_v1_vectors_get_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GetRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GetResponseModel'
+          description: Successful response
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Permission denied from license issue
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Unexpected server error
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      security:
+      - APIKeyHeader: []
+      summary: Get Items from Encrypted Index
+  /v1/vectors/delete:
+    post:
+      description: Delete vectors by their IDs.
+      operationId: delete_vectors_v1_vectors_delete_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/DeleteRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/cyborgdb_service__api__schemas__vectors__SuccessResponseModel'
+          description: Successful response
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Unable to find item to delete
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Unexpected server error
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      security:
+      - APIKeyHeader: []
+      summary: Delete Items from Encrypted Index
+  /v1/vectors/list_ids:
+    post:
+      description: |-
+        List all item IDs currently stored in the index.
+
+        Returns a list of all IDs and the total count.
+      operationId: list_ids_v1_vectors_list_ids_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ListIDsRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ListIDsResponse'
+          description: Successful Response
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      security:
+      - APIKeyHeader: []
+      summary: List all IDs in an index
+  /v1/vectors/num_vectors:
+    post:
+      description: Get the number of vectors stored in an index
+      operationId: get_index_size_v1_vectors_num_vectors_post
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/IndexOperationRequest'
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/cyborgdb_service__api__schemas__vectors__SuccessResponseModel'
+          description: Successful response
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Permission denied from license issue
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponseModel'
+          description: Unexpected server error
+        "422":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HTTPValidationError'
+          description: Validation Error
+      security:
+      - APIKeyHeader: []
+      summary: Get the number of vectors in an index
+components:
+  schemas:
+    BatchQueryRequest:
+      description: |-
+        Request model for batch similarity search.
+
+        Inherits:
+            IndexOperationRequest: Includes `index_name` and `index_key`.
+
+        Attributes:
+            query_vectors (List[List[float]]): List of vectors to search for in batch mode.
+            top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.
+            n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.
+            greedy (Optional[bool]): Whether to use greedy search. Defaults to False.
+            filters (Optional[Dict[str, Any]]): JSON-like dictionary specifying metadata filters. Defaults to {}.
+            include (List[str]): List of additional fields to include in the response. Defaults to `["distance", "metadata"]`.
+      properties:
+        index_key:
+          description: 32-byte encryption key as hex string
+          title: Index Key
+          type: string
+        index_name:
+          description: ID name
+          title: Index Name
+          type: string
+        query_vectors:
+          items:
+            items:
+              type: number
+            type: array
+          type: array
+        top_k:
+          nullable: true
+          type: integer
+        n_probes:
+          nullable: true
+          type: integer
+        greedy:
+          nullable: true
+          type: boolean
+        filters:
+          additionalProperties: true
+          nullable: true
+          type: object
+        include:
+          default:
+          - distance
+          - metadata
+          items:
+            type: string
+          type: array
+      required:
+      - index_key
+      - index_name
+      - query_vectors
+      title: BatchQueryRequest
+    CreateIndexRequest:
+      description: "Request model for creating a new encrypted index.\n\nAttributes:\n\
+        \    index_config (Optional[Union[IndexIVFModel, IndexIVFPQModel, IndexIVFFlatModel]]):\
+        \ \n        Optional configuration model for the index.\n    index_key (str):\
+        \ A 32-byte encryption key as a hex string.\n    index_name (str): The name/identifier\
+        \ of the index.\n    embedding_model (Optional[str]): Optional embedding model\
+        \ name.\n    metric (Optional[str]): Optional distance metric."
+      example:
+        index_config:
+          type: ivf
+          dimension: 0
+        index_key: index_key
+        metric: metric
+        embedding_model: embedding_model
+        index_name: index_name
+      properties:
+        index_config:
+          $ref: '#/components/schemas/Index_Config'
+        index_key:
+          description: 32-byte encryption key as hex string
+          title: Index Key
+          type: string
+        index_name:
+          description: ID name
+          title: Index Name
+          type: string
+        embedding_model:
+          nullable: true
+          type: string
+        metric:
+          nullable: true
+          type: string
+      required:
+      - index_key
+      - index_name
+      title: CreateIndexRequest
+    DeleteRequest:
+      description: |-
+        Request model for deleting vectors from the encrypted index.
+
+        Inherits:
+            IndexOperationRequest: Includes `index_name` and `index_key`.
+
+        Attributes:
+            ids (List[str]): List of vector item IDs to be deleted.
+      example:
+        index_key: index_key
+        ids:
+        - ids
+        - ids
+        index_name: index_name
+      properties:
+        index_key:
+          description: 32-byte encryption key as hex string
+          title: Index Key
+          type: string
+        index_name:
+          description: ID name
+          title: Index Name
+          type: string
+        ids:
+          items:
+            type: string
+          type: array
+      required:
+      - ids
+      - index_key
+      - index_name
+      title: DeleteRequest
+    ErrorResponseModel:
+      description: |-
+        Standard error response model.
+
+        Attributes:
+            status_code (int): HTTP status code of the error.
+            detail (str): A detailed message describing the error.
+      example:
+        status_code: 0
+        detail: detail
+      properties:
+        status_code:
+          title: Status Code
+          type: integer
+        detail:
+          title: Detail
+          type: string
+      required:
+      - detail
+      - status_code
+      title: ErrorResponseModel
+    GetRequest:
+      description: "Request model for retrieving specific vectors from the index.\n\
+        \nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\
+        \nAttributes:\n    ids (List[str]): List of vector item IDs to retrieve.\n\
+        \    include (List[str]): List of fields to include in the response. \n  \
+        \      Defaults to `[\"vector\", \"contents\", \"metadata\"]`."
+      example:
+        index_key: index_key
+        include:
+        - include
+        - include
+        ids:
+        - ids
+        - ids
+        index_name: index_name
+      properties:
+        index_key:
+          description: 32-byte encryption key as hex string
+          title: Index Key
+          type: string
+        index_name:
+          description: ID name
+          title: Index Name
+          type: string
+        ids:
+          items:
+            type: string
+          type: array
+        include:
+          default:
+          - vector
+          - contents
+          - metadata
+          items:
+            type: string
+          type: array
+      required:
+      - ids
+      - index_key
+      - index_name
+      title: GetRequest
+    GetResponseModel:
+      description: |-
+        Response model for retrieving multiple encrypted index items.
+
+        Attributes:
+            results (List[GetResultItem]): A list of retrieved items with requested fields.
+      example:
+        results:
+        - metadata:
+            key: ""
+          contents: ""
+          vector:
+          - 0.8008281904610115
+          - 0.8008281904610115
+          id: id
+        - metadata:
+            key: ""
+          contents: ""
+          vector:
+          - 0.8008281904610115
+          - 0.8008281904610115
+          id: id
+      properties:
+        results:
+          items:
+            $ref: '#/components/schemas/GetResultItemModel'
+          type: array
+      required:
+      - results
+      title: GetResponseModel
+    GetResultItemModel:
+      description: |-
+        Represents an individual item retrieved from the encrypted index.
+
+        Attributes:
+            id (str): The unique identifier of the item.
+            metadata (Optional[Dict[str, Any]]): Additional metadata associated with the item.
+            contents (Optional[bytes]): The raw byte contents of the item.
+            vector (Optional[List[float]]): The vector representation of the item.
+      example:
+        metadata:
+          key: ""
+        contents: ""
+        vector:
+        - 0.8008281904610115
+        - 0.8008281904610115
+        id: id
+      properties:
+        id:
+          title: Id
+          type: string
+        metadata:
+          additionalProperties: true
+          nullable: true
+          type: object
+        contents:
+          format: binary
+          nullable: true
+          type: string
+        vector:
+          items:
+            type: number
+          nullable: true
+          type: array
+      required:
+      - id
+      title: GetResultItemModel
+    HTTPValidationError:
+      example:
+        detail:
+        - msg: msg
+          loc:
+          - ValidationError_loc_inner
+          - ValidationError_loc_inner
+          type: type
+        - msg: msg
+          loc:
+          - ValidationError_loc_inner
+          - ValidationError_loc_inner
+          type: type
+      properties:
+        detail:
+          items:
+            $ref: '#/components/schemas/ValidationError'
+          type: array
+      title: HTTPValidationError
+    IndexIVFFlatModel:
+      description: |-
+        Model for configuring an IVFFlat (Inverted File with Flat quantization) index.
+
+        Attributes:
+            type (str): Index type identifier. Defaults to "ivfflat".
+      properties:
+        dimension:
+          nullable: true
+          type: integer
+        type:
+          default: ivfflat
+          title: Type
+          type: string
+      title: IndexIVFFlatModel
+    IndexIVFModel:
+      description: |-
+        Model for configuring an IVF (Inverted File) index.
+
+        Attributes:
+            type (str): Index type identifier. Defaults to "ivf".
+      example:
+        type: ivf
+        dimension: 0
+      properties:
+        dimension:
+          nullable: true
+          type: integer
+        type:
+          default: ivf
+          title: Type
+          type: string
+      title: IndexIVFModel
+    IndexIVFPQModel:
+      description: |-
+        Model for configuring an IVFPQ (Inverted File with Product Quantization) index.
+
+        Attributes:
+            type (str): Index type identifier. Defaults to "ivfpq".
+            pq_dim (int): Dimensionality of PQ codes.
+            pq_bits (int): Number of bits per quantizer.
+      properties:
+        dimension:
+          nullable: true
+          type: integer
+        type:
+          default: ivfpq
+          title: Type
+          type: string
+        pq_dim:
+          title: Pq Dim
+          type: integer
+        pq_bits:
+          title: Pq Bits
+          type: integer
+      required:
+      - pq_bits
+      - pq_dim
+      title: IndexIVFPQModel
+    IndexInfoResponseModel:
+      description: |-
+        Response model for retrieving information about an index.
+
+        Attributes:
+            index_name (str): The name of the index.
+            index_type (str): The type of index (e.g., IVF, IVFFlat, IVFPQ).
+            is_trained (bool): Indicates whether the index has been trained.
+            index_config (Dict[str, Any]): The full configuration details of the index.
+      example:
+        index_config:
+          key: ""
+        is_trained: true
+        index_name: index_name
+        index_type: index_type
+      properties:
+        index_name:
+          title: Index Name
+          type: string
+        index_type:
+          title: Index Type
+          type: string
+        is_trained:
+          title: Is Trained
+          type: boolean
+        index_config:
+          additionalProperties: true
+          title: Index Config
+          type: object
+      required:
+      - index_config
+      - index_name
+      - index_type
+      - is_trained
+      title: IndexInfoResponseModel
+    IndexListResponseModel:
+      description: |-
+        Response model for listing all indexes.
+
+        Attributes:
+            indexes (List[str]): List of available index names.
+      example:
+        indexes:
+        - indexes
+        - indexes
+      properties:
+        indexes:
+          items:
+            type: string
+          type: array
+      required:
+      - indexes
+      title: IndexListResponseModel
+    IndexOperationRequest:
+      description: |-
+        Request model for performing operations on an existing index (e.g., delete, describe).
+
+        Attributes:
+            index_key (str): A 32-byte encryption key as a hex string.
+            index_name (str): The name/identifier of the index.
+      example:
+        index_key: index_key
+        index_name: index_name
+      properties:
+        index_key:
+          description: 32-byte encryption key as hex string
+          title: Index Key
+          type: string
+        index_name:
+          description: ID name
+          title: Index Name
+          type: string
+      required:
+      - index_key
+      - index_name
+      title: IndexOperationRequest
+    ListIDsRequest:
+      description: |-
+        Request model for listing all IDs in the index.
+
+        Inherits:
+            IndexOperationRequest: Includes `index_name` and `index_key`.
+      example:
+        index_key: index_key
+        index_name: index_name
+      properties:
+        index_key:
+          description: 32-byte encryption key as hex string
+          title: Index Key
+          type: string
+        index_name:
+          description: ID name
+          title: Index Name
+          type: string
+      required:
+      - index_key
+      - index_name
+      title: ListIDsRequest
+    ListIDsResponse:
+      description: |-
+        Response model for listing all IDs in the index.
+
+        Attributes:
+            ids (List[str]): List of all item IDs in the index.
+            count (int): Total number of IDs in the index.
+      example:
+        count: 0
+        ids:
+        - ids
+        - ids
+      properties:
+        ids:
+          items:
+            type: string
+          type: array
+        count:
+          title: Count
+          type: integer
+      required:
+      - count
+      - ids
+      title: ListIDsResponse
+    QueryRequest:
+      description: |-
+        Request model for performing a similarity search in the encrypted index.
+
+        Inherits:
+            IndexOperationRequest: Includes `index_name` and `index_key`.
+
+        Attributes:
+            query_vectors (Optional[List[float]]): The vector used for the similarity search.
+            query_contents (Optional[str]): Text-based content used for semantic search.
+            top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.
+            n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.
+            greedy (Optional[bool]): Whether to use greedy search. Defaults to False.
+            filters (Optional[Dict[str, Any]]): JSON-like dictionary specifying metadata filters. Defaults to {}.
+            include (List[str]): List of additional fields to include in the response. Defaults to `["distance", "metadata"]`.
+      example:
+        index_key: index_key
+        query_contents: query_contents
+        include:
+        - include
+        - include
+        query_vectors:
+        - 0.8008281904610115
+        - 0.8008281904610115
+        top_k: 6
+        greedy: true
+        filters:
+          key: ""
+        index_name: index_name
+        n_probes: 1
+      properties:
+        index_key:
+          description: 32-byte encryption key as hex string
+          title: Index Key
+          type: string
+        index_name:
+          description: ID name
+          title: Index Name
+          type: string
+        query_vectors:
+          items:
+            type: number
+          nullable: true
+          type: array
+        query_contents:
+          nullable: true
+          type: string
+        top_k:
+          nullable: true
+          type: integer
+        n_probes:
+          nullable: true
+          type: integer
+        greedy:
+          nullable: true
+          type: boolean
+        filters:
+          additionalProperties: true
+          nullable: true
+          type: object
+        include:
+          default:
+          - distance
+          - metadata
+          items:
+            type: string
+          type: array
+      required:
+      - index_key
+      - index_name
+      title: QueryRequest
+    QueryResponse:
+      description: |-
+        Response model for similarity search queries.
+
+        Attributes:
+            results (List[QueryResultItem]): List of search results.
+      example:
+        results:
+        - metadata:
+            key: ""
+          distance: 0.8008281904610115
+          vector:
+          - 6.027456183070403
+          - 6.027456183070403
+          id: id
+        - metadata:
+            key: ""
+          distance: 0.8008281904610115
+          vector:
+          - 6.027456183070403
+          - 6.027456183070403
+          id: id
+      properties:
+        results:
+          $ref: '#/components/schemas/Results'
+      required:
+      - results
+      title: QueryResponse
+    QueryResultItem:
+      description: |-
+        Represents a single result from a similarity search.
+
+        Attributes:
+            id (str): The identifier of the retrieved item.
+            distance (Optional[float]): Distance from the query vector (smaller = more similar).
+            metadata (Optional[Dict[str, Any]]): Additional metadata for the result.
+            vector (Optional[List[float]]): The retrieved vector (if included in response).
+      example:
+        metadata:
+          key: ""
+        distance: 0.8008281904610115
+        vector:
+        - 6.027456183070403
+        - 6.027456183070403
+        id: id
+      properties:
+        id:
+          title: Id
+          type: string
+        distance:
+          nullable: true
+          type: number
+        metadata:
+          additionalProperties: true
+          nullable: true
+          type: object
+        vector:
+          items:
+            type: number
+          nullable: true
+          type: array
+      required:
+      - id
+      title: QueryResultItem
+    TrainRequest:
+      description: |-
+        Request model for training an index.
+
+        Attributes:
+            n_lists (Optional[int]): Number of lists/clusters for the index. Default is auto.
+            batch_size (Optional[int]): Size of each batch for training. Default is 2048.
+            max_iters (Optional[int]): Maximum iterations for training. Default is 100.
+            tolerance (Optional[float]): Convergence tolerance for training. Default is 1e-6.
+            max_memory (Optional[int]): Maximum memory (MB) usage during training. Default is 0 (no limit).
+      example:
+        index_key: index_key
+        batch_size: 6
+        n_lists: 0
+        max_iters: 1
+        index_name: index_name
+        tolerance: 5.962133916683182
+        max_memory: 5
+      properties:
+        index_key:
+          description: 32-byte encryption key as hex string
+          title: Index Key
+          type: string
+        index_name:
+          description: ID name
+          title: Index Name
+          type: string
+        n_lists:
+          nullable: true
+          type: integer
+        batch_size:
+          nullable: true
+          type: integer
+        max_iters:
+          nullable: true
+          type: integer
+        tolerance:
+          nullable: true
+          type: number
+        max_memory:
+          nullable: true
+          type: integer
+      required:
+      - index_key
+      - index_name
+      title: TrainRequest
+    UpsertRequest:
+      description: |-
+        Request model for adding or updating vectors in an encrypted index.
+
+        Inherits:
+            IndexOperationRequest: Includes `index_name` and `index_key`.
+
+        Attributes:
+            items (List[VectorItem]): List of vector items to be inserted or updated.
+      example:
+        index_key: index_key
+        index_name: index_name
+        items:
+        - metadata:
+            key: ""
+          contents: Contents
+          vector:
+          - 0.8008281904610115
+          - 0.8008281904610115
+          id: id
+        - metadata:
+            key: ""
+          contents: Contents
+          vector:
+          - 0.8008281904610115
+          - 0.8008281904610115
+          id: id
+      properties:
+        index_key:
+          description: 32-byte encryption key as hex string
+          title: Index Key
+          type: string
+        index_name:
+          description: ID name
+          title: Index Name
+          type: string
+        items:
+          items:
+            $ref: '#/components/schemas/VectorItem'
+          type: array
+      required:
+      - index_key
+      - index_name
+      - items
+      title: UpsertRequest
+    ValidationError:
+      example:
+        msg: msg
+        loc:
+        - ValidationError_loc_inner
+        - ValidationError_loc_inner
+        type: type
+      properties:
+        loc:
+          items:
+            $ref: '#/components/schemas/ValidationError_loc_inner'
+          type: array
+        msg:
+          title: Message
+          type: string
+        type:
+          title: Error Type
+          type: string
+      required:
+      - loc
+      - msg
+      - type
+      title: ValidationError
+    VectorItem:
+      description: |-
+        Represents a vectorized item for storage in the encrypted index.
+
+        Attributes:
+            id (str): Unique identifier for the vector item.
+            vector (Optional[List[float]]): The vector representation of the item.
+            contents (Optional[Union[str, bytes]]): The original text or associated content (can be string or bytes).
+            metadata (Optional[Dict[str, Any]]): Additional metadata associated with the item.
+      example:
+        metadata:
+          key: ""
+        contents: Contents
+        vector:
+        - 0.8008281904610115
+        - 0.8008281904610115
+        id: id
+      properties:
+        id:
+          title: Id
+          type: string
+        vector:
+          items:
+            type: number
+          nullable: true
+          type: array
+        contents:
+          $ref: '#/components/schemas/Contents'
+        metadata:
+          additionalProperties: true
+          nullable: true
+          type: object
+      required:
+      - id
+      title: VectorItem
+    cyborgdb_service__api__schemas__index__SuccessResponseModel:
+      description: |-
+        Standard success response model.
+
+        Attributes:
+            status (str): The status of the response. Defaults to "success".
+            message (str): A success message.
+      example:
+        message: message
+        status: success
+      properties:
+        status:
+          default: success
+          title: Status
+          type: string
+        message:
+          title: Message
+          type: string
+      required:
+      - message
+      title: SuccessResponseModel
+    cyborgdb_service__api__schemas__vectors__SuccessResponseModel:
+      description: |-
+        Standard success response model for operations like upsert and delete.
+
+        Attributes:
+            status (str): Operation status. Defaults to `"success"`.
+            message (str): Descriptive success message.
+      example:
+        message: message
+        status: success
+      properties:
+        status:
+          default: success
+          title: Status
+          type: string
+        message:
+          title: Message
+          type: string
+      required:
+      - message
+      title: SuccessResponseModel
+    Request:
+      anyOf:
+      - $ref: '#/components/schemas/QueryRequest'
+      - $ref: '#/components/schemas/BatchQueryRequest'
+      title: Request
+    Index_Config:
+      anyOf:
+      - $ref: '#/components/schemas/IndexIVFModel'
+      - $ref: '#/components/schemas/IndexIVFPQModel'
+      - $ref: '#/components/schemas/IndexIVFFlatModel'
+      nullable: true
+      title: Index Config
+    Results:
+      anyOf:
+      - items:
+          $ref: '#/components/schemas/QueryResultItem'
+        type: array
+      - items:
+          items:
+            $ref: '#/components/schemas/QueryResultItem'
+          type: array
+        type: array
+      title: Results
+    ValidationError_loc_inner:
+      anyOf:
+      - type: string
+      - type: integer
+    Contents:
+      anyOf:
+      - type: string
+      - format: binary
+        type: string
+      nullable: true
+      title: Contents
+  securitySchemes:
+    APIKeyHeader:
+      in: header
+      name: X-API-Key
+      type: apiKey
