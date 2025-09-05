@@ -69,6 +69,39 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 //   - *QueryResponse with nearest neighbors, distances, and metadata
 //   - error on failure
 func (e *EncryptedIndex) Query(ctx context.Context, params QueryParams) (*QueryResponse, error) {
+	// Handle batch queries separately
+	if len(params.BatchQueryVectors) > 0 {
+		batchReq := internal.BatchQueryRequest{
+			IndexName:    e.indexName,
+			IndexKey:     e.indexKey,
+			QueryVectors: params.BatchQueryVectors,
+			Filters:      params.Filters,
+			Include:      params.Include,
+		}
+		
+		// Handle nullable fields for batch request
+		if params.TopK != 0 {
+			batchReq.TopK = *internal.NewNullableInt32(&params.TopK)
+		}
+		
+		if params.NProbes != nil {
+			batchReq.NProbes = *internal.NewNullableInt32(params.NProbes)
+		}
+		
+		if params.Greedy != nil {
+			batchReq.Greedy = *internal.NewNullableBool(params.Greedy)
+		}
+		
+		request := internal.Request{
+			BatchQueryRequest: &batchReq,
+		}
+		result, _, err := e.client.APIClient.DefaultAPI.QueryVectorsV1VectorsQueryPost(ctx).
+			Request(request).
+			Execute()
+		return result, err
+	}
+	
+	// Handle single query
 	req := internal.QueryRequest{
 		IndexName: e.indexName,
 		IndexKey:  e.indexKey,
@@ -76,15 +109,7 @@ func (e *EncryptedIndex) Query(ctx context.Context, params QueryParams) (*QueryR
 		Include:   params.Include,
 	}
 	
-	// Handle query vectors - merge single and batch into single field
-	if len(params.BatchQueryVectors) > 0 {
-		// Flatten batch query vectors into single slice
-		var allVectors []float32
-		for _, batch := range params.BatchQueryVectors {
-			allVectors = append(allVectors, batch...)
-		}
-		req.QueryVectors = allVectors
-	} else if params.QueryVector != nil {
+	if params.QueryVector != nil {
 		req.QueryVectors = params.QueryVector
 	}
 	

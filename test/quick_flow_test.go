@@ -36,7 +36,7 @@ const (
 	// Index type configuration - change this to test different index types
 	// Options: "ivf", "ivfflat", "ivfpq"
 	// NOTE: "ivf" is IndexIVF, "ivfflat" is IndexIVFFlat, "ivfpq" is IndexIVFPQ
-	indexType = "ivfpq"
+	indexType = "ivfflat"
 )
 
 // Variables for taking addresses
@@ -517,6 +517,9 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryNoMetadata() {
 			Filters:           map[string]interface{}{},
 			Include:           []string{"metadata"},
 		}
+		fmt.Printf("Batch query with %d vectors\n", len(batchVectors))
+		//print the length of batchVectors[0]
+		fmt.Printf("First vector dimension: %d\n", len(batchVectors[0]))
 		response, err := suite.index.Query(context.Background(), params)
 		require.NoError(t, err)
 		batchResults := extractBatchResults(response.Results)
