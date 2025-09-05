@@ -97,9 +97,15 @@ type CyborgDBIntegrationTestSuite struct {
 	indexName   string
 	indexKey    []byte
 	indexKeyHex string
-	trainData   [][]float32
-	testData    [][]float32
-	dimension   int32
+	
+	// trainData contains vectors for populating the index (subset of sharedData.Train)
+	trainData [][]float32
+	
+	// testData contains query vectors for similarity search testing (subset of sharedData.Test)
+	testData [][]float32
+	
+	// dimension specifies the vector dimensionality for this test run
+	dimension int32
 }
 
 // Helper functions
@@ -149,6 +155,18 @@ func generateSyntheticNeighbors(numQueries, topK, totalVectors int) [][]int {
 	return neighbors
 }
 
+// generateSyntheticData creates deterministic test vectors when wiki data is unavailable.
+//
+// This function generates vectors with predictable patterns that enable meaningful
+// similarity search testing. Each vector is normalized and has unique characteristics
+// based on its index position.
+//
+// Parameters:
+//   - numVectors: Number of vectors to generate
+//   - dimension: Dimensionality of each vector
+//
+// Returns:
+//   - [][]float32: Array of normalized synthetic vectors
 func generateSyntheticData(numVectors, dimension int) [][]float32 {
 	data := make([][]float32, numVectors)
 	for i := range data {
@@ -249,7 +267,17 @@ func createIndexModel(dimension int32) cyborgdb.IndexModel {
 	}
 }
 
-// SetupSuite runs once before all tests
+// SetupSuite initializes the test environment once before all tests run.
+//
+// This method performs one-time setup including:
+//   - Validating the CYBORGDB_API_KEY environment variable
+//   - Creating a CyborgDB client with SSL verification disabled for testing
+//   - Verifying server connectivity via health check
+//   - Loading the wiki_data_sample.json dataset or generating synthetic fallback data
+//   - Preparing training and test data subsets for consistent test behavior
+//
+// The loaded data is stored in the global sharedData variable and reused across all tests
+// to avoid repeated file I/O and ensure consistent test conditions.
 func (suite *CyborgDBIntegrationTestSuite) SetupSuite() {
 	apiKey := os.Getenv("CYBORGDB_API_KEY")
 	if apiKey == "" {
@@ -299,7 +327,16 @@ func (suite *CyborgDBIntegrationTestSuite) SetupSuite() {
 	suite.testData = sharedData.Test[:numTestVectors]
 }
 
-// SetupTest runs before each test
+// SetupTest creates a fresh index before each test method runs.
+//
+// This method ensures test isolation by:
+//   - Generating a unique index name to avoid conflicts between tests
+//   - Creating a new 32-byte encryption key using the GenerateKey() function
+//   - Creating a new encrypted index with the configured index type
+//   - Storing the index handle in suite.index for use by test methods
+//
+// Each test gets a clean, empty index with predictable configuration,
+// ensuring tests don't interfere with each other.
 func (suite *CyborgDBIntegrationTestSuite) SetupTest() {
 	// Generate unique index name and key for each test
 	suite.indexName = generateTestIndexName()

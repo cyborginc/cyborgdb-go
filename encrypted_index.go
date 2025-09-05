@@ -1,4 +1,6 @@
-// encrypted_index.go
+// encrypted_index.go provides the EncryptedIndex type for encrypted vector operations.
+// This file implements the main interface for working with encrypted vector indexes,
+// including CRUD operations, similarity search, and index management.
 package cyborgdb
 
 import (
@@ -9,41 +11,108 @@ import (
 )
 
 var (
-	// ErrQueryVectorsInvalidType is returned when QueryOptions.QueryVectors has an invalid type.
+	// ErrQueryVectorsInvalidType is returned when QueryParams contains invalid query vector types.
+	// This occurs when query vectors are not properly formatted as []float32 or [][]float32.
 	ErrQueryVectorsInvalidType = fmt.Errorf("queryVectors must be []float32 for single vector queries or [][]float32 for batch queries")
-	// ErrMissingQueryInput is returned when neither QueryVectors nor QueryContents is provided.
+	
+	// ErrMissingQueryInput is returned when no query input is provided in QueryParams.
+	// At least one of QueryVector, BatchQueryVectors, or QueryContents must be specified.
 	ErrMissingQueryInput = fmt.Errorf("either queryVectors or queryContents must be provided")
 )
 
-// EncryptedIndex is the public handle for an encrypted vector index.
-// It wraps the internal implementation and exposes friendly methods.
+// EncryptedIndex provides a handle for performing operations on an encrypted vector index.
+//
+// This type encapsulates all the information needed to interact with a specific index,
+// including authentication credentials and cached metadata. It provides methods for:
+//
+//   - Vector operations: Upsert, Query, Get, Delete
+//   - Index management: Train, DeleteIndex, ListIDs
+//   - Metadata access: GetIndexName, GetIndexType, IsTrained, GetIndexConfig
+//
+// All vector data is encrypted end-to-end using the provided encryption key.
+// The index maintains a persistent connection to the CyborgDB service and
+// caches metadata to avoid unnecessary API calls.
+//
+// Instances should be created via Client.CreateIndex() or Client.LoadIndex().
 type EncryptedIndex struct {
+	// indexName is the unique identifier for this index
 	indexName string
-	indexKey  string
+	
+	// indexKey is the hex-encoded encryption key for end-to-end encryption
+	indexKey string
+	
+	// indexType indicates the index algorithm ("ivf", "ivfflat", "ivfpq")
 	indexType string
-	config    *internal.IndexConfig
-	trained   bool
-	client    *internal.Client
+	
+	// config holds the detailed index configuration, may be nil for loaded indexes
+	config *internal.IndexConfig
+	
+	// trained indicates whether the index has been optimized via training
+	trained bool
+	
+	// client provides access to the underlying API client
+	client *internal.Client
 }
 
-// GetIndexName returns the index name.
+// GetIndexName returns the unique name of this index.
+//
+// This is a cached value that doesn't require an API call.
+//
+// Returns:
+//   - string: The index name as specified during creation
 func (e *EncryptedIndex) GetIndexName() string { return e.indexName }
 
-// GetIndexType returns the index type ("ivf", "ivfpq", or "ivfflat").
+// GetIndexType returns the algorithm type of this index.
+//
+// This is a cached value that doesn't require an API call.
+//
+// Returns:
+//   - string: Index type ("ivf", "ivfflat", or "ivfpq")
 func (e *EncryptedIndex) GetIndexType() string { return e.indexType }
 
-// GetIndexConfig returns the full index configuration.
-func (e *EncryptedIndex) GetIndexConfig() internal.IndexConfig { 
+// GetIndexConfig returns the detailed configuration of this index.
+//
+// This is a cached value that doesn't require an API call. For indexes
+// loaded via LoadIndex(), the configuration may be incomplete.
+//
+// Returns:
+//   - internal.IndexConfig: The index configuration, or empty if not available
+func (e *EncryptedIndex) GetIndexConfig() internal.IndexConfig {
 	if e.config != nil {
 		return *e.config
 	}
 	return internal.IndexConfig{}
 }
 
-// IsTrained reports whether the index has been trained.
+// IsTrained reports whether this index has been optimized through training.
+//
+// This is a cached value that doesn't require an API call. The value is
+// updated automatically when Train() completes successfully.
+//
+// Returns:
+//   - bool: true if the index has been trained, false otherwise
 func (e *EncryptedIndex) IsTrained() bool { return e.trained }
 
-// Upsert inserts or updates vectors (IDs that already exist will be updated).
+// Upsert inserts new vectors or updates existing ones in the index.
+//
+// Vector data is encrypted end-to-end before transmission. If a vector ID
+// already exists, it will be updated with the new vector data and metadata.
+// This operation is idempotent.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - items: Slice of VectorItem containing ID, vector, and optional metadata
+//
+// Returns:
+//   - error: Any error encountered during the operation
+//
+// Example:
+//
+//	items := []VectorItem{
+//		{Id: "doc1", Vector: []float32{0.1, 0.2, 0.3}, Metadata: map[string]interface{}{"type": "document"}},
+//		{Id: "doc2", Vector: []float32{0.4, 0.5, 0.6}},
+//	}
+//	err := index.Upsert(ctx, items)
 func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 	req := internal.UpsertRequest{
 		IndexName: e.indexName,
@@ -56,18 +125,34 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 	return err
 }
 
-// Query performs a similarity search.
+// Query performs similarity search to find the nearest neighbors to query vector(s).
 //
-// Provide a single request object:
-//   - QueryParams
+// This method supports three types of queries:
+//   - Single vector query: Set QueryParams.QueryVector
+//   - Batch vector query: Set QueryParams.BatchQueryVectors  
+//   - Content-based query: Set QueryParams.QueryContents (if supported by server)
 //
-// Behavior:
-//   - If params.BatchQueryVectors is non-empty, a batch query is executed.
-//   - Otherwise, a single-vector or contents-based query is executed.
+// The search uses the distance metric specified during index creation.
+// Results are ordered by similarity (closest first) and can be filtered
+// by metadata using the Filters parameter.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - params: QueryParams specifying query vectors, filters, and result preferences
 //
 // Returns:
-//   - *QueryResponse with nearest neighbors, distances, and metadata
-//   - error on failure
+//   - *QueryResponse: Search results with IDs, distances, and requested fields
+//   - error: Any error encountered during the search
+//
+// Example:
+//
+//	params := QueryParams{
+//		QueryVector: []float32{0.1, 0.2, 0.3},
+//		TopK: 10,
+//		Include: []string{"metadata"},
+//		Filters: map[string]interface{}{"category": "document"},
+//	}
+//	results, err := index.Query(ctx, params)
 func (e *EncryptedIndex) Query(ctx context.Context, params QueryParams) (*QueryResponse, error) {
 	// Handle batch queries separately
 	if len(params.BatchQueryVectors) > 0 {
@@ -138,7 +223,26 @@ func (e *EncryptedIndex) Query(ctx context.Context, params QueryParams) (*QueryR
 	return result, err
 }
 
-// Get fetches vectors by ID with selected fields.
+// Get retrieves specific vectors from the index by their IDs.
+//
+// This method allows efficient retrieval of vectors and their metadata
+// without performing similarity search. Useful for reconstructing original
+// data or examining specific vectors.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - ids: Slice of vector IDs to retrieve
+//   - include: Fields to include in response ("vector", "metadata", or both)
+//
+// Returns:
+//   - *GetResponse: Retrieved vectors with requested fields
+//   - error: Any error encountered, including IDs not found
+//
+// Example:
+//
+//	ids := []string{"doc1", "doc2", "doc3"}
+//	include := []string{"vector", "metadata"}
+//	results, err := index.Get(ctx, ids, include)
 func (e *EncryptedIndex) Get(ctx context.Context, ids []string, include []string) (*GetResponse, error) {
 	req := internal.GetRequest{
 		IndexName: e.indexName,
@@ -156,7 +260,23 @@ func (e *EncryptedIndex) Get(ctx context.Context, ids []string, include []string
 	return (*GetResponse)(result), nil
 }
 
-// Delete removes vectors by ID.
+// Delete removes vectors from the index by their IDs.
+//
+// This operation is irreversible. Deleted vectors are permanently removed
+// from the index and cannot be recovered. The operation succeeds even if
+// some IDs don't exist in the index.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - ids: Slice of vector IDs to delete
+//
+// Returns:
+//   - error: Any error encountered during deletion
+//
+// Example:
+//
+//	ids := []string{"doc1", "doc2"}
+//	err := index.Delete(ctx, ids)
 func (e *EncryptedIndex) Delete(ctx context.Context, ids []string) error {
 	req := internal.DeleteRequest{
 		IndexName: e.indexName,
@@ -169,7 +289,33 @@ func (e *EncryptedIndex) Delete(ctx context.Context, ids []string) error {
 	return err
 }
 
-// Train optimizes the index (see internal.TrainRequest for options).
+// Train optimizes the index for better query performance and accuracy.
+//
+// Training analyzes the existing vectors to build internal data structures
+// that accelerate similarity search. This process can significantly improve
+// query speed and accuracy, especially for large datasets.
+//
+// Training is typically performed after upserting a substantial number of
+// vectors. The index remains usable during training, but performance may
+// be suboptimal until training completes.
+//
+// All parameters are optional with sensible defaults. The trained flag is
+// automatically updated upon successful completion.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts (training can take time)
+//   - params: TrainParams specifying training options like batch size and iterations
+//
+// Returns:
+//   - error: Any error encountered during training
+//
+// Example:
+//
+//	params := TrainParams{
+//		BatchSize: &[]int32{1024}[0],  // Process 1024 vectors per batch
+//		MaxIters: &[]int32{200}[0],   // Allow up to 200 iterations
+//	}
+//	err := index.Train(ctx, params)
 func (e *EncryptedIndex) Train(ctx context.Context, params TrainParams) error {
 	// Create request with required fields
 	req := internal.TrainRequest{
@@ -223,7 +369,24 @@ func (e *EncryptedIndex) Train(ctx context.Context, params TrainParams) error {
 	return err
 }
 
-// DeleteIndex permanently removes the index.
+// DeleteIndex permanently destroys this index and all its data.
+//
+// This operation is irreversible and will delete all vectors, metadata,
+// and index structures. The index cannot be recovered after deletion.
+// The EncryptedIndex handle becomes invalid after this operation.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//
+// Returns:
+//   - error: Any error encountered during deletion
+//
+// Warning: This operation cannot be undone. Ensure you have backups if needed.
+//
+// Example:
+//
+//	err := index.DeleteIndex(ctx)
+//	// index is now invalid and should not be used
 func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 	req := internal.IndexOperationRequest{
 		IndexName: e.indexName,
@@ -235,11 +398,31 @@ func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 	return err
 }
 
-// ListIDs returns all IDs in the index.
+// ListIDs retrieves all vector IDs currently stored in the index.
+//
+// This method provides a way to enumerate all vectors without retrieving
+// their actual vector data or metadata. Useful for administrative tasks,
+// data exploration, or building processing pipelines.
+//
+// For large indexes, this operation may take considerable time and return
+// a large response. Consider implementing pagination if needed.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
 //
 // Returns:
-//   - *ListIDsResponse containing the IDs and count
-//   - error on failure
+//   - *ListIDsResponse: Contains all vector IDs and total count
+//   - error: Any error encountered during the operation
+//
+// Example:
+//
+//	response, err := index.ListIDs(ctx)
+//	if err == nil {
+//		fmt.Printf("Index contains %d vectors\n", len(response.Ids))
+//		for _, id := range response.Ids {
+//			fmt.Printf("Vector ID: %s\n", id)
+//		}
+//	}
 func (e *EncryptedIndex) ListIDs(ctx context.Context) (*ListIDsResponse, error) {
 	req := internal.ListIDsRequest{
 		IndexName: e.indexName,
