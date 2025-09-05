@@ -21,9 +21,6 @@ type QueryResponse = internal.QueryResponse
 // QueryResultItem represents a single result from a similarity search query.
 type QueryResultItem = internal.QueryResultItem
 
-// CreateIndexRequest represents the low-level request structure for index creation.
-type CreateIndexRequest = internal.CreateIndexRequest
-
 // ListIDsResponse represents the response from ListIDs operations.
 type ListIDsResponse = internal.ListIDsResponse
 
