@@ -1401,99 +1401,93 @@ func TestOptionalSSLVerification(t *testing.T) {
 	})
 }
 
-// Test 18: Content-based search using QueryContents
-func (suite *CyborgDBIntegrationTestSuite) TestContentBasedSearch() {
-	// Setup index with vectors that have associated content
-	numVectors := 50
-	vectors := make([]cyborgdb.VectorItem, numVectors)
-	contentPrefixes := []string{"apple", "banana", "cherry", "date", "elderberry"}
-	
-	for i := 0; i < numVectors; i++ {
-		// Create content with searchable text
-		prefix := contentPrefixes[i%len(contentPrefixes)]
-		content := fmt.Sprintf("%s: This is document %d about %s fruit. It contains information about %s.",
-			prefix, i, prefix, prefix)
-		
-		vectors[i] = cyborgdb.VectorItem{
-			Id:     fmt.Sprintf("content-%d", i),
-			Vector: suite.trainData[i%len(suite.trainData)],
-			Metadata: map[string]interface{}{
-				"category": prefix,
-				"index":    i,
-				"test":     true,
-			},
-			Contents: stringToNullableContents(content),
-		}
-	}
-	
-	err := suite.index.Upsert(context.Background(), vectors)
-	require.NoError(suite.T(), err)
-	
-	// Test content-based search (may not be supported by all server versions)
-	suite.T().Run("QueryWithContents", func(t *testing.T) {
-		searchContent := "apple fruit information"
-		nProbes := int32(10)
-		
-		params := cyborgdb.QueryParams{
-			QueryContents: &searchContent,
-			TopK:         10,
-			NProbes:      &nProbes,
-			Filters:      map[string]interface{}{},
-			Include:      []string{"metadata", "distance"},
-		}
-		
-		response, err := suite.index.Query(context.Background(), params)
-		if err != nil {
-			// Content-only search might not be supported, skip this test
-			t.Skipf("Content-only search not supported by server: %v", err)
-			return
-		}
-		
-		require.NotNil(t, response)
-		results := extractSingleResults(response.Results)
-		require.Greater(t, len(results), 0, "Should return results for content search")
-		
-		// Verify that results are returned (QueryResultItem doesn't include Contents field)
-		// To get actual content, we'd need to use Get() with the returned IDs
-		for _, result := range results[:min(5, len(results))] {
-			require.NotEmpty(t, result.Id, "Results should have valid IDs")
-			suite.T().Logf("Content search result ID: %s", result.Id)
-		}
-		
-		// Optional: Retrieve actual content using Get
-		if len(results) > 0 {
-			ids := []string{results[0].Id}
-			getResult, err := suite.index.Get(context.Background(), ids, []string{"contents"})
-			if err == nil && len(getResult.Results) > 0 {
-				contents := getResult.Results[0].GetContents()
-				if contents != nil && contents.String != nil {
-					suite.T().Logf("Retrieved content: %s", *contents.String)
-				}
-			}
-		}
-	})
-	
-	// Test combined vector and content search
-	suite.T().Run("CombinedVectorAndContentSearch", func(t *testing.T) {
-		searchContent := "banana information"
-		nProbes := int32(10)
-		
-		params := cyborgdb.QueryParams{
-			QueryVector:   suite.testData[0],
-			QueryContents: &searchContent,
-			TopK:          10,
-			NProbes:       &nProbes,
-			Filters:       map[string]interface{}{},
-			Include:       []string{"metadata", "distance"},
-		}
-		
-		response, err := suite.index.Query(context.Background(), params)
-		require.NoError(t, err)
-		require.NotNil(t, response)
-		
-		results := extractSingleResults(response.Results)
-		require.Greater(t, len(results), 0, "Should return results for combined search")
-	})
+// Test: Content-based search with embedding model
+func (suite *CyborgDBIntegrationTestSuite) TestContentBasedSearchWithEmbeddingModel() {
+    // Create a separate index with embedding model support
+    embeddingIndexName := generateTestIndexName()
+    embeddingKey, err := cyborgdb.GenerateKey()
+    require.NoError(suite.T(), err)
+    embeddingKeyHex := hex.EncodeToString(embeddingKey)
+    
+    // Create index with 384 dimensions for all-MiniLM-L6-v2
+    model := cyborgdb.IndexIVFFlat(384)
+    metric := METRIC
+    embeddingModel := "all-MiniLM-L6-v2"
+    
+    params := &cyborgdb.CreateIndexParams{
+        IndexName:      embeddingIndexName,
+        IndexKey:       embeddingKeyHex,
+        IndexConfig:    model,
+        Metric:         &metric,
+        EmbeddingModel: &embeddingModel,  // Add embedding model parameter
+    }
+    
+    embeddingIndex, err := suite.client.CreateIndex(context.Background(), params)
+    if err != nil {
+        // If embedding models aren't supported, skip gracefully
+        suite.T().Skipf("Embedding model not supported: %v", err)
+        return
+    }
+    require.NotNil(suite.T(), embeddingIndex)
+    
+    defer func() {
+        _ = embeddingIndex.DeleteIndex(context.Background())
+    }()
+    
+    // Upsert documents with meaningful content
+    documents := []cyborgdb.VectorItem{
+        {
+            Id:       "doc1",
+            Vector:   make([]float32, 384), // Dummy vector
+            Contents: stringToNullableContents("The quick brown fox jumps over the lazy dog"),
+            Metadata: map[string]interface{}{"category": "animals", "type": "sentence"},
+        },
+        {
+            Id:       "doc2",
+            Vector:   make([]float32, 384),
+            Contents: stringToNullableContents("Machine learning and artificial intelligence are transforming technology"),
+            Metadata: map[string]interface{}{"category": "technology", "type": "sentence"},
+        },
+        {
+            Id:       "doc3",
+            Vector:   make([]float32, 384),
+            Contents: stringToNullableContents("Cats and dogs are popular pets around the world"),
+            Metadata: map[string]interface{}{"category": "animals", "type": "sentence"},
+        },
+    }
+    
+    err = embeddingIndex.Upsert(context.Background(), documents)
+    require.NoError(suite.T(), err)
+    
+    // Test content-only search with embedding
+    searchContent := "animals and pets"
+    params2 := cyborgdb.QueryParams{
+        QueryContents: &searchContent,
+        TopK:         3,
+		NProbes:      func() *int32 { v := int32(10); return &v }(),
+        Filters:      map[string]interface{}{},
+        Include:      []string{"metadata", "contents"},
+    }
+    
+    response, err := embeddingIndex.Query(context.Background(), params2)
+    require.NoError(suite.T(), err, "Embedding-based content search should work")
+    require.NotNil(suite.T(), response)
+    
+    results := extractSingleResults(response.Results)
+    require.Greater(suite.T(), len(results), 0, "Should return results for embedding search")
+    
+    // Verify we get animal-related results
+    animalResults := 0
+    for _, result := range results {
+        if result.Metadata != nil {
+            if category, ok := result.Metadata["category"].(string); ok && category == "animals" {
+                animalResults++
+            }
+        }
+    }
+    
+    require.Greater(suite.T(), animalResults, 0, "Should find animal-related documents")
+    suite.T().Logf("Embedding search found %d animal-related results", animalResults)
 }
 
 // Test 19: Edge case validation for malformed inputs
