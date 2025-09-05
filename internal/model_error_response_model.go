@@ -31,9 +31,8 @@ type _ErrorResponseModel ErrorResponseModel
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewErrorResponseModel(statusCode int32, detail string) *ErrorResponseModel {
+func NewErrorResponseModel(detail string) *ErrorResponseModel {
 	this := ErrorResponseModel{}
-	this.StatusCode = statusCode
 	this.Detail = detail
 	return &this
 }
@@ -114,7 +113,6 @@ func (o *ErrorResponseModel) UnmarshalJSON(data []byte) (err error) {
 	// by unmarshalling the object into a generic map with string keys and checking
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
-		"status_code",
 		"detail",
 	}
 

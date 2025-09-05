@@ -1021,7 +1021,9 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedGet() {
 		// Contents check
 		require.True(suite.T(), item.HasContents(), "Contents should be present")
 		contents := item.GetContents()
-		require.Equal(suite.T(), fmt.Sprintf("trained-content-%d", expectedIndex), contents)
+		require.NotNil(suite.T(), contents, "Contents should not be nil")
+		require.NotNil(suite.T(), contents.String, "Contents.String should not be nil")
+		require.Equal(suite.T(), fmt.Sprintf("trained-content-%d", expectedIndex), *contents.String)
 	}
 }
 
