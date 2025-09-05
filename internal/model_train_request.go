@@ -312,12 +312,21 @@ func (o *TrainRequest) UnsetMaxMemory() {
 }
 
 func (o TrainRequest) MarshalJSON() ([]byte, error) {
-	// Custom serialization to properly handle optional fields
+	// Use ToMap to avoid duplication of serialization logic
+	toSerialize, err := o.ToMap()
+	if err != nil {
+		return nil, err
+	}
+	return json.Marshal(toSerialize)
+}
+
+func (o TrainRequest) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["index_key"] = o.IndexKey
 	toSerialize["index_name"] = o.IndexName
 	
-	// Include optional fields only if set and not nil
+	// Only include optional fields if they are set AND not nil
+	// Dereference the pointers to get the actual values for JSON serialization
 	if o.NLists.IsSet() && o.NLists.Get() != nil {
 		toSerialize["n_lists"] = *o.NLists.Get()
 	}
@@ -334,40 +343,6 @@ func (o TrainRequest) MarshalJSON() ([]byte, error) {
 		toSerialize["max_memory"] = *o.MaxMemory.Get()
 	}
 	
-	return json.Marshal(toSerialize)
-}
-
-func (o TrainRequest) ToMap() (map[string]interface{}, error) {
-	toSerialize := map[string]interface{}{}
-	toSerialize["index_key"] = o.IndexKey
-	toSerialize["index_name"] = o.IndexName
-	// Only include optional fields if they are set AND not nil
-	if o.NLists.IsSet() {
-		if o.NLists.Get() != nil {
-			toSerialize["n_lists"] = o.NLists.Get()
-		}
-		// If IsSet but nil, DON'T add it at all
-	}
-	if o.BatchSize.IsSet() {
-		if o.BatchSize.Get() != nil {
-			toSerialize["batch_size"] = o.BatchSize.Get()
-		}
-	}
-	if o.MaxIters.IsSet() {
-		if o.MaxIters.Get() != nil {
-			toSerialize["max_iters"] = o.MaxIters.Get()
-		}
-	}
-	if o.Tolerance.IsSet() {
-		if o.Tolerance.Get() != nil {
-			toSerialize["tolerance"] = o.Tolerance.Get()
-		}
-	}
-	if o.MaxMemory.IsSet() {
-		if o.MaxMemory.Get() != nil {
-			toSerialize["max_memory"] = o.MaxMemory.Get()
-		}
-	}
 	return toSerialize, nil
 }
 

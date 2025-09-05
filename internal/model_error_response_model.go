@@ -21,7 +21,7 @@ var _ MappedNullable = &ErrorResponseModel{}
 
 // ErrorResponseModel Standard error response model.  Attributes:     status_code (int): HTTP status code of the error.     detail (str): A detailed message describing the error.
 type ErrorResponseModel struct {
-	StatusCode int32 `json:"status_code"`
+	StatusCode *int32 `json:"status_code,omitempty"`
 	Detail string `json:"detail"`
 }
 
@@ -45,28 +45,36 @@ func NewErrorResponseModelWithDefaults() *ErrorResponseModel {
 	return &this
 }
 
-// GetStatusCode returns the StatusCode field value
+// GetStatusCode returns the StatusCode field value if set, zero value otherwise
 func (o *ErrorResponseModel) GetStatusCode() int32 {
-	if o == nil {
+	if o == nil || o.StatusCode == nil {
 		var ret int32
 		return ret
 	}
 
-	return o.StatusCode
+	return *o.StatusCode
 }
 
-// GetStatusCodeOk returns a tuple with the StatusCode field value
+// GetStatusCodeOk returns a tuple with the StatusCode field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 func (o *ErrorResponseModel) GetStatusCodeOk() (*int32, bool) {
-	if o == nil {
+	if o == nil || o.StatusCode == nil {
 		return nil, false
 	}
-	return &o.StatusCode, true
+	return o.StatusCode, true
 }
 
 // SetStatusCode sets field value
 func (o *ErrorResponseModel) SetStatusCode(v int32) {
-	o.StatusCode = v
+	o.StatusCode = &v
+}
+
+// HasStatusCode returns a boolean if a field has been set
+func (o *ErrorResponseModel) HasStatusCode() bool {
+	if o != nil && o.StatusCode != nil {
+		return true
+	}
+	return false
 }
 
 // GetDetail returns the Detail field value
@@ -103,7 +111,9 @@ func (o ErrorResponseModel) MarshalJSON() ([]byte, error) {
 
 func (o ErrorResponseModel) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	toSerialize["status_code"] = o.StatusCode
+	if o.StatusCode != nil {
+		toSerialize["status_code"] = *o.StatusCode
+	}
 	toSerialize["detail"] = o.Detail
 	return toSerialize, nil
 }
