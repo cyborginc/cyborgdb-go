@@ -32,6 +32,11 @@ const (
 	MaxIters  = 5
 	TOLERANCE = 1e-5
 	DIMENSION = 768 // Default dimension for synthetic data
+	
+	// Index type configuration - change this to test different index types
+	// Options: "ivf", "ivfflat", "ivfpq"
+	// NOTE: "ivf" is IndexIVF, "ivfflat" is IndexIVFFlat, "ivfpq" is IndexIVFPQ
+	indexType = "ivfpq"
 )
 
 // Variables for taking addresses
@@ -83,13 +88,6 @@ func resultsLength(results internal.Results) int {
 // Global variable to store loaded data (similar to TypeScript sharedData)
 var sharedData *WikiDataSample
 
-// IndexType represents the different types of indexes we can test
-type IndexType string
-
-const (
-	IndexTypeIVFFlat IndexType = "ivfflat" // Only testing IVFFLAT per PR feedback
-)
-
 // CyborgDBIntegrationTestSuite provides a comprehensive test suite for CyborgDB Go SDK
 type CyborgDBIntegrationTestSuite struct {
 	suite.Suite
@@ -101,12 +99,11 @@ type CyborgDBIntegrationTestSuite struct {
 	trainData   [][]float32
 	testData    [][]float32
 	dimension   int32
-	indexType   IndexType
 }
 
 // Helper functions
 
-func generateTestIndexName(indexType IndexType) string {
+func generateTestIndexName() string {
 	timestamp := time.Now().UnixNano()
 	random := make([]byte, 4)
 	rand.Read(random)
@@ -237,8 +234,18 @@ func stringToNullableContents(s string) internal.NullableContents {
 
 // createIndexModel creates the appropriate index model based on the index type
 func createIndexModel(dimension int32) cyborgdb.IndexModel {
-	// Only supporting IVFFLAT per PR feedback
-	return cyborgdb.IndexIVFFlat(dimension)
+	switch indexType {
+	case "ivf":
+		return cyborgdb.IndexIVF(dimension)
+	case "ivfflat":
+		return cyborgdb.IndexIVFFlat(dimension)
+	case "ivfpq":
+		// Use the PqDim and PqBits constants defined above
+		return cyborgdb.IndexIVFPQ(dimension, int32(PqDim), int32(PqBits))
+	default:
+		// Default to IVFFLAT if invalid type
+		return cyborgdb.IndexIVFFlat(dimension)
+	}
 }
 
 // SetupSuite runs once before all tests
@@ -294,7 +301,7 @@ func (suite *CyborgDBIntegrationTestSuite) SetupSuite() {
 // SetupTest runs before each test
 func (suite *CyborgDBIntegrationTestSuite) SetupTest() {
 	// Generate unique index name and key for each test
-	suite.indexName = generateTestIndexName(suite.indexType)
+	suite.indexName = generateTestIndexName()
 	// Use the new GenerateKey function (matching TypeScript client.generateKey())
 	var err error
 	suite.indexKey, err = cyborgdb.GenerateKey()
@@ -347,12 +354,25 @@ func (suite *CyborgDBIntegrationTestSuite) TestHealthCheck() {
 // Test 2: Index Creation and Properties (equivalent to Python test_14_index_properties)
 func (suite *CyborgDBIntegrationTestSuite) TestIndexCreationAndProperties() {
 	require.Equal(suite.T(), suite.indexName, suite.index.GetIndexName())
-	require.Equal(suite.T(), string(suite.indexType), suite.index.GetIndexType())
+	require.Equal(suite.T(), indexType, suite.index.GetIndexType())
 
 	cfg := suite.index.GetIndexConfig()
-	if cfg.IndexIVFFlatModel != nil {
-		require.Equal(suite.T(), suite.dimension, cfg.IndexIVFFlatModel.GetDimension())
-		require.Equal(suite.T(), "ivfflat", cfg.IndexIVFFlatModel.GetType())
+	switch indexType {
+	case "ivf":
+		if cfg.IndexIVFModel != nil {
+			require.Equal(suite.T(), suite.dimension, cfg.IndexIVFModel.GetDimension())
+			require.Equal(suite.T(), "ivf", cfg.IndexIVFModel.GetType())
+		}
+	case "ivfflat":
+		if cfg.IndexIVFFlatModel != nil {
+			require.Equal(suite.T(), suite.dimension, cfg.IndexIVFFlatModel.GetDimension())
+			require.Equal(suite.T(), "ivfflat", cfg.IndexIVFFlatModel.GetType())
+		}
+	case "ivfpq":
+		if cfg.IndexIVFPQModel != nil {
+			require.Equal(suite.T(), suite.dimension, cfg.IndexIVFPQModel.GetDimension())
+			require.Equal(suite.T(), "ivfpq", cfg.IndexIVFPQModel.GetType())
+		}
 	}
 }
 
@@ -370,7 +390,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestLoadExistingIndex() {
 				"test":       true,
 				"index":      i,
 				"category":   "loading",
-				"index_type": string(suite.indexType),
+				"index_type": indexType,
 			},
 		})
 	}
@@ -425,7 +445,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedUpsert() {
 					"tags":     []string{"tag1", "tag2", "tag3"},
 					"quantity": (i % 10) + 1,
 				},
-				"index_type":    string(suite.indexType),
+				"index_type":    indexType,
 				"created_year":  2020 + (i % 4),
 				"number":        i % 10,
 				"metadata_test": true,
@@ -448,7 +468,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryNoMetadata() {
 			Metadata: map[string]interface{}{
 				"category":      "training",
 				"index":         i,
-				"index_type":    string(suite.indexType),
+				"index_type":    indexType,
 				"metadata_test": true,
 			},
 		}
@@ -545,7 +565,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedQueryWithMetadata() {
 				"tags":         tags,
 				"category":     map[string]string{"even": "even", "odd": "odd"}[[]string{"even", "odd"}[i%2]],
 				"number":       i % 10,
-				"index_type":   string(suite.indexType),
+				"index_type":   indexType,
 				"created_year": 2020 + (i % 4),
 				"test":         true,
 			},
@@ -607,7 +627,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedGet() {
 			Metadata: map[string]interface{}{
 				"test":       true,
 				"index":      i,
-				"index_type": string(suite.indexType),
+				"index_type": indexType,
 				"category":   "untrained-get",
 			},
 			Contents: stringToNullableContents(fmt.Sprintf("test-content-%d", i)),
@@ -655,13 +675,15 @@ func (suite *CyborgDBIntegrationTestSuite) TestUntrainedGet() {
 		require.NotNil(suite.T(), metadata)
 		require.Equal(suite.T(), true, metadata["test"])
 		require.Equal(suite.T(), float64(expectedIndex), metadata["index"]) // JSON numbers are float64
-		require.Equal(suite.T(), string(suite.indexType), metadata["index_type"])
+		require.Equal(suite.T(), indexType, metadata["index_type"])
 		require.Equal(suite.T(), "untrained-get", metadata["category"])
 
 		// Contents check
 		require.True(suite.T(), item.HasContents(), "Contents should be present")
 		contents := item.GetContents()
-		require.Equal(suite.T(), fmt.Sprintf("test-content-%d", expectedIndex), contents)
+		require.NotNil(suite.T(), contents, "Contents should not be nil")
+		require.NotNil(suite.T(), contents.String, "Contents.String should not be nil")
+		require.Equal(suite.T(), fmt.Sprintf("test-content-%d", expectedIndex), *contents.String)
 	}
 }
 
@@ -676,7 +698,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainIndex() {
 			Metadata: map[string]interface{}{
 				"test":       true,
 				"index":      i,
-				"index_type": string(suite.indexType),
+				"index_type": indexType,
 				"category":   "training",
 			},
 		}
@@ -704,7 +726,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedUpsert() {
 			Metadata: map[string]interface{}{
 				"category":   "initial",
 				"index":      i,
-				"index_type": string(suite.indexType),
+				"index_type": indexType,
 			},
 		}
 	}
@@ -728,7 +750,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedUpsert() {
 				Metadata: map[string]interface{}{
 					"category":   "additional",
 					"index":      i + 100,
-					"index_type": string(suite.indexType),
+					"index_type": indexType,
 				},
 			}
 		}
@@ -748,7 +770,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedQueryNoMetadata() {
 			Metadata: map[string]interface{}{
 				"category":   "trained",
 				"index":      i,
-				"index_type": string(suite.indexType),
+				"index_type": indexType,
 			},
 		}
 	}
@@ -850,7 +872,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedQueryWithMetadata() {
 				"tags":       tags,
 				"category":   map[string]string{"even": "even", "odd": "odd"}[[]string{"even", "odd"}[i%2]],
 				"number":     i % 10,
-				"index_type": string(suite.indexType),
+				"index_type": indexType,
 				"item": map[string]interface{}{
 					"price":    100.0 + float64(i*10),
 					"rating":   1.0 + float64(i%5),
@@ -928,7 +950,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedGet() {
 				"category":   "trained-test",
 				"index":      i,
 				"test":       true,
-				"index_type": string(suite.indexType),
+				"index_type": indexType,
 				"owner": map[string]interface{}{
 					"name":       []string{"John", "Joseph", "Mike"}[i%3],
 					"pets_owned": (i % 3) + 1,
@@ -990,7 +1012,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestTrainedGet() {
 		require.NotNil(suite.T(), metadata)
 		require.Equal(suite.T(), true, metadata["test"])
 		require.Equal(suite.T(), float64(expectedIndex), metadata["index"])
-		require.Equal(suite.T(), string(suite.indexType), metadata["index_type"])
+		require.Equal(suite.T(), indexType, metadata["index_type"])
 		require.Equal(suite.T(), "trained-test", metadata["category"])
 
 		// Contents check
@@ -1070,7 +1092,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestDeleteVectors() {
 			Metadata: map[string]interface{}{
 				"test":       true,
 				"index":      i,
-				"index_type": string(suite.indexType),
+				"index_type": indexType,
 				"category":   "delete-test",
 			},
 		}
@@ -1107,7 +1129,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestGetDeletedItemsVerification() {
 				"test":       true,
 				"index":      i,
 				"category":   "verification",
-				"index_type": string(suite.indexType),
+				"index_type": indexType,
 			},
 		}
 	}
@@ -1151,7 +1173,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestQueryAfterDeletion() {
 			Metadata: map[string]interface{}{
 				"test":       true,
 				"index":      i,
-				"index_type": string(suite.indexType),
+				"index_type": indexType,
 				"category":   "query-after-delete",
 			},
 		}
@@ -1252,7 +1274,7 @@ func (suite *CyborgDBIntegrationTestSuite) TestContentsFieldComprehensive() {
 				"description":    tc.description,
 				"index":          i,
 				"test":           true,
-				"index_type":     string(suite.indexType),
+				"index_type":     indexType,
 				"content_length": len(tc.content),
 			},
 			Contents: stringToNullableContents(tc.content),
@@ -1279,7 +1301,9 @@ func (suite *CyborgDBIntegrationTestSuite) TestContentsFieldComprehensive() {
 		// Verify contents field exists and matches exactly
 		require.True(suite.T(), item.HasContents(), "Contents should be present for item %d", i)
 		contents := item.GetContents()
-		require.Equal(suite.T(), expectedContent, contents, "Content mismatch for test case: %s", testCases[i].name)
+		require.NotNil(suite.T(), contents, "Contents should not be nil")
+		require.NotNil(suite.T(), contents.String, "Contents.String should not be nil")
+		require.Equal(suite.T(), expectedContent, *contents.String, "Content mismatch for test case: %s", testCases[i].name)
 
 		// Verify metadata matches
 		require.True(suite.T(), item.HasMetadata(), "Metadata should be present")
@@ -1335,16 +1359,16 @@ func TestOptionalSSLVerification(t *testing.T) {
 	})
 }
 
-// Only test IVFFLAT per PR feedback for speed
-func TestCyborgDBIVFFlatIntegrationSuite(t *testing.T) {
-	testSuite := &CyborgDBIntegrationTestSuite{indexType: IndexTypeIVFFlat}
+// Test suite runner - uses the global indexType constant
+func TestCyborgDBIntegrationSuite(t *testing.T) {
+	testSuite := &CyborgDBIntegrationTestSuite{}
 	suite.Run(t, testSuite)
 }
 
 // TestMain sets up global test data loading (similar to Python beforeAll)
 func TestMain(m *testing.M) {
 	// Set a random seed for reproducible synthetic data generation
-	rand.Seed(time.Now().UnixNano())
+	rand.New(rand.NewSource(time.Now().UnixNano()))
 
 	// Load shared data once for all tests
 	var err error
