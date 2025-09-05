@@ -48,22 +48,22 @@ type CreateIndexParams struct {
 	// Must be unique within your project and contain only alphanumeric characters,
 	// hyphens, and underscores.
 	IndexName string `json:"index_name"`
-	
+
 	// IndexKey is the 64-character hex string representation of a 32-byte encryption key.
 	// This key is used for end-to-end encryption of vector data.
 	// Generate using GenerateKey() and convert to hex, or use hex.EncodeToString().
 	IndexKey string `json:"index_key"`
-	
+
 	// IndexConfig specifies the index type and configuration.
 	// Can be created using IndexIVF(), IndexIVFFlat(), or IndexIVFPQ() functions.
 	// If nil, the server will use default configuration.
 	IndexConfig IndexModel `json:"index_config,omitempty"`
-	
+
 	// Metric specifies the distance metric for similarity calculations.
 	// Supported values include "euclidean", "cosine", "dot_product".
 	// Defaults to "euclidean" if not specified.
 	Metric *string `json:"metric,omitempty"`
-	
+
 	// EmbeddingModel optionally associates an embedding model name with this index.
 	// This is for metadata purposes and doesn't affect index behavior.
 	EmbeddingModel *string `json:"embedding_model,omitempty"`
@@ -85,19 +85,19 @@ type TrainParams struct {
 	// BatchSize controls how many vectors are processed in each training batch.
 	// Larger batches may train faster but use more memory. Default: 2048.
 	BatchSize *int32 `json:"batch_size,omitempty"`
-	
+
 	// MaxIters sets the maximum number of training iterations.
 	// Training may stop early if convergence is reached. Default: 100.
 	MaxIters *int32 `json:"max_iters,omitempty"`
-	
+
 	// Tolerance defines the convergence threshold for training.
 	// Lower values mean more precise training but longer time. Default: 1e-6.
 	Tolerance *float64 `json:"tolerance,omitempty"`
-	
+
 	// MaxMemory limits memory usage during training in MB.
 	// Set to 0 for no limit. Default: 0 (unlimited).
 	MaxMemory *int32 `json:"max_memory,omitempty"`
-	
+
 	// NLists specifies the number of IVF clusters for index partitioning.
 	// Set to 0 for automatic determination based on data size. Default: 0 (auto).
 	NLists *int32 `json:"n_lists,omitempty"`
@@ -118,34 +118,34 @@ type QueryParams struct {
 	// QueryVector contains the query vector for single vector similarity search.
 	// Mutually exclusive with BatchQueryVectors and QueryContents.
 	QueryVector []float32 `json:"query_vector,omitempty"`
-	
+
 	// BatchQueryVectors contains multiple query vectors for batch similarity search.
 	// Results will be returned for each query vector in the same order.
 	// Mutually exclusive with QueryVector and QueryContents.
 	BatchQueryVectors [][]float32 `json:"query_vectors,omitempty"`
-	
+
 	// QueryContents enables content-based search using text input (if supported).
 	// The server will embed the text and perform similarity search.
 	// Mutually exclusive with QueryVector and BatchQueryVectors.
 	QueryContents *string `json:"query_contents,omitempty"`
-	
+
 	// TopK specifies the number of nearest neighbors to return (required).
 	// Must be > 0. Server may have maximum limits.
 	TopK int32 `json:"top_k"`
-	
+
 	// NProbes controls the search accuracy vs speed trade-off for IVF indexes.
 	// Higher values = more accurate but slower. If not set, uses index default.
 	NProbes *int32 `json:"n_probes,omitempty"`
-	
+
 	// Greedy enables greedy search mode for potentially faster results.
 	// May affect result quality. If not set, uses index default.
 	Greedy *bool `json:"greedy,omitempty"`
-	
+
 	// Filters applies metadata-based filtering to search results.
 	// Map keys are metadata field names, values are filter criteria.
 	// Exact filter syntax depends on server implementation.
 	Filters map[string]interface{} `json:"filters,omitempty"`
-	
+
 	// Include specifies which fields to return in results (required).
 	// Common values: ["metadata"], ["vector"], ["metadata", "vector"].
 	// An empty slice may return only IDs and distances.
@@ -185,7 +185,8 @@ type indexIVFPQ struct {
 //   - *indexIVF: IVF index configuration implementing IndexModel
 //
 // Usage:
-//   config := IndexIVF(768) // For 768-dimensional vectors
+//
+//	config := IndexIVF(768) // For 768-dimensional vectors
 func IndexIVF(dimension int32) *indexIVF {
 	model := &internal.IndexIVFModel{}
 	model.SetDimension(dimension)
@@ -205,7 +206,8 @@ func IndexIVF(dimension int32) *indexIVF {
 //   - *indexIVFFlat: IVFFlat index configuration implementing IndexModel
 //
 // Usage:
-//   config := IndexIVFFlat(768) // For 768-dimensional vectors
+//
+//	config := IndexIVFFlat(768) // For 768-dimensional vectors
 func IndexIVFFlat(dimension int32) *indexIVFFlat {
 	model := &internal.IndexIVFFlatModel{}
 	model.SetDimension(dimension)
@@ -228,7 +230,8 @@ func IndexIVFFlat(dimension int32) *indexIVFFlat {
 //   - *indexIVFPQ: IVFPQ index configuration implementing IndexModel
 //
 // Usage:
-//   config := IndexIVFPQ(768, 96, 8) // 768-dim vectors, 96 PQ dim, 8 bits per code
+//
+//	config := IndexIVFPQ(768, 96, 8) // 768-dim vectors, 96 PQ dim, 8 bits per code
 func IndexIVFPQ(dimension int32, pqDim int32, pqBits int32) *indexIVFPQ {
 	model := &internal.IndexIVFPQModel{
 		PqDim:  pqDim,

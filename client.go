@@ -119,11 +119,11 @@ func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 // Parameters:
 //   - ctx: Context for cancellation/timeouts
 //   - params: Complete payload containing:
-//       • IndexName (required): unique index name
-//       • IndexKey  (required): 64-char hex of a 32-byte key
-//       • IndexConfig (optional): index configuration (IndexIVF, IndexIVFFlat, or IndexIVFPQ)
-//       • Metric (optional): distance metric (e.g., "euclidean", "cosine")
-//       • EmbeddingModel (optional): embedding model name to associate
+//   - IndexName (required): unique index name
+//   - IndexKey  (required): 64-char hex of a 32-byte key
+//   - IndexConfig (optional): index configuration (IndexIVF, IndexIVFFlat, or IndexIVFPQ)
+//   - Metric (optional): distance metric (e.g., "euclidean", "cosine")
+//   - EmbeddingModel (optional): embedding model name to associate
 //
 // Returns:
 //   - *EncryptedIndex: Handle for vector operations
@@ -140,24 +140,24 @@ func (c *Client) CreateIndex(
 	if params.IndexConfig != nil {
 		indexConfig = *params.IndexConfig.ToIndexConfig()
 	}
-	
+
 	req := internal.CreateIndexRequest{
 		IndexName: params.IndexName,
 		IndexKey:  params.IndexKey,
 	}
-	
+
 	if params.IndexConfig != nil {
 		req.IndexConfig = *internal.NewNullableIndexConfig(&indexConfig)
 	}
-	
+
 	if params.Metric != nil {
 		req.Metric = *internal.NewNullableString(params.Metric)
 	}
-	
+
 	if params.EmbeddingModel != nil {
 		req.EmbeddingModel = *internal.NewNullableString(params.EmbeddingModel)
 	}
-	
+
 	// Call internal CreateIndex
 	_, _, err := c.internal.APIClient.DefaultAPI.CreateIndexV1IndexesCreatePost(ctx).
 		CreateIndexRequest(req).
@@ -165,7 +165,7 @@ func (c *Client) CreateIndex(
 	if err != nil {
 		return nil, err
 	}
-	
+
 	// Build the EncryptedIndex handle
 	idx := &EncryptedIndex{
 		indexName: params.IndexName,
@@ -174,7 +174,7 @@ func (c *Client) CreateIndex(
 		config:    &indexConfig,
 		trained:   false,
 	}
-	
+
 	// Set index type if available
 	if indexConfig.IndexIVFModel != nil && indexConfig.IndexIVFModel.Type != nil {
 		idx.indexType = *indexConfig.IndexIVFModel.Type
@@ -183,7 +183,7 @@ func (c *Client) CreateIndex(
 	} else if indexConfig.IndexIVFPQModel != nil && indexConfig.IndexIVFPQModel.Type != nil {
 		idx.indexType = *indexConfig.IndexIVFPQModel.Type
 	}
-	
+
 	return idx, nil
 }
 
@@ -207,7 +207,7 @@ func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byt
 	}
 
 	keyHex := fmt.Sprintf("%x", indexKey)
-	
+
 	describeReq := internal.IndexOperationRequest{
 		IndexName: indexName,
 		IndexKey:  keyHex,
@@ -227,7 +227,7 @@ func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byt
 		// The EncryptedIndex will work without the detailed config
 		indexConfig = nil
 	}
-	
+
 	return &EncryptedIndex{
 		indexName: indexInfo.IndexName,
 		indexKey:  keyHex,

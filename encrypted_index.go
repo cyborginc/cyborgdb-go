@@ -14,7 +14,7 @@ var (
 	// ErrQueryVectorsInvalidType is returned when QueryParams contains invalid query vector types.
 	// This occurs when query vectors are not properly formatted as []float32 or [][]float32.
 	ErrQueryVectorsInvalidType = fmt.Errorf("queryVectors must be []float32 for single vector queries or [][]float32 for batch queries")
-	
+
 	// ErrMissingQueryInput is returned when no query input is provided in QueryParams.
 	// At least one of QueryVector, BatchQueryVectors, or QueryContents must be specified.
 	ErrMissingQueryInput = fmt.Errorf("either queryVectors or queryContents must be provided")
@@ -37,19 +37,19 @@ var (
 type EncryptedIndex struct {
 	// indexName is the unique identifier for this index
 	indexName string
-	
+
 	// indexKey is the hex-encoded encryption key for end-to-end encryption
 	indexKey string
-	
+
 	// indexType indicates the index algorithm ("ivf", "ivfflat", "ivfpq")
 	indexType string
-	
+
 	// config holds the detailed index configuration, may be nil for loaded indexes
 	config *internal.IndexConfig
-	
+
 	// trained indicates whether the index has been optimized via training
 	trained bool
-	
+
 	// client provides access to the underlying API client
 	client *internal.Client
 }
@@ -129,7 +129,7 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 //
 // This method supports three types of queries:
 //   - Single vector query: Set QueryParams.QueryVector
-//   - Batch vector query: Set QueryParams.BatchQueryVectors  
+//   - Batch vector query: Set QueryParams.BatchQueryVectors
 //   - Content-based query: Set QueryParams.QueryContents (if supported by server)
 //
 // The search uses the distance metric specified during index creation.
@@ -163,20 +163,20 @@ func (e *EncryptedIndex) Query(ctx context.Context, params QueryParams) (*QueryR
 			Filters:      params.Filters,
 			Include:      params.Include,
 		}
-		
+
 		// Handle nullable fields for batch request
 		if params.TopK != 0 {
 			batchReq.TopK = *internal.NewNullableInt32(&params.TopK)
 		}
-		
+
 		if params.NProbes != nil {
 			batchReq.NProbes = *internal.NewNullableInt32(params.NProbes)
 		}
-		
+
 		if params.Greedy != nil {
 			batchReq.Greedy = *internal.NewNullableBool(params.Greedy)
 		}
-		
+
 		request := internal.Request{
 			BatchQueryRequest: &batchReq,
 		}
@@ -185,7 +185,7 @@ func (e *EncryptedIndex) Query(ctx context.Context, params QueryParams) (*QueryR
 			Execute()
 		return result, err
 	}
-	
+
 	// Handle single query
 	req := internal.QueryRequest{
 		IndexName: e.indexName,
@@ -193,24 +193,24 @@ func (e *EncryptedIndex) Query(ctx context.Context, params QueryParams) (*QueryR
 		Filters:   params.Filters,
 		Include:   params.Include,
 	}
-	
+
 	if params.QueryVector != nil {
 		req.QueryVectors = params.QueryVector
 	}
-	
+
 	// Handle nullable fields
 	if params.QueryContents != nil {
 		req.QueryContents = *internal.NewNullableString(params.QueryContents)
 	}
-	
+
 	if params.TopK != 0 {
 		req.TopK = *internal.NewNullableInt32(&params.TopK)
 	}
-	
+
 	if params.NProbes != nil {
 		req.NProbes = *internal.NewNullableInt32(params.NProbes)
 	}
-	
+
 	if params.Greedy != nil {
 		req.Greedy = *internal.NewNullableBool(params.Greedy)
 	}
@@ -322,38 +322,38 @@ func (e *EncryptedIndex) Train(ctx context.Context, params TrainParams) error {
 		IndexKey:  e.indexKey,
 		IndexName: e.indexName,
 	}
-	
+
 	// Set optional fields, using server defaults when not provided
 	// This works around a Python server issue where missing fields become None
-	
+
 	// BatchSize: default 2048
 	batchSize := int32(2048)
 	if params.BatchSize != nil {
 		batchSize = *params.BatchSize
 	}
 	req.BatchSize = *internal.NewNullableInt32(&batchSize)
-	
+
 	// MaxIters: default 100
 	maxIters := int32(100)
 	if params.MaxIters != nil {
 		maxIters = *params.MaxIters
 	}
 	req.MaxIters = *internal.NewNullableInt32(&maxIters)
-	
+
 	// Tolerance: default 1e-6
 	tolerance := float32(1e-6)
 	if params.Tolerance != nil {
 		tolerance = float32(*params.Tolerance)
 	}
 	req.Tolerance = *internal.NewNullableFloat32(&tolerance)
-	
+
 	// MaxMemory: default 0 (no limit)
 	maxMemory := int32(0)
 	if params.MaxMemory != nil {
 		maxMemory = *params.MaxMemory
 	}
 	req.MaxMemory = *internal.NewNullableInt32(&maxMemory)
-	
+
 	// NLists: default 0 (auto)
 	nLists := int32(0)
 	if params.NLists != nil {
