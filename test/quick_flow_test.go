@@ -9,6 +9,7 @@ import (
 	"math/rand"
 	"os"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -1362,6 +1363,986 @@ func TestOptionalSSLVerification(t *testing.T) {
 		require.NoError(t, sslErr)
 		require.NotNil(t, sslClient)
 	})
+}
+
+// Test 18: Content-based search using QueryContents
+func (suite *CyborgDBIntegrationTestSuite) TestContentBasedSearch() {
+	// Setup index with vectors that have associated content
+	numVectors := 50
+	vectors := make([]cyborgdb.VectorItem, numVectors)
+	contentPrefixes := []string{"apple", "banana", "cherry", "date", "elderberry"}
+	
+	for i := 0; i < numVectors; i++ {
+		// Create content with searchable text
+		prefix := contentPrefixes[i%len(contentPrefixes)]
+		content := fmt.Sprintf("%s: This is document %d about %s fruit. It contains information about %s.",
+			prefix, i, prefix, prefix)
+		
+		vectors[i] = cyborgdb.VectorItem{
+			Id:     fmt.Sprintf("content-%d", i),
+			Vector: suite.trainData[i%len(suite.trainData)],
+			Metadata: map[string]interface{}{
+				"category": prefix,
+				"index":    i,
+				"test":     true,
+			},
+			Contents: stringToNullableContents(content),
+		}
+	}
+	
+	err := suite.index.Upsert(context.Background(), vectors)
+	require.NoError(suite.T(), err)
+	
+	// Test content-based search (may not be supported by all server versions)
+	suite.T().Run("QueryWithContents", func(t *testing.T) {
+		searchContent := "apple fruit information"
+		nProbes := int32(10)
+		
+		params := cyborgdb.QueryParams{
+			QueryContents: &searchContent,
+			TopK:         10,
+			NProbes:      &nProbes,
+			Filters:      map[string]interface{}{},
+			Include:      []string{"metadata", "distance"},
+		}
+		
+		response, err := suite.index.Query(context.Background(), params)
+		if err != nil {
+			// Content-only search might not be supported, skip this test
+			t.Skipf("Content-only search not supported by server: %v", err)
+			return
+		}
+		
+		require.NotNil(t, response)
+		results := extractSingleResults(response.Results)
+		require.Greater(t, len(results), 0, "Should return results for content search")
+		
+		// Verify that results are returned (QueryResultItem doesn't include Contents field)
+		// To get actual content, we'd need to use Get() with the returned IDs
+		for _, result := range results[:min(5, len(results))] {
+			require.NotEmpty(t, result.Id, "Results should have valid IDs")
+			suite.T().Logf("Content search result ID: %s", result.Id)
+		}
+		
+		// Optional: Retrieve actual content using Get
+		if len(results) > 0 {
+			ids := []string{results[0].Id}
+			getResult, err := suite.index.Get(context.Background(), ids, []string{"contents"})
+			if err == nil && len(getResult.Results) > 0 {
+				contents := getResult.Results[0].GetContents()
+				if contents != nil && contents.String != nil {
+					suite.T().Logf("Retrieved content: %s", *contents.String)
+				}
+			}
+		}
+	})
+	
+	// Test combined vector and content search
+	suite.T().Run("CombinedVectorAndContentSearch", func(t *testing.T) {
+		searchContent := "banana information"
+		nProbes := int32(10)
+		
+		params := cyborgdb.QueryParams{
+			QueryVector:   suite.testData[0],
+			QueryContents: &searchContent,
+			TopK:          10,
+			NProbes:       &nProbes,
+			Filters:       map[string]interface{}{},
+			Include:       []string{"metadata", "distance"},
+		}
+		
+		response, err := suite.index.Query(context.Background(), params)
+		require.NoError(t, err)
+		require.NotNil(t, response)
+		
+		results := extractSingleResults(response.Results)
+		require.Greater(t, len(results), 0, "Should return results for combined search")
+	})
+}
+
+// Test 19: Edge case validation for malformed inputs
+func (suite *CyborgDBIntegrationTestSuite) TestEdgeCaseValidation() {
+	ctx := context.Background()
+	
+	// Test 1: Empty vector
+	suite.T().Run("EmptyVector", func(t *testing.T) {
+		vectors := []cyborgdb.VectorItem{
+			{
+				Id:       "empty-vector",
+				Vector:   []float32{},
+				Metadata: map[string]interface{}{"test": true},
+			},
+		}
+		err := suite.index.Upsert(ctx, vectors)
+		// Should fail with dimension mismatch
+		require.Error(t, err, "Should error on empty vector")
+	})
+	
+	// Test 2: Wrong dimension vector
+	suite.T().Run("WrongDimensionVector", func(t *testing.T) {
+		vectors := []cyborgdb.VectorItem{
+			{
+				Id:       "wrong-dim",
+				Vector:   make([]float32, 100), // Wrong dimension
+				Metadata: map[string]interface{}{"test": true},
+			},
+		}
+		err := suite.index.Upsert(ctx, vectors)
+		require.Error(t, err, "Should error on wrong dimension")
+	})
+	
+	// Test 3: Duplicate IDs in same upsert
+	suite.T().Run("DuplicateIDsSameUpsert", func(t *testing.T) {
+		vectors := []cyborgdb.VectorItem{
+			{
+				Id:       "duplicate-id",
+				Vector:   suite.trainData[0],
+				Metadata: map[string]interface{}{"index": 0},
+			},
+			{
+				Id:       "duplicate-id",
+				Vector:   suite.trainData[1],
+				Metadata: map[string]interface{}{"index": 1},
+			},
+		}
+		// Server should handle this gracefully (last one wins)
+		err := suite.index.Upsert(ctx, vectors)
+		require.NoError(t, err, "Should handle duplicate IDs in same batch")
+		
+		// Verify only one exists
+		result, err := suite.index.Get(ctx, []string{"duplicate-id"}, []string{"metadata"})
+		require.NoError(t, err)
+		require.Equal(t, 1, len(result.Results))
+		// Should have the second one's metadata
+		require.Equal(t, float64(1), result.Results[0].Metadata["index"])
+	})
+	
+	// Test 4: Invalid metadata types
+	suite.T().Run("ComplexMetadataTypes", func(t *testing.T) {
+		vectors := []cyborgdb.VectorItem{
+			{
+				Id:     "complex-metadata",
+				Vector: suite.trainData[0],
+				Metadata: map[string]interface{}{
+					"string":  "test",
+					"number":  42,
+					"float":   3.14,
+					"bool":    true,
+					"null":    nil,
+					"array":   []string{"a", "b", "c"},
+					"nested": map[string]interface{}{
+						"deep": map[string]interface{}{
+							"value": "nested",
+						},
+					},
+				},
+			},
+		}
+		err := suite.index.Upsert(ctx, vectors)
+		require.NoError(t, err, "Should handle complex metadata")
+		
+		// Retrieve and verify
+		result, err := suite.index.Get(ctx, []string{"complex-metadata"}, []string{"metadata"})
+		require.NoError(t, err)
+		require.Equal(t, 1, len(result.Results))
+		meta := result.Results[0].Metadata
+		require.Equal(t, "test", meta["string"])
+		require.Equal(t, float64(42), meta["number"])
+		require.Equal(t, 3.14, meta["float"])
+		require.Equal(t, true, meta["bool"])
+	})
+	
+	// Test 5: Very long ID
+	suite.T().Run("VeryLongID", func(t *testing.T) {
+		longID := strings.Repeat("a", 1000)
+		vectors := []cyborgdb.VectorItem{
+			{
+				Id:       longID,
+				Vector:   suite.trainData[0],
+				Metadata: map[string]interface{}{"test": true},
+			},
+		}
+		err := suite.index.Upsert(ctx, vectors)
+		// Server should handle this (may truncate or error)
+		if err == nil {
+			// If it succeeded, verify we can retrieve it
+			result, err := suite.index.Get(ctx, []string{longID}, []string{"metadata"})
+			if err == nil {
+				require.LessOrEqual(t, len(result.Results), 1)
+			}
+		}
+	})
+	
+	// Test 6: Special characters in ID
+	suite.T().Run("SpecialCharactersID", func(t *testing.T) {
+		specialIDs := []string{
+			"id-with-spaces and tabs",
+			"id/with/slashes",
+			"id\\with\\backslashes",
+			"id:with:colons",
+			"id|with|pipes",
+			"id*with*asterisks",
+			"id?with?questions",
+			"id\"with\"quotes",
+			"id<with>brackets",
+			"id{with}braces",
+			"id[with]squares",
+			"id(with)parens",
+			"id#with#hashes",
+			"id@with@ats",
+			"id$with$dollars",
+			"id%with%percents",
+			"id^with^carets",
+			"id&with&amps",
+			"id=with=equals",
+			"id+with+plus",
+			"id~with~tilde",
+			"id`with`backticks",
+		}
+		
+		for _, id := range specialIDs {
+			vectors := []cyborgdb.VectorItem{
+				{
+					Id:       id,
+					Vector:   suite.trainData[0],
+					Metadata: map[string]interface{}{"original_id": id},
+				},
+			}
+			err := suite.index.Upsert(ctx, vectors)
+			if err == nil {
+				// If upsert succeeded, try to retrieve
+				result, err := suite.index.Get(ctx, []string{id}, []string{"metadata"})
+				if err == nil && len(result.Results) > 0 {
+					require.Equal(t, id, result.Results[0].Metadata["original_id"])
+				}
+			}
+		}
+	})
+	
+	// Test 7: Query with invalid parameters
+	suite.T().Run("InvalidQueryParameters", func(t *testing.T) {
+		// Negative TopK
+		params := cyborgdb.QueryParams{
+			QueryVector: suite.testData[0],
+			TopK:        -10,
+			Include:     []string{"metadata"},
+		}
+		_, err := suite.index.Query(ctx, params)
+		require.Error(t, err, "Should error on negative TopK")
+		
+		// Zero TopK - server may accept this as using default
+		params.TopK = 0
+		_, err = suite.index.Query(ctx, params)
+		// Zero TopK might be acceptable (uses server default), so don't require error
+		_ = err
+		
+		// Very large TopK
+		params.TopK = 1000000
+		_, err = suite.index.Query(ctx, params)
+		// May or may not error depending on server limits
+		_ = err
+		
+		// Negative NProbes
+		negativeProbes := int32(-5)
+		params2 := cyborgdb.QueryParams{
+			QueryVector: suite.testData[0],
+			TopK:        10,
+			NProbes:     &negativeProbes,
+			Include:     []string{"metadata"},
+		}
+		_, err = suite.index.Query(ctx, params2)
+		// Server might handle this gracefully
+		_ = err
+	})
+	
+	// Test 8: Empty batch operations
+	suite.T().Run("EmptyBatchOperations", func(t *testing.T) {
+		// Empty upsert
+		err := suite.index.Upsert(ctx, []cyborgdb.VectorItem{})
+		// Should handle gracefully
+		_ = err
+		
+		// Empty delete
+		err = suite.index.Delete(ctx, []string{})
+		// Should handle gracefully
+		_ = err
+		
+		// Empty get
+		result, err := suite.index.Get(ctx, []string{}, []string{"metadata"})
+		if err == nil {
+			require.Equal(t, 0, len(result.Results))
+		}
+	})
+	
+	// Test 9: Non-existent IDs operations
+	suite.T().Run("NonExistentIDs", func(t *testing.T) {
+		// Get non-existent IDs
+		result, err := suite.index.Get(ctx, []string{"does-not-exist-1", "does-not-exist-2"}, []string{"metadata"})
+		require.NoError(t, err)
+		require.Equal(t, 0, len(result.Results), "Should return empty for non-existent IDs")
+		
+		// Delete non-existent IDs
+		err = suite.index.Delete(ctx, []string{"does-not-exist-3", "does-not-exist-4"})
+		require.NoError(t, err, "Should handle deleting non-existent IDs gracefully")
+	})
+	
+	// Test 10: Very large batch operations
+	suite.T().Run("LargeBatchOperations", func(t *testing.T) {
+		// Large upsert (but within reason)
+		largeBatchSize := 1000
+		if largeBatchSize > len(suite.trainData) {
+			largeBatchSize = len(suite.trainData)
+		}
+		
+		vectors := make([]cyborgdb.VectorItem, largeBatchSize)
+		for i := 0; i < largeBatchSize; i++ {
+			vectors[i] = cyborgdb.VectorItem{
+				Id:       fmt.Sprintf("large-batch-%d", i),
+				Vector:   suite.trainData[i%len(suite.trainData)],
+				Metadata: map[string]interface{}{"batch": "large", "index": i},
+			}
+		}
+		
+		err := suite.index.Upsert(ctx, vectors)
+		require.NoError(t, err, "Should handle large batch upsert")
+		
+		// Large batch get
+		ids := make([]string, min(100, largeBatchSize))
+		for i := 0; i < len(ids); i++ {
+			ids[i] = fmt.Sprintf("large-batch-%d", i)
+		}
+		
+		result, err := suite.index.Get(ctx, ids, []string{"metadata"})
+		require.NoError(t, err)
+		require.LessOrEqual(t, len(result.Results), len(ids))
+		
+		// Clean up
+		err = suite.index.Delete(ctx, ids)
+		require.NoError(t, err)
+	})
+}
+
+// Test 20: Multiple upsert signatures and patterns
+func (suite *CyborgDBIntegrationTestSuite) TestMultipleUpsertPatterns() {
+	ctx := context.Background()
+	
+	// Test 1: Incremental upserts (adding vectors over time)
+	suite.T().Run("IncrementalUpserts", func(t *testing.T) {
+		// First batch
+		batch1 := []cyborgdb.VectorItem{
+			{
+				Id:       "incremental-1",
+				Vector:   suite.trainData[0],
+				Metadata: map[string]interface{}{"batch": 1},
+			},
+		}
+		err := suite.index.Upsert(ctx, batch1)
+		require.NoError(t, err)
+		
+		// Second batch
+		batch2 := []cyborgdb.VectorItem{
+			{
+				Id:       "incremental-2",
+				Vector:   suite.trainData[1],
+				Metadata: map[string]interface{}{"batch": 2},
+			},
+		}
+		err = suite.index.Upsert(ctx, batch2)
+		require.NoError(t, err)
+		
+		// Verify both exist
+		result, err := suite.index.Get(ctx, []string{"incremental-1", "incremental-2"}, []string{"metadata"})
+		require.NoError(t, err)
+		require.Equal(t, 2, len(result.Results))
+	})
+	
+	// Test 2: Update existing vectors (overwrite)
+	suite.T().Run("UpdateExistingVectors", func(t *testing.T) {
+		// Initial upsert
+		initial := []cyborgdb.VectorItem{
+			{
+				Id:       "update-test",
+				Vector:   suite.trainData[0],
+				Metadata: map[string]interface{}{"version": 1, "data": "initial"},
+				Contents: stringToNullableContents("Initial content"),
+			},
+		}
+		err := suite.index.Upsert(ctx, initial)
+		require.NoError(t, err)
+		
+		// Update with new data
+		updated := []cyborgdb.VectorItem{
+			{
+				Id:       "update-test",
+				Vector:   suite.trainData[1],
+				Metadata: map[string]interface{}{"version": 2, "data": "updated"},
+				Contents: stringToNullableContents("Updated content"),
+			},
+		}
+		err = suite.index.Upsert(ctx, updated)
+		require.NoError(t, err)
+		
+		// Verify update
+		result, err := suite.index.Get(ctx, []string{"update-test"}, []string{"metadata", "contents"})
+		require.NoError(t, err)
+		require.Equal(t, 1, len(result.Results))
+		require.Equal(t, float64(2), result.Results[0].Metadata["version"])
+		require.Equal(t, "updated", result.Results[0].Metadata["data"])
+		contents := result.Results[0].GetContents()
+		if contents != nil && contents.String != nil {
+			require.Equal(t, "Updated content", *contents.String)
+		}
+	})
+	
+	// Test 3: Mixed operations (new and updates in same batch)
+	suite.T().Run("MixedNewAndUpdates", func(t *testing.T) {
+		// Initial data
+		initial := []cyborgdb.VectorItem{
+			{
+				Id:       "mixed-1",
+				Vector:   suite.trainData[0],
+				Metadata: map[string]interface{}{"original": true},
+			},
+			{
+				Id:       "mixed-2",
+				Vector:   suite.trainData[1],
+				Metadata: map[string]interface{}{"original": true},
+			},
+		}
+		err := suite.index.Upsert(ctx, initial)
+		require.NoError(t, err)
+		
+		// Mixed batch with updates and new
+		mixed := []cyborgdb.VectorItem{
+			{
+				Id:       "mixed-1", // Update
+				Vector:   suite.trainData[2],
+				Metadata: map[string]interface{}{"original": false, "updated": true},
+			},
+			{
+				Id:       "mixed-3", // New
+				Vector:   suite.trainData[3],
+				Metadata: map[string]interface{}{"new": true},
+			},
+			{
+				Id:       "mixed-4", // New
+				Vector:   suite.trainData[4],
+				Metadata: map[string]interface{}{"new": true},
+			},
+		}
+		err = suite.index.Upsert(ctx, mixed)
+		require.NoError(t, err)
+		
+		// Verify all four exist
+		result, err := suite.index.Get(ctx, 
+			[]string{"mixed-1", "mixed-2", "mixed-3", "mixed-4"}, 
+			[]string{"metadata"})
+		require.NoError(t, err)
+		require.Equal(t, 4, len(result.Results))
+		
+		// Verify mixed-1 was updated
+		for _, r := range result.Results {
+			if r.Id == "mixed-1" {
+				require.Equal(t, false, r.Metadata["original"])
+				require.Equal(t, true, r.Metadata["updated"])
+			}
+		}
+	})
+	
+	// Test 4: Upsert with only some fields
+	suite.T().Run("PartialFieldUpserts", func(t *testing.T) {
+		// Upsert with minimal fields
+		minimal := []cyborgdb.VectorItem{
+			{
+				Id:     "minimal",
+				Vector: suite.trainData[0],
+				// No metadata, no contents
+			},
+		}
+		err := suite.index.Upsert(ctx, minimal)
+		require.NoError(t, err)
+		
+		// Upsert with all fields
+		full := []cyborgdb.VectorItem{
+			{
+				Id:       "full",
+				Vector:   suite.trainData[1],
+				Metadata: map[string]interface{}{"complete": true},
+				Contents: stringToNullableContents("Full content"),
+			},
+		}
+		err = suite.index.Upsert(ctx, full)
+		require.NoError(t, err)
+		
+		// Verify both
+		result, err := suite.index.Get(ctx, 
+			[]string{"minimal", "full"}, 
+			[]string{"metadata", "contents"})
+		require.NoError(t, err)
+		require.Equal(t, 2, len(result.Results))
+	})
+}
+
+// Test 21: SSL verification tests
+func (suite *CyborgDBIntegrationTestSuite) TestSSLVerification() {
+	apiKey := os.Getenv("CYBORGDB_API_KEY")
+	if apiKey == "" {
+		suite.T().Skip("Skipping SSL tests - no API key")
+		return
+	}
+	
+	// Test with SSL verification enabled (default)
+	suite.T().Run("WithSSLVerification", func(t *testing.T) {
+		clientWithSSL, err := cyborgdb.NewClient(apiURL, apiKey)
+		require.NoError(t, err)
+		require.NotNil(t, clientWithSSL)
+		
+		// Test basic operation
+		health, err := clientWithSSL.GetHealth(context.Background())
+		require.NoError(t, err)
+		require.NotNil(t, health)
+		require.Equal(t, "healthy", health["status"])
+	})
+	
+	// Test with SSL verification explicitly enabled
+	suite.T().Run("WithSSLVerificationExplicit", func(t *testing.T) {
+		clientWithSSL, err := cyborgdb.NewClient(apiURL, apiKey, true)
+		require.NoError(t, err)
+		require.NotNil(t, clientWithSSL)
+		
+		// Test basic operation
+		health, err := clientWithSSL.GetHealth(context.Background())
+		require.NoError(t, err)
+		require.NotNil(t, health)
+	})
+	
+	// Test with SSL verification disabled
+	suite.T().Run("WithoutSSLVerification", func(t *testing.T) {
+		clientNoSSL, err := cyborgdb.NewClient(apiURL, apiKey, false)
+		require.NoError(t, err)
+		require.NotNil(t, clientNoSSL)
+		
+		// Test basic operation
+		health, err := clientNoSSL.GetHealth(context.Background())
+		require.NoError(t, err)
+		require.NotNil(t, health)
+		require.Equal(t, "healthy", health["status"])
+		
+		// Test index operations with no SSL verification
+		key, _ := cyborgdb.GenerateKey()
+		keyHex := hex.EncodeToString(key)
+		indexName := "ssl-test-index"
+		
+		model := cyborgdb.IndexIVFFlat(768)
+		metric := "euclidean"
+		params := &cyborgdb.CreateIndexParams{
+			IndexName:   indexName,
+			IndexKey:    keyHex,
+			IndexConfig: model,
+			Metric:      &metric,
+		}
+		
+		index, err := clientNoSSL.CreateIndex(context.Background(), params)
+		if err == nil {
+			require.NotNil(t, index)
+			// Clean up
+			_ = index.DeleteIndex(context.Background())
+		}
+	})
+}
+
+// Test 22: Comprehensive Error Handling Tests
+func (suite *CyborgDBIntegrationTestSuite) TestErrorHandling() {
+	ctx := context.Background()
+	
+	// Test 1: Invalid API Key
+	suite.T().Run("InvalidAPIKey", func(t *testing.T) {
+		invalidClient, err := cyborgdb.NewClient(apiURL, "invalid-key-12345")
+		require.NoError(t, err, "Client creation should succeed even with invalid key")
+		
+		// Try to use the client - should fail
+		_, err = invalidClient.GetHealth(ctx)
+		// Health endpoint might not require auth, so try a protected operation instead
+		if err == nil {
+			// Try creating an index which should require valid auth
+			key, _ := cyborgdb.GenerateKey()
+			keyHex := hex.EncodeToString(key)
+			model := cyborgdb.IndexIVFFlat(768)
+			params := &cyborgdb.CreateIndexParams{
+				IndexName:   "test-invalid-auth",
+				IndexKey:    keyHex,
+				IndexConfig: model,
+			}
+			_, err = invalidClient.CreateIndex(ctx, params)
+		}
+		require.Error(t, err, "Should fail with invalid API key")
+	})
+	
+	// Test 2: Wrong Server URL
+	suite.T().Run("WrongServerURL", func(t *testing.T) {
+		apiKey := os.Getenv("CYBORGDB_API_KEY")
+		wrongURLClient, err := cyborgdb.NewClient("http://localhost:9999", apiKey)
+		require.NoError(t, err, "Client creation should succeed")
+		
+		// Try to connect - should fail
+		_, err = wrongURLClient.GetHealth(ctx)
+		require.Error(t, err, "Should fail to connect to wrong URL")
+	})
+	
+	// Test 3: Invalid Index Key Format
+	suite.T().Run("InvalidIndexKeyFormat", func(t *testing.T) {
+		invalidKeys := []string{
+			"too-short",
+			"not-hex-gggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggggg",
+			"wrong-length-0123456789abcdef0123456789abcdef0123456789abcdef01234567890123456789", // too long
+			"", // empty
+		}
+		
+		for _, invalidKey := range invalidKeys {
+			model := cyborgdb.IndexIVFFlat(768)
+			metric := "euclidean"
+			params := &cyborgdb.CreateIndexParams{
+				IndexName:   "test-invalid-key",
+				IndexKey:    invalidKey,
+				IndexConfig: model,
+				Metric:      &metric,
+			}
+			
+			_, err := suite.client.CreateIndex(ctx, params)
+			require.Error(t, err, "Should fail with invalid key format: %s", invalidKey)
+		}
+	})
+	
+	// Test 4: Load Index with Wrong Key
+	suite.T().Run("LoadIndexWrongKey", func(t *testing.T) {
+		// Create an index first
+		key, _ := cyborgdb.GenerateKey()
+		keyHex := hex.EncodeToString(key)
+		indexName := "test-wrong-key-load"
+		
+		model := cyborgdb.IndexIVFFlat(768)
+		metric := "euclidean"
+		params := &cyborgdb.CreateIndexParams{
+			IndexName:   indexName,
+			IndexKey:    keyHex,
+			IndexConfig: model,
+			Metric:      &metric,
+		}
+		
+		index, err := suite.client.CreateIndex(ctx, params)
+		require.NoError(t, err)
+		
+		// Try to load with wrong key
+		wrongKey, _ := cyborgdb.GenerateKey()
+		_, err = suite.client.LoadIndex(ctx, indexName, wrongKey)
+		require.Error(t, err, "Should fail to load index with wrong key")
+		
+		// Clean up
+		_ = index.DeleteIndex(ctx)
+	})
+	
+	// Test 5: Operations on Non-existent Index
+	suite.T().Run("NonExistentIndexOperations", func(t *testing.T) {
+		key, _ := cyborgdb.GenerateKey()
+		_, err := suite.client.LoadIndex(ctx, "does-not-exist-index", key)
+		require.Error(t, err, "Should fail to load non-existent index")
+	})
+	
+	// Test 6: Invalid Vector Dimensions
+	suite.T().Run("InvalidVectorDimensions", func(t *testing.T) {
+		testCases := []struct {
+			name      string
+			dimension int
+			expectErr bool
+		}{
+			{"EmptyVector", 0, true},
+			{"WrongDimension", 100, true}, // Should be 768 for our test index
+			// Skip negative dimension test as it causes panic in make()
+		}
+		
+		for _, tc := range testCases {
+			// Skip cases that would cause panic
+			if tc.dimension < 0 {
+				continue
+			}
+			
+			vectors := []cyborgdb.VectorItem{
+				{
+					Id:       fmt.Sprintf("test-%s", tc.name),
+					Vector:   make([]float32, tc.dimension),
+					Metadata: map[string]interface{}{"test": tc.name},
+				},
+			}
+			
+			err := suite.index.Upsert(ctx, vectors)
+			if tc.expectErr {
+				require.Error(t, err, "Should fail for %s", tc.name)
+			} else {
+				require.NoError(t, err, "Should succeed for %s", tc.name)
+			}
+		}
+	})
+	
+	// Test 7: Invalid Query Parameters
+	suite.T().Run("InvalidQueryParameters", func(t *testing.T) {
+		testCases := []struct {
+			name   string
+			params cyborgdb.QueryParams
+		}{
+			{
+				name: "NegativeTopK",
+				params: cyborgdb.QueryParams{
+					QueryVector: suite.testData[0],
+					TopK:        -5,
+					Include:     []string{"metadata"},
+				},
+			},
+			{
+				name: "MissingQueryInput",
+				params: cyborgdb.QueryParams{
+					// No QueryVector or QueryContents
+					TopK:    10,
+					Include: []string{"metadata"},
+				},
+			},
+			{
+				name: "WrongVectorDimension",
+				params: cyborgdb.QueryParams{
+					QueryVector: make([]float32, 100), // Wrong dimension
+					TopK:        10,
+					Include:     []string{"metadata"},
+				},
+			},
+		}
+		
+		for _, tc := range testCases {
+			_, err := suite.index.Query(ctx, tc.params)
+			require.Error(t, err, "Should fail for %s", tc.name)
+		}
+	})
+	
+	// Test 8: Invalid Train Parameters
+	suite.T().Run("InvalidTrainParameters", func(t *testing.T) {
+		testCases := []struct {
+			name   string
+			params cyborgdb.TrainParams
+		}{
+			{
+				name: "NegativeBatchSize",
+				params: cyborgdb.TrainParams{
+					BatchSize: func() *int32 { v := int32(-100); return &v }(),
+				},
+			},
+			{
+				name: "ZeroMaxIters",
+				params: cyborgdb.TrainParams{
+					MaxIters: func() *int32 { v := int32(0); return &v }(),
+				},
+			},
+			{
+				name: "NegativeTolerance",
+				params: cyborgdb.TrainParams{
+					Tolerance: func() *float64 { v := -1.0; return &v }(),
+				},
+			},
+		}
+		
+		for _, tc := range testCases {
+			err := suite.index.Train(ctx, tc.params)
+			// Some parameters might be accepted by server, so we just log the result
+			if err != nil {
+				suite.T().Logf("Train failed for %s (expected): %v", tc.name, err)
+			} else {
+				suite.T().Logf("Train succeeded for %s (server accepted invalid param)", tc.name)
+			}
+		}
+	})
+	
+	// Test 9: Invalid Metadata Types and Structures
+	suite.T().Run("InvalidMetadataStructures", func(t *testing.T) {
+		// Test with problematic metadata - these should generally be handled gracefully
+		problemMetadata := []map[string]interface{}{
+			// Very deeply nested structure
+			{
+				"deep": map[string]interface{}{
+					"level1": map[string]interface{}{
+						"level2": map[string]interface{}{
+							"level3": map[string]interface{}{
+								"level4": map[string]interface{}{
+									"level5": "very deep",
+								},
+							},
+						},
+					},
+				},
+			},
+			// Very large string
+			{
+				"large_string": strings.Repeat("a", 10000),
+			},
+			// Many fields
+			func() map[string]interface{} {
+				meta := make(map[string]interface{})
+				for i := 0; i < 1000; i++ {
+					meta[fmt.Sprintf("field_%d", i)] = i
+				}
+				return meta
+			}(),
+		}
+		
+		for i, meta := range problemMetadata {
+			vectors := []cyborgdb.VectorItem{
+				{
+					Id:       fmt.Sprintf("problem-meta-%d", i),
+					Vector:   suite.trainData[0],
+					Metadata: meta,
+				},
+			}
+			
+			err := suite.index.Upsert(ctx, vectors)
+			// Most metadata should be handled gracefully
+			if err != nil {
+				suite.T().Logf("Upsert failed for problem metadata %d: %v", i, err)
+			} else {
+				suite.T().Logf("Upsert succeeded for problem metadata %d", i)
+			}
+		}
+	})
+	
+	// Test 10: Concurrent Access Errors
+	suite.T().Run("ConcurrentOperations", func(t *testing.T) {
+		// Test concurrent operations that might cause conflicts
+		const numGoroutines = 10
+		errors := make(chan error, numGoroutines)
+		
+		// Concurrent upserts to same IDs
+		for i := 0; i < numGoroutines; i++ {
+			go func(id int) {
+				vectors := []cyborgdb.VectorItem{
+					{
+						Id:       "concurrent-test",
+						Vector:   suite.trainData[id%len(suite.trainData)],
+						Metadata: map[string]interface{}{"goroutine": id},
+					},
+				}
+				err := suite.index.Upsert(ctx, vectors)
+				errors <- err
+			}(i)
+		}
+		
+		// Collect results
+		var errCount int
+		for i := 0; i < numGoroutines; i++ {
+			err := <-errors
+			if err != nil {
+				errCount++
+				suite.T().Logf("Concurrent upsert error: %v", err)
+			}
+		}
+		
+		// Most should succeed, some conflicts are acceptable
+		suite.T().Logf("Concurrent operations: %d errors out of %d operations", errCount, numGoroutines)
+	})
+	
+	// Test 11: Resource Exhaustion
+	suite.T().Run("ResourceExhaustion", func(t *testing.T) {
+		// Try to create many indexes quickly
+		const numIndexes = 5
+		var createdIndexes []*cyborgdb.EncryptedIndex
+		
+		for i := 0; i < numIndexes; i++ {
+			key, _ := cyborgdb.GenerateKey()
+			keyHex := hex.EncodeToString(key)
+			indexName := fmt.Sprintf("resource-test-%d-%d", i, time.Now().UnixNano())
+			
+			model := cyborgdb.IndexIVFFlat(768)
+			metric := "euclidean"
+			params := &cyborgdb.CreateIndexParams{
+				IndexName:   indexName,
+				IndexKey:    keyHex,
+				IndexConfig: model,
+				Metric:      &metric,
+			}
+			
+			index, err := suite.client.CreateIndex(ctx, params)
+			if err != nil {
+				suite.T().Logf("Failed to create index %d: %v", i, err)
+			} else {
+				createdIndexes = append(createdIndexes, index)
+			}
+		}
+		
+		// Clean up created indexes
+		for i, index := range createdIndexes {
+			if err := index.DeleteIndex(ctx); err != nil {
+				suite.T().Logf("Failed to delete index %d: %v", i, err)
+			}
+		}
+		
+		suite.T().Logf("Created %d out of %d indexes", len(createdIndexes), numIndexes)
+	})
+	
+	// Test 12: Network Timeout and Recovery
+	suite.T().Run("TimeoutHandling", func(t *testing.T) {
+		// Create a context with a very short timeout
+		shortCtx, cancel := context.WithTimeout(ctx, 1*time.Millisecond)
+		defer cancel()
+		
+		// Try operations that should timeout
+		_, err := suite.index.Query(shortCtx, cyborgdb.QueryParams{
+			QueryVector: suite.testData[0],
+			TopK:        10,
+			Include:     []string{"metadata"},
+		})
+		
+		if err != nil {
+			require.Contains(t, err.Error(), "context", "Should be a context-related error")
+			suite.T().Logf("Timeout error (expected): %v", err)
+		}
+		
+		// Verify that normal operations still work after timeout
+		_, err = suite.index.Query(ctx, cyborgdb.QueryParams{
+			QueryVector: suite.testData[0],
+			TopK:        5,
+			Include:     []string{"metadata"},
+		})
+		require.NoError(t, err, "Normal operation should work after timeout")
+	})
+	
+	// Test 13: Invalid Content Types
+	suite.T().Run("InvalidContentTypes", func(t *testing.T) {
+		// Test with various problematic content
+		problematicContents := []string{
+			strings.Repeat("x", 100000), // Very large content
+			string([]byte{0, 1, 2, 3}),  // Binary data
+			"",                          // Empty content
+		}
+		
+		for i, content := range problematicContents {
+			vectors := []cyborgdb.VectorItem{
+				{
+					Id:       fmt.Sprintf("problem-content-%d", i),
+					Vector:   suite.trainData[0],
+					Contents: stringToNullableContents(content),
+				},
+			}
+			
+			err := suite.index.Upsert(ctx, vectors)
+			if err != nil {
+				suite.T().Logf("Upsert failed for problem content %d: %v", i, err)
+			} else {
+				suite.T().Logf("Upsert succeeded for problem content %d", i)
+			}
+		}
+	})
+}
+
+// Helper function for min
+func min(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }
 
 // Test suite runner - uses the global indexType constant
