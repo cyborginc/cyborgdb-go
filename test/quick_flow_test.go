@@ -36,7 +36,6 @@ const (
 	
 	// Index type configuration - change this to test different index types
 	// Options: "ivf", "ivfflat", "ivfpq"
-	// NOTE: "ivf" is IndexIVF, "ivfflat" is IndexIVFFlat, "ivfpq" is IndexIVFPQ
 	indexType = "ivfflat"
 )
 
