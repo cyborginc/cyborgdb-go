@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"testing"
 	"time"
+	"crypto/sha256"
 
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
@@ -237,6 +238,13 @@ func TestUnitFlow(t *testing.T) {
 	jsonData, err := ioutil.ReadFile(jsonPath)
 	if err != nil {
 		t.Fatalf("Failed to read test data: %v", err)
+	}
+
+	// Compute & validate checksum
+	expectedChecksum := "a2989692cb12e8667b22bee4177acb295b72a23be82458ce7dd06e4a901cb04d"
+	checksum := fmt.Sprintf("%x", sha256.Sum256(jsonData))
+	if checksum != expectedChecksum {
+		t.Fatalf("Checksum mismatch: expected %s, got %s", expectedChecksum, checksum)
 	}
 
 	var data TestData
@@ -611,8 +619,8 @@ func TestUnitFlow(t *testing.T) {
 		recall := checkQueryResults(results, trainedNeighbors, numQueries)
 		fmt.Printf("Trained Query (No Metadata). Expected recall: %f, got %f\n", trainedRecall, recall)
 
-		if math.Abs(recall-trainedRecall) > 0.8 {
-			t.Errorf("Recall mismatch: expected %f±0.8, got %f", trainedRecall, recall)
+		if math.Abs(recall-trainedRecall) > 0.08 {
+			t.Errorf("Recall mismatch: expected %f±0.08, got %f", trainedRecall, recall)
 		}
 	})
 
