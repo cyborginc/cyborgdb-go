@@ -380,43 +380,30 @@ func (e *EncryptedIndex) Train(ctx context.Context, params TrainParams) error {
 		IndexName: e.indexName,
 	}
 
-	// Set optional fields, using server defaults when not provided
-	// This works around a Python server issue where missing fields become None
+	// Set optional fields only if provided by the caller
+	// Let the server handle default values
 
-	// BatchSize: default 2048
-	batchSize := int32(2048)
 	if params.BatchSize != nil {
-		batchSize = *params.BatchSize
+		req.BatchSize = *internal.NewNullableInt32(params.BatchSize)
 	}
-	req.BatchSize = *internal.NewNullableInt32(&batchSize)
 
-	// MaxIters: default 100
-	maxIters := int32(100)
 	if params.MaxIters != nil {
-		maxIters = *params.MaxIters
+		req.MaxIters = *internal.NewNullableInt32(params.MaxIters)
 	}
-	req.MaxIters = *internal.NewNullableInt32(&maxIters)
 
-	// Tolerance: default 1e-6
-	tolerance := float32(1e-6)
 	if params.Tolerance != nil {
-		tolerance = float32(*params.Tolerance)
+		tolerance := float32(*params.Tolerance)
+		req.Tolerance = *internal.NewNullableFloat32(&tolerance)
 	}
-	req.Tolerance = *internal.NewNullableFloat32(&tolerance)
 
-	// MaxMemory: default 0 (no limit)
-	maxMemory := int32(0)
 	if params.MaxMemory != nil {
-		maxMemory = *params.MaxMemory
+		req.MaxMemory = *internal.NewNullableInt32(params.MaxMemory)
 	}
-	req.MaxMemory = *internal.NewNullableInt32(&maxMemory)
 
-	// NLists: default 0 (auto)
-	nLists := int32(0)
 	if params.NLists != nil {
-		nLists = *params.NLists
+		req.NLists = *internal.NewNullableInt32(params.NLists)
 	}
-	req.NLists = *internal.NewNullableInt32(&nLists)
+
 	_, _, err := e.client.APIClient.DefaultAPI.TrainIndexV1IndexesTrainPost(ctx).
 		TrainRequest(req).
 		Execute()
