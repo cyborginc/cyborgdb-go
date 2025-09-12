@@ -112,8 +112,8 @@ type TrainParams struct {
 //   - Vector query: Provide QueryVector for single query or BatchQueryVectors for batch
 //   - Content query: Provide QueryContents for text-based search (if supported)
 //
-// Required fields: TopK, Include
-// Optional fields: NProbes, Greedy, Filters (and one query input)
+// Required fields: TopK, Include.
+// Optional fields: NProbes, Greedy, Filters (and one query input).
 type QueryParams struct {
 	// QueryVector contains the query vector for single vector similarity search.
 	// Mutually exclusive with BatchQueryVectors and QueryContents.

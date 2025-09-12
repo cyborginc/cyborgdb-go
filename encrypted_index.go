@@ -18,6 +18,9 @@ var (
 	// ErrMissingQueryInput is returned when no query input is provided in QueryParams.
 	// At least one of QueryVector, BatchQueryVectors, or QueryContents must be specified.
 	ErrMissingQueryInput = fmt.Errorf("either queryVectors or queryContents must be provided")
+
+	// ErrUnexpectedTrainingStatus is returned when the training status response format is unexpected.
+	ErrUnexpectedTrainingStatus = fmt.Errorf("unexpected training status response format")
 )
 
 // EncryptedIndex provides a handle for performing operations on an encrypted vector index.
@@ -116,7 +119,7 @@ func (e *EncryptedIndex) CheckTrainingStatus(ctx context.Context) (bool, error) 
 					break
 				}
 			}
-			
+
 			// If not training anymore but was previously untrained, update the cached status
 			if !isTraining && !e.trained {
 				// Check if the index is actually trained by querying its info
@@ -124,7 +127,7 @@ func (e *EncryptedIndex) CheckTrainingStatus(ctx context.Context) (bool, error) 
 					IndexName: e.indexName,
 					IndexKey:  e.indexKey,
 				}
-				
+
 				resp, _, err := e.client.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
 					IndexOperationRequest(describeReq).
 					Execute()
@@ -132,12 +135,12 @@ func (e *EncryptedIndex) CheckTrainingStatus(ctx context.Context) (bool, error) 
 					e.trained = resp.GetIsTrained()
 				}
 			}
-			
+
 			return isTraining, nil
 		}
 	}
-	
-	return false, fmt.Errorf("unexpected training status response format")
+
+	return false, ErrUnexpectedTrainingStatus
 }
 
 // Upsert inserts new vectors or updates existing ones in the index.
@@ -172,13 +175,13 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 	if err != nil {
 		return err
 	}
-	
+
 	// If training was triggered, we can note that the index is no longer trained
 	// (it will be retrained automatically)
 	if resp != nil && resp.HasTrainingTriggered() && resp.GetTrainingTriggered() {
 		e.trained = false
 	}
-	
+
 	return nil
 }
 
@@ -314,7 +317,7 @@ func (e *EncryptedIndex) Get(ctx context.Context, ids []string, include []string
 		return nil, err
 	}
 	// Convert GetResponseModel to GetResponse
-	return (*GetResponse)(result), nil
+	return result, nil
 }
 
 // Delete removes vectors from the index by their IDs.

@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	cryptoRand "crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -15,10 +16,10 @@ import (
 	"strconv"
 	"testing"
 	"time"
-	"crypto/sha256"
 
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+
 	cyborgdb "github.com/cyborginc/cyborgdb-go"
 )
 
@@ -32,7 +33,7 @@ func generateUniqueName(prefix string) string {
 func checkQueryResults(results *cyborgdb.QueryResponse, neighbors [][]int32, numQueries int) float64 {
 	// Parse results to extract IDs from the returned dictionaries
 	resultsData := results.GetResults()
-	
+
 	// Handle both single query and batch query results
 	var queryResults [][]cyborgdb.QueryResultItem
 	if resultsData.ArrayOfQueryResultItem != nil {
@@ -44,7 +45,7 @@ func checkQueryResults(results *cyborgdb.QueryResponse, neighbors [][]int32, num
 	} else {
 		panic("Unexpected results type")
 	}
-	
+
 	resultIds := make([][]int, len(queryResults))
 	for i, qr := range queryResults {
 		resultIds[i] = make([]int, len(qr))
@@ -101,10 +102,10 @@ func safeInt(val interface{}) int {
 
 func checkMetadataResults(results []*cyborgdb.QueryResponse, metadataNeighbors [][][]int32, metadataCandidates [][]int32, numQueries int) []float64 {
 	allResults := make([][][]cyborgdb.QueryResultItem, len(results))
-	
+
 	for idx, result := range results {
 		resultsData := result.GetResults()
-		
+
 		// Handle both single query and batch query results
 		if resultsData.ArrayOfQueryResultItem != nil {
 			// Single query result - wrap in array
@@ -116,7 +117,7 @@ func checkMetadataResults(results []*cyborgdb.QueryResponse, metadataNeighbors [
 			panic("Unexpected results type")
 		}
 	}
-	
+
 	resultIds := make([][][]int, len(allResults))
 	for idx, result := range allResults {
 		resultIds[idx] = make([][]int, len(result))
@@ -208,21 +209,21 @@ func checkMetadataResults(results []*cyborgdb.QueryResponse, metadataNeighbors [
 }
 
 type TestData struct {
-	Vectors                    [][]float32     `json:"vectors"`
-	Queries                    [][]float32     `json:"queries"`
-	UntrainedNeighbors        [][]int32       `json:"untrained_neighbors"`
-	TrainedNeighbors          [][]int32       `json:"trained_neighbors"`
-	Metadata                   []interface{}   `json:"metadata"`
-	MetadataQueries           []interface{}   `json:"metadata_queries"`
-	MetadataQueryNames        []string        `json:"metadata_query_names"`
-	UntrainedMetadataMatches  [][]int32       `json:"untrained_metadata_matches"`
-	TrainedMetadataMatches    [][]int32       `json:"trained_metadata_matches"`
-	UntrainedMetadataNeighbors [][][]int32     `json:"untrained_metadata_neighbors"`
-	TrainedMetadataNeighbors  [][][]int32     `json:"trained_metadata_neighbors"`
-	UntrainedRecall           float64         `json:"untrained_recall"`
-	TrainedRecall             float64         `json:"trained_recall"`
-	NumUntrainedVectors       int             `json:"num_untrained_vectors"`
-	NumTrainedVectors         int             `json:"num_trained_vectors"`
+	Vectors                    [][]float32   `json:"vectors"`
+	Queries                    [][]float32   `json:"queries"`
+	UntrainedNeighbors         [][]int32     `json:"untrained_neighbors"`
+	TrainedNeighbors           [][]int32     `json:"trained_neighbors"`
+	Metadata                   []interface{} `json:"metadata"`
+	MetadataQueries            []interface{} `json:"metadata_queries"`
+	MetadataQueryNames         []string      `json:"metadata_query_names"`
+	UntrainedMetadataMatches   [][]int32     `json:"untrained_metadata_matches"`
+	TrainedMetadataMatches     [][]int32     `json:"trained_metadata_matches"`
+	UntrainedMetadataNeighbors [][][]int32   `json:"untrained_metadata_neighbors"`
+	TrainedMetadataNeighbors   [][][]int32   `json:"trained_metadata_neighbors"`
+	UntrainedRecall            float64       `json:"untrained_recall"`
+	TrainedRecall              float64       `json:"trained_recall"`
+	NumUntrainedVectors        int           `json:"num_untrained_vectors"`
+	NumTrainedVectors          int           `json:"num_trained_vectors"`
 }
 
 func TestUnitFlow(t *testing.T) {
@@ -248,7 +249,7 @@ func TestUnitFlow(t *testing.T) {
 	}
 
 	var data TestData
-	if err := json.Unmarshal(jsonData, &data); err != nil {
+	if err = json.Unmarshal(jsonData, &data); err != nil {
 		t.Fatalf("Failed to parse test data: %v", err)
 	}
 
@@ -287,7 +288,7 @@ func TestUnitFlow(t *testing.T) {
 	indexKeyBytes := make([]byte, 32)
 	cryptoRand.Read(indexKeyBytes)
 	indexKey := hex.EncodeToString(indexKeyBytes)
-	
+
 	metric := "euclidean"
 	createParams := &cyborgdb.CreateIndexParams{
 		IndexName:   indexName,
@@ -563,7 +564,7 @@ func TestUnitFlow(t *testing.T) {
 				fmt.Printf("Error checking training status: %v, retrying... (%d/%d)\n", err, attempt+1, numRetries)
 				continue
 			}
-			
+
 			// If not training and index is marked as trained, we're done
 			if !isTraining && index.IsTrained() {
 				trained = true
@@ -890,10 +891,10 @@ func TestUnitFlow(t *testing.T) {
 			t.Errorf("Failed to list IDs: %v", err)
 		}
 
-		for _, deletedId := range idsToDelete {
+		for _, deletedID := range idsToDelete {
 			for _, id := range results.Ids {
-				if id == deletedId {
-					t.Errorf("ID %s was not deleted", deletedId)
+				if id == deletedID {
+					t.Errorf("ID %s was not deleted", deletedID)
 				}
 			}
 		}
@@ -1009,7 +1010,7 @@ func TestUnitFlow(t *testing.T) {
 		if err != nil {
 			t.Errorf("Failed to decode index key: %v", err)
 		}
-		
+
 		loadedIndex, err := client.LoadIndex(ctx, indexName, loadedKeyBytes)
 		if err != nil {
 			t.Errorf("Failed to load index: %v", err)
