@@ -3,19 +3,19 @@
 package internal
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
+	"bytes"
 )
 
 // IndexIVFPQModel configures an IVFPQ (Inverted File with Product Quantization) index.
 type IndexIVFPQModel struct {
 	Dimension int32  `json:"dimension,omitempty"`
-	NLists    int32  `json:"n_lists"`
+	NLists    int32   `json:"n_lists"`
 	Metric    string `json:"metric,omitempty"`
-	Type      string `json:"type"`    // default: "ivfpq"
-	PqDim     int32  `json:"pq_dim"`  // required
-	PqBits    int32  `json:"pq_bits"` // required
+	Type      string  `json:"type"`      // default: "ivfpq"
+	PqDim     int32   `json:"pq_dim"`    // required
+	PqBits    int32   `json:"pq_bits"`   // required
 }
 
 type _IndexIVFPQModel IndexIVFPQModel

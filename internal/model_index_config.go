@@ -1,7 +1,7 @@
 /*
 CyborgDB API
 
-CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks.
+CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks. 
 
 API version: 1.0.0
 */
@@ -11,8 +11,8 @@ API version: 1.0.0
 package internal
 
 import (
-	"bytes"
 	"encoding/json"
+	"bytes"
 	"fmt"
 )
 
@@ -21,12 +21,12 @@ var _ MappedNullable = &IndexConfig{}
 
 // IndexConfig struct for IndexConfig
 type IndexConfig struct {
-	Dimension int32  `json:"dimension"`
-	Metric    string `json:"metric"`
+	Dimension int32 `json:"dimension"`
+	Metric string `json:"metric"`
 	IndexType string `json:"index_type"`
-	NLists    int32  `json:"n_lists"`
-	PqDim     *int32 `json:"pq_dim,omitempty"`
-	PqBits    *int32 `json:"pq_bits,omitempty"`
+	NLists int32 `json:"n_lists"`
+	PqDim *int32 `json:"pq_dim,omitempty"`
+	PqBits *int32 `json:"pq_bits,omitempty"`
 }
 
 type _IndexConfig IndexConfig
@@ -212,23 +212,12 @@ func (o *IndexConfig) SetPqBits(v int32) {
 	o.PqBits = &v
 }
 
-func (cfg IndexConfig) MarshalJSON() ([]byte, error) {
-	// Create a map with type first
-	data := map[string]interface{}{
-		"type":      cfg.IndexType,
-		"dimension": cfg.Dimension,
-		"metric":    cfg.Metric,
-		"n_lists":   cfg.NLists,
+func (o IndexConfig) MarshalJSON() ([]byte, error) {
+	toSerialize,err := o.ToMap()
+	if err != nil {
+		return []byte{}, err
 	}
-
-	if cfg.PqDim != nil {
-		data["pq_dim"] = *cfg.PqDim
-	}
-	if cfg.PqBits != nil {
-		data["pq_bits"] = *cfg.PqBits
-	}
-
-	return json.Marshal(data)
+	return json.Marshal(toSerialize)
 }
 
 func (o IndexConfig) ToMap() (map[string]interface{}, error) {
@@ -262,10 +251,10 @@ func (o *IndexConfig) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err
+		return err;
 	}
 
-	for _, requiredProperty := range requiredProperties {
+	for _, requiredProperty := range(requiredProperties) {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -321,3 +310,5 @@ func (v *NullableIndexConfig) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+

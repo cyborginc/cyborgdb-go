@@ -3,17 +3,17 @@
 package internal
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
+	"bytes"
 )
 
 // IndexIVFFlatModel struct for configuring an IVFFlat (Inverted File with Flat quantization) index.
 type IndexIVFFlatModel struct {
 	Dimension int32  `json:"dimension,omitempty"`
-	NLists    int32  `json:"n_lists"`
+	NLists    int32   `json:"n_lists"`
 	Metric    string `json:"metric,omitempty"`
-	Type      string `json:"type"` // default: "ivfflat"
+	Type      string  `json:"type"` // default: "ivfflat"
 }
 
 type _IndexIVFFlatModel IndexIVFFlatModel
