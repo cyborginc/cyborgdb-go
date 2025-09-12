@@ -93,6 +93,53 @@ func (e *EncryptedIndex) GetIndexConfig() internal.IndexConfig {
 //   - bool: true if the index has been trained, false otherwise
 func (e *EncryptedIndex) IsTrained() bool { return e.trained }
 
+// CheckTrainingStatus queries the server to check if this index is currently being trained
+// and updates the cached training status if training has completed.
+//
+// Returns:
+//   - bool: true if the index is currently being trained, false otherwise
+//   - error: Any error encountered during the status check
+func (e *EncryptedIndex) CheckTrainingStatus(ctx context.Context) (bool, error) {
+	// Get training status from server
+	result, _, err := e.client.APIClient.DefaultAPI.GetTrainingStatusV1IndexesTrainingStatusGet(ctx).Execute()
+	if err != nil {
+		return false, fmt.Errorf("failed to get training status: %w", err)
+	}
+
+	// Parse the result to check if this index is being trained
+	if statusMap, ok := result.(map[string]interface{}); ok {
+		if trainingIndexes, ok := statusMap["training_indexes"].([]interface{}); ok {
+			isTraining := false
+			for _, idx := range trainingIndexes {
+				if idxName, ok := idx.(string); ok && idxName == e.indexName {
+					isTraining = true
+					break
+				}
+			}
+			
+			// If not training anymore but was previously untrained, update the cached status
+			if !isTraining && !e.trained {
+				// Check if the index is actually trained by querying its info
+				describeReq := internal.IndexOperationRequest{
+					IndexName: e.indexName,
+					IndexKey:  e.indexKey,
+				}
+				
+				resp, _, err := e.client.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
+					IndexOperationRequest(describeReq).
+					Execute()
+				if err == nil && resp != nil {
+					e.trained = resp.GetIsTrained()
+				}
+			}
+			
+			return isTraining, nil
+		}
+	}
+	
+	return false, fmt.Errorf("unexpected training status response format")
+}
+
 // Upsert inserts new vectors or updates existing ones in the index.
 //
 // Vector data is encrypted end-to-end before transmission. If a vector ID
@@ -119,10 +166,20 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 		IndexKey:  e.indexKey,
 		Items:     items,
 	}
-	_, _, err := e.client.APIClient.DefaultAPI.UpsertVectorsV1VectorsUpsertPost(ctx).
+	resp, _, err := e.client.APIClient.DefaultAPI.UpsertVectorsV1VectorsUpsertPost(ctx).
 		UpsertRequest(req).
 		Execute()
-	return err
+	if err != nil {
+		return err
+	}
+	
+	// If training was triggered, we can note that the index is no longer trained
+	// (it will be retrained automatically)
+	if resp != nil && resp.HasTrainingTriggered() && resp.GetTrainingTriggered() {
+		e.trained = false
+	}
+	
+	return nil
 }
 
 // Query performs similarity search to find the nearest neighbors to query vector(s).

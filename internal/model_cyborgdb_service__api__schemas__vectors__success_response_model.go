@@ -23,6 +23,8 @@ var _ MappedNullable = &CyborgdbServiceApiSchemasVectorsSuccessResponseModel{}
 type CyborgdbServiceApiSchemasVectorsSuccessResponseModel struct {
 	Status *string `json:"status,omitempty"`
 	Message string `json:"message"`
+	TrainingTriggered *bool `json:"training_triggered,omitempty"`
+	TrainingMessage *string `json:"training_message,omitempty"`
 }
 
 type _CyborgdbServiceApiSchemasVectorsSuccessResponseModel CyborgdbServiceApiSchemasVectorsSuccessResponseModel
@@ -105,6 +107,70 @@ func (o *CyborgdbServiceApiSchemasVectorsSuccessResponseModel) SetMessage(v stri
 	o.Message = v
 }
 
+// GetTrainingTriggered returns the TrainingTriggered field value if set, zero value otherwise.
+func (o *CyborgdbServiceApiSchemasVectorsSuccessResponseModel) GetTrainingTriggered() bool {
+	if o == nil || IsNil(o.TrainingTriggered) {
+		var ret bool
+		return ret
+	}
+	return *o.TrainingTriggered
+}
+
+// GetTrainingTriggeredOk returns a tuple with the TrainingTriggered field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CyborgdbServiceApiSchemasVectorsSuccessResponseModel) GetTrainingTriggeredOk() (*bool, bool) {
+	if o == nil || IsNil(o.TrainingTriggered) {
+		return nil, false
+	}
+	return o.TrainingTriggered, true
+}
+
+// HasTrainingTriggered returns a boolean if a field has been set.
+func (o *CyborgdbServiceApiSchemasVectorsSuccessResponseModel) HasTrainingTriggered() bool {
+	if o != nil && !IsNil(o.TrainingTriggered) {
+		return true
+	}
+
+	return false
+}
+
+// SetTrainingTriggered gets a reference to the given bool and assigns it to the TrainingTriggered field.
+func (o *CyborgdbServiceApiSchemasVectorsSuccessResponseModel) SetTrainingTriggered(v bool) {
+	o.TrainingTriggered = &v
+}
+
+// GetTrainingMessage returns the TrainingMessage field value if set, zero value otherwise.
+func (o *CyborgdbServiceApiSchemasVectorsSuccessResponseModel) GetTrainingMessage() string {
+	if o == nil || IsNil(o.TrainingMessage) {
+		var ret string
+		return ret
+	}
+	return *o.TrainingMessage
+}
+
+// GetTrainingMessageOk returns a tuple with the TrainingMessage field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *CyborgdbServiceApiSchemasVectorsSuccessResponseModel) GetTrainingMessageOk() (*string, bool) {
+	if o == nil || IsNil(o.TrainingMessage) {
+		return nil, false
+	}
+	return o.TrainingMessage, true
+}
+
+// HasTrainingMessage returns a boolean if a field has been set.
+func (o *CyborgdbServiceApiSchemasVectorsSuccessResponseModel) HasTrainingMessage() bool {
+	if o != nil && !IsNil(o.TrainingMessage) {
+		return true
+	}
+
+	return false
+}
+
+// SetTrainingMessage gets a reference to the given string and assigns it to the TrainingMessage field.
+func (o *CyborgdbServiceApiSchemasVectorsSuccessResponseModel) SetTrainingMessage(v string) {
+	o.TrainingMessage = &v
+}
+
 func (o CyborgdbServiceApiSchemasVectorsSuccessResponseModel) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -119,6 +185,12 @@ func (o CyborgdbServiceApiSchemasVectorsSuccessResponseModel) ToMap() (map[strin
 		toSerialize["status"] = o.Status
 	}
 	toSerialize["message"] = o.Message
+	if !IsNil(o.TrainingTriggered) {
+		toSerialize["training_triggered"] = o.TrainingTriggered
+	}
+	if !IsNil(o.TrainingMessage) {
+		toSerialize["training_message"] = o.TrainingMessage
+	}
 	return toSerialize, nil
 }
 
