@@ -62,14 +62,13 @@ func main() {
         log.Fatal(err)
     }
     
-    // Create an encrypted index with IVFFlat configuration
-    indexModel := &cyborgdb.IndexIVFFlat{
-        Dimension: 128,
-        Metric:    "euclidean",
-        NLists:    1024,
+    // Create an encrypted index
+    createParams := &cyborgdb.CreateIndexParams{
+        IndexName: "my-index",
+        IndexKey:  fmt.Sprintf("%x", indexKey),
     }
     
-    index, err := client.CreateIndex(context.Background(), "my-index", indexKey, indexModel, nil)
+    index, err := client.CreateIndex(context.Background(), createParams)
     if err != nil {
         log.Fatal(err)
     }
@@ -103,7 +102,12 @@ func main() {
     
     // Query the encrypted index
     queryVector := []float32{0.1, 0.2, 0.3} // ... 128 dimensions
-    response, err := index.Query(context.Background(), queryVector, 10)
+    queryParams := cyborgdb.QueryParams{
+        QueryVector: queryVector,
+        TopK:        10,
+        Include:     []string{"metadata"},
+    }
+    response, err := index.Query(context.Background(), queryParams)
     if err != nil {
         log.Fatal(err)
     }
@@ -133,7 +137,12 @@ queryVectors := [][]float32{
     {0.4, 0.5, 0.6}, // ... second vector
 }
 
-batchResults, err := index.Query(context.Background(), queryVectors, 5)
+queryParams := cyborgdb.QueryParams{
+    BatchQueryVectors: queryVectors,
+    TopK:              5,
+    Include:           []string{"metadata"},
+}
+batchResults, err := index.Query(context.Background(), queryParams)
 if err != nil {
     log.Fatal(err)
 }
@@ -151,15 +160,19 @@ complexFilter := map[string]interface{}{
     },
 }
 
-results, err := index.Query(
-    context.Background(),
-    queryVector,
-    10,    // topK
-    1,     // nProbes  
-    false, // greedy
-    complexFilter,
-    []string{"distance", "metadata", "contents"},
-)
+queryVector := []float32{0.1, 0.2, 0.3} // ... your query vector
+nProbes := int32(1)
+greedy := false
+
+queryParams := cyborgdb.QueryParams{
+    QueryVector: queryVector,
+    TopK:        10,
+    NProbes:     &nProbes,
+    Greedy:      &greedy,
+    Filters:     complexFilter,
+    Include:     []string{"distance", "metadata", "contents"},
+}
+results, err := index.Query(context.Background(), queryParams)
 ```
 
 ## Documentation
