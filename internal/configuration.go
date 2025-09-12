@@ -1,7 +1,7 @@
 /*
 CyborgDB API
 
-CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks.
+CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks. 
 
 API version: 1.0.0
 */
@@ -62,9 +62,9 @@ type ServerVariable struct {
 
 // ServerConfiguration stores the information about a server
 type ServerConfiguration struct {
-	URL         string
+	URL string
 	Description string
-	Variables   map[string]ServerVariable
+	Variables map[string]ServerVariable
 }
 
 // ServerConfigurations stores multiple ServerConfiguration items
@@ -85,16 +85,17 @@ type Configuration struct {
 // NewConfiguration returns a new Configuration object
 func NewConfiguration() *Configuration {
 	cfg := &Configuration{
-		DefaultHeader: make(map[string]string),
-		UserAgent:     "OpenAPI-Generator/1.0.0/go",
-		Debug:         false,
-		Servers: ServerConfigurations{
+		DefaultHeader:    make(map[string]string),
+		UserAgent:        "OpenAPI-Generator/1.0.0/go",
+		Debug:            false,
+		Servers:          ServerConfigurations{
 			{
-				URL:         "https://api.cyborgdb.co",
+				URL: "https://api.cyborgdb.co",
 				Description: "No description provided",
 			},
 		},
-		OperationServers: map[string]ServerConfigurations{},
+		OperationServers: map[string]ServerConfigurations{
+		},
 	}
 	return cfg
 }
