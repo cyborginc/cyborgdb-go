@@ -1,7 +1,7 @@
 /*
 CyborgDB API
 
-CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks.
+CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks. 
 
 API version: 1.0.0
 */
@@ -11,8 +11,8 @@ API version: 1.0.0
 package internal
 
 import (
-	"bytes"
 	"encoding/json"
+	"bytes"
 	"fmt"
 )
 

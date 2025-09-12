@@ -1,7 +1,7 @@
 /*
 CyborgDB API
 
-CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks.
+CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks. 
 
 API version: 1.0.0
 */
@@ -23,12 +23,12 @@ var _ MappedNullable = &EncryptedIndex{}
 // It provides a secure way to store and query high-dimensional vectors with end-to-end encryption.
 // The index maintains references to the index name, encryption key, type, configuration, and client connection.
 type EncryptedIndex struct {
-	indexName *string      `json:"index_name,omitempty"`
-	indexKey  string       `json:"-"`
-	indexType *string      `json:"index_type,omitempty"`
-	config    *IndexConfig `json:"config,omitempty"`
-	client    *Client      `json:"-"`
-	trained   bool         `json:"-"`
+    indexName *string      `json:"index_name,omitempty"`
+    indexKey  string       `json:"-"`
+    indexType *string      `json:"index_type,omitempty"`
+    config    *IndexConfig `json:"config,omitempty"`
+    client    *Client      `json:"-"`
+    trained   bool         `json:"-"`
 }
 
 // NewEncryptedIndex creates and returns a new EncryptedIndex instance with default values.
@@ -437,7 +437,6 @@ func (e *EncryptedIndex) Train(ctx context.Context, batchSize int32, maxIters in
 
 	return nil
 }
-
 // Query searches for the nearest neighbors to the given query vector(s) in the encrypted index.
 // This method performs similarity search using the specified distance metric and returns
 // the most similar vectors along with their distances and metadata.
@@ -450,9 +449,9 @@ func (e *EncryptedIndex) Train(ctx context.Context, batchSize int32, maxIters in
 // Parameters:
 //   - ctx: Context for controlling the request lifecycle (timeouts, cancellation, etc.)
 //   - args: Variable arguments supporting multiple patterns:
-//   - (queryVectors, topK, nProbes, greedy, filters, include) - Direct parameter style
-//   - (QueryRequest) - Single query request struct
-//   - (BatchQueryRequest) - Batch query request struct
+//     * (queryVectors, topK, nProbes, greedy, filters, include) - Direct parameter style
+//     * (QueryRequest) - Single query request struct
+//     * (BatchQueryRequest) - Batch query request struct
 //
 // Returns:
 //   - *QueryResponse: Contains the search results with nearest neighbors, distances, and metadata
@@ -491,7 +490,6 @@ func (e *EncryptedIndex) Query(ctx context.Context, args ...interface{}) (*Query
 		return e.executeDirectQueryAsBatch(ctx, keyHex, args...)
 	}
 }
-
 // convertQueryRequestToBatch converts a QueryRequest to BatchQueryRequest format.
 // This helper function ensures consistency with the TypeScript SDK which always
 // uses batch format internally, even for single vector queries.
@@ -842,14 +840,14 @@ func (e *EncryptedIndex) executeDirectQuery(ctx context.Context, args ...interfa
 	if len(vectors) == 1 {
 		// Use QueryRequest for single vector
 		queryRequest := QueryRequest{
-			IndexName:   *e.indexName,
-			IndexKey:    e.indexKey,
-			QueryVector: vectors[0], // Use single vector field
-			TopK:        topK,
-			NProbes:     nProbes,
-			Greedy:      &greedy,
-			Filters:     filters,
-			Include:     include,
+			IndexName:    *e.indexName,
+			IndexKey:     e.indexKey,
+			QueryVector:  vectors[0], // Use single vector field
+			TopK:         topK,
+			NProbes:      nProbes,
+			Greedy:       &greedy,
+			Filters:      filters,
+			Include:      include,
 		}
 
 		return e.executeQueryRequest(ctx, &queryRequest)
@@ -882,12 +880,11 @@ func (e *EncryptedIndex) executeDirectQuery(ctx context.Context, args ...interfa
 //   - error: nil on success, or an error describing what went wrong
 //
 // Example:
-//
-//	idsToDelete := []string{"vec1", "vec2", "vec3"}
-//	err := index.Delete(ctx, idsToDelete)
-//	if err != nil {
-//	    log.Printf("Failed to delete vectors: %v", err)
-//	}
+//   idsToDelete := []string{"vec1", "vec2", "vec3"}
+//   err := index.Delete(ctx, idsToDelete)
+//   if err != nil {
+//       log.Printf("Failed to delete vectors: %v", err)
+//   }
 //
 // Note: Deleting non-existent IDs will not cause an error. The operation will
 // succeed and only existing vectors will be removed.
@@ -974,7 +971,6 @@ func (e *EncryptedIndex) Get(ctx context.Context, ids []string, include []string
 
 	return resp, nil
 }
-
 // IsTrained returns whether the index has been trained.
 // Training optimizes the index for better search performance and is typically
 // performed after upserting a significant number of vectors.
@@ -985,5 +981,5 @@ func (e *EncryptedIndex) Get(ctx context.Context, ids []string, include []string
 // Note: The trained state is tracked locally and may not reflect the actual
 // server-side state if the index was trained outside of this client instance.
 func (e *EncryptedIndex) IsTrained() bool {
-	return e.trained // You'll need to add this field
+    return e.trained  // You'll need to add this field
 }

@@ -1,7 +1,7 @@
 /*
 CyborgDB API
 
-CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks.
+CyborgDB is a secure, encrypted vector database that allows you to store and query high-dimensional vectors with end-to-end encryption. This OpenAPI specification describes the REST interface used by the Go SDK client to perform operations such as indexing, querying, and health checks. 
 
 API version: 1.0.0
 */
@@ -11,8 +11,8 @@ API version: 1.0.0
 package internal
 
 import (
-	"bytes"
 	"encoding/json"
+	"bytes"
 	"fmt"
 )
 
@@ -25,6 +25,7 @@ type DeleteRequest struct {
 	IndexKey  string   `json:"index_key"`
 	Ids       []string `json:"ids"`
 }
+
 
 type _DeleteRequest DeleteRequest
 
@@ -73,7 +74,7 @@ func (o *DeleteRequest) SetIds(v []string) {
 }
 
 func (o DeleteRequest) MarshalJSON() ([]byte, error) {
-	toSerialize, err := o.ToMap()
+	toSerialize,err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -101,10 +102,10 @@ func (o *DeleteRequest) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err
+		return err;
 	}
 
-	for _, requiredProperty := range requiredProperties {
+	for _, requiredProperty := range(requiredProperties) {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -160,3 +161,5 @@ func (v *NullableDeleteRequest) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+
