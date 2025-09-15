@@ -120,7 +120,7 @@ func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 //   - ctx: Context for cancellation/timeouts
 //   - params: Complete payload containing:
 //   - IndexName (required): unique index name
-//   - IndexKey  (required): 64-char hex of a 32-byte key
+//   - IndexKey  (required): 32-byte encryption key
 //   - IndexConfig (optional): index configuration (IndexIVF, IndexIVFFlat, or IndexIVFPQ)
 //   - Metric (optional): distance metric (e.g., "euclidean", "cosine")
 //   - EmbeddingModel (optional): embedding model name to associate
@@ -135,6 +135,14 @@ func (c *Client) CreateIndex(
 	ctx context.Context,
 	params *CreateIndexParams,
 ) (*EncryptedIndex, error) {
+	// Validate the key length
+	if len(params.IndexKey) != KeySize {
+		return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(params.IndexKey))
+	}
+
+	// Convert bytes to hex string
+	keyHex := fmt.Sprintf("%x", params.IndexKey)
+
 	// Convert CreateIndexParams to internal.CreateIndexRequest
 	var indexConfig internal.IndexConfig
 	if params.IndexConfig != nil {
@@ -143,7 +151,7 @@ func (c *Client) CreateIndex(
 
 	req := internal.CreateIndexRequest{
 		IndexName: params.IndexName,
-		IndexKey:  params.IndexKey,
+		IndexKey:  keyHex,
 	}
 
 	if params.IndexConfig != nil {
@@ -169,7 +177,7 @@ func (c *Client) CreateIndex(
 	// Build the EncryptedIndex handle
 	idx := &EncryptedIndex{
 		indexName: params.IndexName,
-		indexKey:  params.IndexKey,
+		indexKey:  keyHex,
 		client:    c.internal,
 		config:    &indexConfig,
 		trained:   false,

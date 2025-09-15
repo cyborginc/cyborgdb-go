@@ -49,10 +49,9 @@ type CreateIndexParams struct {
 	// hyphens, and underscores.
 	IndexName string `json:"index_name"`
 
-	// IndexKey is the 64-character hex string representation of a 32-byte encryption key.
-	// This key is used for end-to-end encryption of vector data.
-	// Generate using GenerateKey() and convert to hex, or use hex.EncodeToString().
-	IndexKey string `json:"index_key"`
+	// IndexKey is the 32-byte encryption key used for end-to-end encryption of vector data.
+	// Generate using GenerateKey() or provide your own 32-byte key.
+	IndexKey []byte `json:"index_key"`
 
 	// IndexConfig specifies the index type and configuration.
 	// Can be created using IndexIVF(), IndexIVFFlat(), or IndexIVFPQ() functions.

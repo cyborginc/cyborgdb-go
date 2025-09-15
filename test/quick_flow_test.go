@@ -4,7 +4,6 @@ import (
 	"context"
 	cryptoRand "crypto/rand"
 	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
@@ -287,12 +286,11 @@ func TestUnitFlow(t *testing.T) {
 	indexName := generateUniqueName("")
 	indexKeyBytes := make([]byte, 32)
 	cryptoRand.Read(indexKeyBytes)
-	indexKey := hex.EncodeToString(indexKeyBytes)
 
 	metric := "euclidean"
 	createParams := &cyborgdb.CreateIndexParams{
 		IndexName:   indexName,
-		IndexKey:    indexKey,
+		IndexKey:    indexKeyBytes,
 		IndexConfig: indexConfig,
 		Metric:      &metric,
 	}
@@ -1006,12 +1004,7 @@ func TestUnitFlow(t *testing.T) {
 
 	// Test 19: Load Index
 	t.Run("test_19_load_index", func(t *testing.T) {
-		loadedKeyBytes, err := hex.DecodeString(indexKey)
-		if err != nil {
-			t.Errorf("Failed to decode index key: %v", err)
-		}
-
-		loadedIndex, err := client.LoadIndex(ctx, indexName, loadedKeyBytes)
+		loadedIndex, err := client.LoadIndex(ctx, indexName, indexKeyBytes)
 		if err != nil {
 			t.Errorf("Failed to load index: %v", err)
 		}
