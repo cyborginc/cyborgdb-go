@@ -1,4 +1,6 @@
 name: Test CyborgDB Go SDK
+permissions:
+  contents: read
 
 on:
   pull_request:
