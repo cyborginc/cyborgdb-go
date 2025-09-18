@@ -4,13 +4,13 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Results** | Pointer to [**[][]QueryResult**]([]QueryResult.md) |  | [optional] 
+**Results** | [**Results**](Results.md) |  | 
 
 ## Methods
 
 ### NewQueryResponse
 
-`func NewQueryResponse() *QueryResponse`
+`func NewQueryResponse(results Results, ) *QueryResponse`
 
 NewQueryResponse instantiates a new QueryResponse object
 This constructor will assign default values to properties that have it defined,
@@ -27,28 +27,23 @@ but it doesn't guarantee that properties required by API are set
 
 ### GetResults
 
-`func (o *QueryResponse) GetResults() [][]QueryResult`
+`func (o *QueryResponse) GetResults() Results`
 
 GetResults returns the Results field if non-nil, zero value otherwise.
 
 ### GetResultsOk
 
-`func (o *QueryResponse) GetResultsOk() (*[][]QueryResult, bool)`
+`func (o *QueryResponse) GetResultsOk() (*Results, bool)`
 
 GetResultsOk returns a tuple with the Results field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetResults
 
-`func (o *QueryResponse) SetResults(v [][]QueryResult)`
+`func (o *QueryResponse) SetResults(v Results)`
 
 SetResults sets Results field to given value.
 
-### HasResults
-
-`func (o *QueryResponse) HasResults() bool`
-
-HasResults returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

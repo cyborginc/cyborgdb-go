@@ -4,22 +4,21 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**IndexName** | **string** |  | 
-**IndexKey** | **string** |  | 
-**QueryVector** | Pointer to **[]float32** |  | [optional] 
-**QueryVectors** | Pointer to **[][]float32** |  | [optional] 
-**QueryContents** | Pointer to **string** |  | [optional] 
-**TopK** | **int32** |  | 
-**NProbes** | **int32** |  | 
-**Greedy** | Pointer to **bool** |  | [optional] 
+**IndexKey** | **string** | 32-byte encryption key as hex string | 
+**IndexName** | **string** | ID name | 
+**QueryVectors** | Pointer to **[]float32** |  | [optional] 
+**QueryContents** | Pointer to **NullableString** |  | [optional] 
+**TopK** | Pointer to **NullableInt32** |  | [optional] 
+**NProbes** | Pointer to **NullableInt32** |  | [optional] 
+**Greedy** | Pointer to **NullableBool** |  | [optional] 
 **Filters** | Pointer to **map[string]interface{}** |  | [optional] 
-**Include** | **[]string** |  | 
+**Include** | Pointer to **[]string** |  | [optional] [default to [distance, metadata]]
 
 ## Methods
 
 ### NewQueryRequest
 
-`func NewQueryRequest(indexName string, indexKey string, topK int32, nProbes int32, include []string, ) *QueryRequest`
+`func NewQueryRequest(indexKey string, indexName string, ) *QueryRequest`
 
 NewQueryRequest instantiates a new QueryRequest object
 This constructor will assign default values to properties that have it defined,
@@ -33,26 +32,6 @@ will change when the set of required properties is changed
 NewQueryRequestWithDefaults instantiates a new QueryRequest object
 This constructor will only assign default values to properties that have it defined,
 but it doesn't guarantee that properties required by API are set
-
-### GetIndexName
-
-`func (o *QueryRequest) GetIndexName() string`
-
-GetIndexName returns the IndexName field if non-nil, zero value otherwise.
-
-### GetIndexNameOk
-
-`func (o *QueryRequest) GetIndexNameOk() (*string, bool)`
-
-GetIndexNameOk returns a tuple with the IndexName field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetIndexName
-
-`func (o *QueryRequest) SetIndexName(v string)`
-
-SetIndexName sets IndexName field to given value.
-
 
 ### GetIndexKey
 
@@ -74,47 +53,42 @@ and a boolean to check if the value has been set.
 SetIndexKey sets IndexKey field to given value.
 
 
-### GetQueryVector
+### GetIndexName
 
-`func (o *QueryRequest) GetQueryVector() []float32`
+`func (o *QueryRequest) GetIndexName() string`
 
-GetQueryVector returns the QueryVector field if non-nil, zero value otherwise.
+GetIndexName returns the IndexName field if non-nil, zero value otherwise.
 
-### GetQueryVectorOk
+### GetIndexNameOk
 
-`func (o *QueryRequest) GetQueryVectorOk() (*[]float32, bool)`
+`func (o *QueryRequest) GetIndexNameOk() (*string, bool)`
 
-GetQueryVectorOk returns a tuple with the QueryVector field if it's non-nil, zero value otherwise
+GetIndexNameOk returns a tuple with the IndexName field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
-### SetQueryVector
+### SetIndexName
 
-`func (o *QueryRequest) SetQueryVector(v []float32)`
+`func (o *QueryRequest) SetIndexName(v string)`
 
-SetQueryVector sets QueryVector field to given value.
+SetIndexName sets IndexName field to given value.
 
-### HasQueryVector
-
-`func (o *QueryRequest) HasQueryVector() bool`
-
-HasQueryVector returns a boolean if a field has been set.
 
 ### GetQueryVectors
 
-`func (o *QueryRequest) GetQueryVectors() [][]float32`
+`func (o *QueryRequest) GetQueryVectors() []float32`
 
 GetQueryVectors returns the QueryVectors field if non-nil, zero value otherwise.
 
 ### GetQueryVectorsOk
 
-`func (o *QueryRequest) GetQueryVectorsOk() (*[][]float32, bool)`
+`func (o *QueryRequest) GetQueryVectorsOk() (*[]float32, bool)`
 
 GetQueryVectorsOk returns a tuple with the QueryVectors field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
 ### SetQueryVectors
 
-`func (o *QueryRequest) SetQueryVectors(v [][]float32)`
+`func (o *QueryRequest) SetQueryVectors(v []float32)`
 
 SetQueryVectors sets QueryVectors field to given value.
 
@@ -124,6 +98,16 @@ SetQueryVectors sets QueryVectors field to given value.
 
 HasQueryVectors returns a boolean if a field has been set.
 
+### SetQueryVectorsNil
+
+`func (o *QueryRequest) SetQueryVectorsNil(b bool)`
+
+ SetQueryVectorsNil sets the value for QueryVectors to be an explicit nil
+
+### UnsetQueryVectors
+`func (o *QueryRequest) UnsetQueryVectors()`
+
+UnsetQueryVectors ensures that no value is present for QueryVectors, not even an explicit nil
 ### GetQueryContents
 
 `func (o *QueryRequest) GetQueryContents() string`
@@ -149,6 +133,16 @@ SetQueryContents sets QueryContents field to given value.
 
 HasQueryContents returns a boolean if a field has been set.
 
+### SetQueryContentsNil
+
+`func (o *QueryRequest) SetQueryContentsNil(b bool)`
+
+ SetQueryContentsNil sets the value for QueryContents to be an explicit nil
+
+### UnsetQueryContents
+`func (o *QueryRequest) UnsetQueryContents()`
+
+UnsetQueryContents ensures that no value is present for QueryContents, not even an explicit nil
 ### GetTopK
 
 `func (o *QueryRequest) GetTopK() int32`
@@ -168,7 +162,22 @@ and a boolean to check if the value has been set.
 
 SetTopK sets TopK field to given value.
 
+### HasTopK
 
+`func (o *QueryRequest) HasTopK() bool`
+
+HasTopK returns a boolean if a field has been set.
+
+### SetTopKNil
+
+`func (o *QueryRequest) SetTopKNil(b bool)`
+
+ SetTopKNil sets the value for TopK to be an explicit nil
+
+### UnsetTopK
+`func (o *QueryRequest) UnsetTopK()`
+
+UnsetTopK ensures that no value is present for TopK, not even an explicit nil
 ### GetNProbes
 
 `func (o *QueryRequest) GetNProbes() int32`
@@ -188,7 +197,22 @@ and a boolean to check if the value has been set.
 
 SetNProbes sets NProbes field to given value.
 
+### HasNProbes
 
+`func (o *QueryRequest) HasNProbes() bool`
+
+HasNProbes returns a boolean if a field has been set.
+
+### SetNProbesNil
+
+`func (o *QueryRequest) SetNProbesNil(b bool)`
+
+ SetNProbesNil sets the value for NProbes to be an explicit nil
+
+### UnsetNProbes
+`func (o *QueryRequest) UnsetNProbes()`
+
+UnsetNProbes ensures that no value is present for NProbes, not even an explicit nil
 ### GetGreedy
 
 `func (o *QueryRequest) GetGreedy() bool`
@@ -214,6 +238,16 @@ SetGreedy sets Greedy field to given value.
 
 HasGreedy returns a boolean if a field has been set.
 
+### SetGreedyNil
+
+`func (o *QueryRequest) SetGreedyNil(b bool)`
+
+ SetGreedyNil sets the value for Greedy to be an explicit nil
+
+### UnsetGreedy
+`func (o *QueryRequest) UnsetGreedy()`
+
+UnsetGreedy ensures that no value is present for Greedy, not even an explicit nil
 ### GetFilters
 
 `func (o *QueryRequest) GetFilters() map[string]interface{}`
@@ -239,6 +273,16 @@ SetFilters sets Filters field to given value.
 
 HasFilters returns a boolean if a field has been set.
 
+### SetFiltersNil
+
+`func (o *QueryRequest) SetFiltersNil(b bool)`
+
+ SetFiltersNil sets the value for Filters to be an explicit nil
+
+### UnsetFilters
+`func (o *QueryRequest) UnsetFilters()`
+
+UnsetFilters ensures that no value is present for Filters, not even an explicit nil
 ### GetInclude
 
 `func (o *QueryRequest) GetInclude() []string`
@@ -258,6 +302,11 @@ and a boolean to check if the value has been set.
 
 SetInclude sets Include field to given value.
 
+### HasInclude
+
+`func (o *QueryRequest) HasInclude() bool`
+
+HasInclude returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

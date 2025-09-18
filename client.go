@@ -3,113 +3,259 @@ package cyborgdb
 
 import (
 	"context"
+	"crypto/rand"
+	"fmt"
+	"net/url"
 
 	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
-// Client provides a high-level interface to the CyborgDB API, similar to the TypeScript SDK.
-// It wraps the internal implementation and exposes user-friendly methods for managing
-// encrypted vector indexes and performing vector database operations.
+const (
+	// KeySize is the required size in bytes for encryption keys (32 bytes for AES-256).
+	KeySize = 32
+)
+
+var (
+	// ErrInvalidKeyLength is returned when an index key is not 32 bytes.
+	ErrInvalidKeyLength = fmt.Errorf("index key must be exactly 32 bytes")
+	// ErrKeyGeneration is returned when key generation fails.
+	ErrKeyGeneration = fmt.Errorf("failed to generate key")
+	// ErrInvalidURL is returned when the base URL is invalid.
+	ErrInvalidURL = fmt.Errorf("invalid base URL")
+)
+
+// Client provides a high-level interface to the CyborgDB API (parallels the TypeScript SDK).
+// It wraps the internal client and exposes ergonomic methods for managing encrypted indexes
+// and performing vector operations, handling auth and connection details.
 //
-// The Client handles authentication, connection management, and provides methods for:
-//   - Creating and listing encrypted indexes
-//   - Health checking the CyborgDB service
-//   - Managing the lifecycle of vector indexes
+// The Client supports:
+//   - Creating and loading encrypted indexes
+//   - Listing indexes
+//   - Upserting/querying/deleting vectors via EncryptedIndex
+//   - Health checks
 //
-// All operations performed through this client maintain end-to-end encryption of vector data.
+// All operations maintain end-to-end encryption for vector data.
 type Client struct {
 	internal *internal.Client // Embedded internal client
 }
 
-// NewClient creates a new CyborgDB client instance.
+// GenerateKey returns a cryptographically secure 32-byte key for use with CyborgDB indexes.
 //
-// The client manages the connection to CyborgDB and handles authentication automatically.
-// SSL verification can be disabled for development environments with self-signed certificates.
-//
-// Parameters:
-//   - baseURL: Base URL of the CyborgDB service (e.g., "https://api.cyborgdb.com")
-//   - apiKey: API key for authentication (required for most operations)
-//   - verifySSL: Whether to verify SSL certificates (set false for localhost development)
+// The caller must persist this key securely; it cannot be recovered if lost.
 //
 // Returns:
-//   - *Client: A new Client instance ready for use
-//   - error: Any error that occurred during client creation
-func NewClient(baseURL, apiKey string, verifySSL bool) (*Client, error) {
-	internalClient, err := internal.NewClient(baseURL, apiKey, verifySSL)
+//   - []byte: A 32-byte encryption key
+//   - error: Any error that occurred during key generation
+func GenerateKey() ([]byte, error) {
+	key := make([]byte, KeySize)
+	_, err := rand.Read(key)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrKeyGeneration, err)
+	}
+	return key, nil
+}
+
+// NewClient constructs a new CyborgDB client.
+//
+// If verifySSL is omitted, behavior matches the TS SDK:
+//   - "http://" URLs -> verifySSL = false
+//   - localhost / 127.0.0.1 -> verifySSL = false
+//   - otherwise -> verifySSL = true
+//
+// Usage:
+//
+//	NewClient(url, apiKey)        // auto-detect verifySSL
+//	NewClient(url, apiKey, false) // force off
+//	NewClient(url, apiKey, true)  // force on
+func NewClient(baseURL, apiKey string, verifySSL ...bool) (*Client, error) {
+	// Explicit override wins.
+	if len(verifySSL) > 0 {
+		v := verifySSL[0]
+		internalClient, err := internal.NewClient(baseURL, apiKey, v)
+		if err != nil {
+			return nil, err
+		}
+		return &Client{internal: internalClient}, nil
+	}
+
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", ErrInvalidURL, err)
+	}
+	v := true
+	if u.Scheme == "http" {
+		v = false
+	} else {
+		host := u.Hostname()
+		if host == "localhost" || host == "127.0.0.1" {
+			v = false
+		}
+	}
+
+	internalClient, err := internal.NewClient(baseURL, apiKey, v)
 	if err != nil {
 		return nil, err
 	}
-
-	return &Client{
-		internal: internalClient,
-	}, nil
+	return &Client{internal: internalClient}, nil
 }
 
-// ListIndexes retrieves a list of all available encrypted index names from your CyborgDB instance.
-//
-// This operation queries the CyborgDB service for all indexes that have been created
-// under your API key. The returned list contains only the index names, not their
-// configurations or contents.
+// ListIndexes returns the names of all encrypted indexes in your project.
 //
 // Parameters:
-//   - ctx: Context for request cancellation, timeouts, and tracing
+//   - ctx: Context for cancellation/timeouts
 //
 // Returns:
-//   - []string: List of index names (empty slice if no indexes exist)
-//   - error: Any error that occurred during the request
+//   - []string: Index names (empty slice if none)
+//   - error: Any error encountered
 func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 	return c.internal.ListIndexes(ctx)
 }
 
-// CreateIndex creates a new encrypted vector index with the specified configuration.
+// CreateIndex creates a new encrypted vector index using a single request object.
 //
-// The created index will be empty and ready for vector operations. Different index types
-// (IVF, IVFPQ, IVFFlat) offer different trade-offs between speed, accuracy, and memory usage.
-// All vector data stored in the index is encrypted using the provided encryption key.
+// The new index is empty and ready for vector operations. Index types (IVF, IVFPQ,
+// IVFFlat) offer different trade-offs across speed, accuracy, and memory.
 //
 // Parameters:
-//   - ctx: Context for request cancellation, timeouts, and tracing
-//   - indexName: Unique name for the index (must be unique within your CyborgDB instance)
-//   - indexKey: 32-byte encryption key (generate using crypto/rand for security)
-//   - indexModel: Index configuration specifying type, dimension, and parameters
-//   - embeddingModel: Optional name of embedding model to associate with this index
+//   - ctx: Context for cancellation/timeouts
+//   - params: Complete payload containing:
+//   - IndexName (required): unique index name
+//   - IndexKey  (required): 32-byte encryption key
+//   - IndexConfig (optional): index configuration (IndexIVF, IndexIVFFlat, or IndexIVFPQ)
+//   - Metric (optional): distance metric (e.g., "euclidean", "cosine")
+//   - EmbeddingModel (optional): embedding model name to associate
 //
 // Returns:
-//   - *EncryptedIndex: A new EncryptedIndex instance for performing vector operations
-//   - error: Any error that occurred during index creation
+//   - *EncryptedIndex: Handle for vector operations
+//   - error: Any error encountered
 //
-// Note: Store the encryption key securely - it cannot be recovered if lost.
-// The index name must be unique; creating an index with an existing name will fail.
+// Note: Store the encryption key securely; it cannot be recovered if lost.
+// Creating with an existing name will fail.
 func (c *Client) CreateIndex(
 	ctx context.Context,
-	indexName string,
-	indexKey []byte,
-	indexModel internal.IndexModel,
-	embeddingModel *string,
+	params *CreateIndexParams,
 ) (*EncryptedIndex, error) {
-	internalIndex, err := c.internal.CreateIndex(ctx, indexName, indexKey, indexModel, embeddingModel)
+	// Validate the key length
+	if len(params.IndexKey) != KeySize {
+		return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(params.IndexKey))
+	}
+
+	// Convert bytes to hex string
+	keyHex := fmt.Sprintf("%x", params.IndexKey)
+
+	// Convert CreateIndexParams to internal.CreateIndexRequest
+	var indexConfig internal.IndexConfig
+	if params.IndexConfig != nil {
+		indexConfig = *params.IndexConfig.ToIndexConfig()
+	}
+
+	req := internal.CreateIndexRequest{
+		IndexName: params.IndexName,
+		IndexKey:  keyHex,
+	}
+
+	if params.IndexConfig != nil {
+		req.IndexConfig = *internal.NewNullableIndexConfig(&indexConfig)
+	}
+
+	if params.Metric != nil {
+		req.Metric = *internal.NewNullableString(params.Metric)
+	}
+
+	if params.EmbeddingModel != nil {
+		req.EmbeddingModel = *internal.NewNullableString(params.EmbeddingModel)
+	}
+
+	// Call internal CreateIndex
+	_, _, err := c.internal.APIClient.DefaultAPI.CreateIndexV1IndexesCreatePost(ctx).
+		CreateIndexRequest(req).
+		Execute()
 	if err != nil {
 		return nil, err
 	}
 
-	// Wrap the internal EncryptedIndex with our public one
+	// Build the EncryptedIndex handle
+	idx := &EncryptedIndex{
+		indexName: params.IndexName,
+		indexKey:  keyHex,
+		client:    c.internal,
+		config:    &indexConfig,
+		trained:   false,
+	}
+
+	// Set index type if available
+	if indexConfig.IndexIVFModel != nil && indexConfig.IndexIVFModel.Type != nil {
+		idx.indexType = *indexConfig.IndexIVFModel.Type
+	} else if indexConfig.IndexIVFFlatModel != nil && indexConfig.IndexIVFFlatModel.Type != nil {
+		idx.indexType = *indexConfig.IndexIVFFlatModel.Type
+	} else if indexConfig.IndexIVFPQModel != nil && indexConfig.IndexIVFPQModel.Type != nil {
+		idx.indexType = *indexConfig.IndexIVFPQModel.Type
+	}
+
+	return idx, nil
+}
+
+// LoadIndex loads an existing encrypted index by name and key.
+//
+// The provided key must match the one used at creation time. Configuration and
+// metadata are fetched from the server.
+//
+// Parameters:
+//   - ctx: Context for cancellation/timeouts
+//   - indexName: Existing index name
+//   - indexKey: 32-byte encryption key
+//
+// Returns:
+//   - *EncryptedIndex: Handle for vector operations
+//   - error: Any error encountered
+func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byte) (*EncryptedIndex, error) {
+	// Validate the key length
+	if len(indexKey) != KeySize {
+		return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(indexKey))
+	}
+
+	keyHex := fmt.Sprintf("%x", indexKey)
+
+	describeReq := internal.IndexOperationRequest{
+		IndexName: indexName,
+		IndexKey:  keyHex,
+	}
+
+	indexInfo, _, err := c.internal.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
+		IndexOperationRequest(describeReq).
+		Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to get index info: %w", err)
+	}
+
+	// Convert the map[string]interface{} config to internal.IndexConfig if needed
+	var indexConfig *internal.IndexConfig
+	if len(indexInfo.IndexConfig) > 0 {
+		// For now, leave config as nil since converting from map to IndexConfig is complex
+		// The EncryptedIndex will work without the detailed config
+		indexConfig = nil
+	}
+
 	return &EncryptedIndex{
-		internal: internalIndex,
+		indexName: indexInfo.IndexName,
+		indexKey:  keyHex,
+		indexType: indexInfo.IndexType,
+		config:    indexConfig,
+		client:    c.internal,
+		trained:   indexInfo.IsTrained,
 	}, nil
 }
 
 // GetHealth checks the health status of the CyborgDB service.
 //
-// This is useful for monitoring, readiness checks, and verifying that the CyborgDB
-// service is accessible and operational. The health check typically does not require
-// authentication and can be used to test connectivity.
+// Useful for readiness/liveness checks and connectivity diagnostics.
 //
 // Parameters:
-//   - ctx: Context for request cancellation, timeouts, and tracing
+//   - ctx: Context for cancellation/timeouts
 //
 // Returns:
-//   - *HealthResponse: Health status information from the server
-//   - error: Any error that occurred during the health check
-func (c *Client) GetHealth(ctx context.Context) (*internal.HealthResponse, error) {
+//   - map[string]string: Health status from the server
+//   - error: Any error encountered
+func (c *Client) GetHealth(ctx context.Context) (map[string]string, error) {
 	return c.internal.GetHealth(ctx)
 }

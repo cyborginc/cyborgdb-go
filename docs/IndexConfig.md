@@ -4,18 +4,16 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**Dimension** | **int32** |  | 
-**Metric** | **string** |  | 
-**IndexType** | **string** |  | 
-**NLists** | **int32** |  | 
-**PqDim** | Pointer to **int32** |  | [optional] 
-**PqBits** | Pointer to **int32** |  | [optional] 
+**Dimension** | Pointer to **int32** |  | [optional] 
+**Type** | Pointer to **string** |  | [optional] [default to "ivfflat"]
+**PqDim** | **int32** |  | 
+**PqBits** | **int32** |  | 
 
 ## Methods
 
 ### NewIndexConfig
 
-`func NewIndexConfig(dimension int32, metric string, indexType string, nLists int32, ) *IndexConfig`
+`func NewIndexConfig(pqDim int32, pqBits int32, ) *IndexConfig`
 
 NewIndexConfig instantiates a new IndexConfig object
 This constructor will assign default values to properties that have it defined,
@@ -49,66 +47,36 @@ and a boolean to check if the value has been set.
 
 SetDimension sets Dimension field to given value.
 
+### HasDimension
 
-### GetMetric
+`func (o *IndexConfig) HasDimension() bool`
 
-`func (o *IndexConfig) GetMetric() string`
+HasDimension returns a boolean if a field has been set.
 
-GetMetric returns the Metric field if non-nil, zero value otherwise.
+### GetType
 
-### GetMetricOk
+`func (o *IndexConfig) GetType() string`
 
-`func (o *IndexConfig) GetMetricOk() (*string, bool)`
+GetType returns the Type field if non-nil, zero value otherwise.
 
-GetMetricOk returns a tuple with the Metric field if it's non-nil, zero value otherwise
+### GetTypeOk
+
+`func (o *IndexConfig) GetTypeOk() (*string, bool)`
+
+GetTypeOk returns a tuple with the Type field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
-### SetMetric
+### SetType
 
-`func (o *IndexConfig) SetMetric(v string)`
+`func (o *IndexConfig) SetType(v string)`
 
-SetMetric sets Metric field to given value.
+SetType sets Type field to given value.
 
+### HasType
 
-### GetIndexType
+`func (o *IndexConfig) HasType() bool`
 
-`func (o *IndexConfig) GetIndexType() string`
-
-GetIndexType returns the IndexType field if non-nil, zero value otherwise.
-
-### GetIndexTypeOk
-
-`func (o *IndexConfig) GetIndexTypeOk() (*string, bool)`
-
-GetIndexTypeOk returns a tuple with the IndexType field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetIndexType
-
-`func (o *IndexConfig) SetIndexType(v string)`
-
-SetIndexType sets IndexType field to given value.
-
-
-### GetNLists
-
-`func (o *IndexConfig) GetNLists() int32`
-
-GetNLists returns the NLists field if non-nil, zero value otherwise.
-
-### GetNListsOk
-
-`func (o *IndexConfig) GetNListsOk() (*int32, bool)`
-
-GetNListsOk returns a tuple with the NLists field if it's non-nil, zero value otherwise
-and a boolean to check if the value has been set.
-
-### SetNLists
-
-`func (o *IndexConfig) SetNLists(v int32)`
-
-SetNLists sets NLists field to given value.
-
+HasType returns a boolean if a field has been set.
 
 ### GetPqDim
 
@@ -129,11 +97,6 @@ and a boolean to check if the value has been set.
 
 SetPqDim sets PqDim field to given value.
 
-### HasPqDim
-
-`func (o *IndexConfig) HasPqDim() bool`
-
-HasPqDim returns a boolean if a field has been set.
 
 ### GetPqBits
 
@@ -154,11 +117,6 @@ and a boolean to check if the value has been set.
 
 SetPqBits sets PqBits field to given value.
 
-### HasPqBits
-
-`func (o *IndexConfig) HasPqBits() bool`
-
-HasPqBits returns a boolean if a field has been set.
 
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)

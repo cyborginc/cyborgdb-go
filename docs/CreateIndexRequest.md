@@ -4,15 +4,17 @@
 
 Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
-**IndexName** | **string** |  | 
-**IndexKey** | **string** |  | 
-**Config** | [**IndexConfig**](IndexConfig.md) |  | 
+**IndexConfig** | Pointer to [**NullableIndexConfig**](IndexConfig.md) |  | [optional] 
+**IndexKey** | **string** | 32-byte encryption key as hex string | 
+**IndexName** | **string** | ID name | 
+**EmbeddingModel** | Pointer to **NullableString** |  | [optional] 
+**Metric** | Pointer to **NullableString** |  | [optional] 
 
 ## Methods
 
 ### NewCreateIndexRequest
 
-`func NewCreateIndexRequest(indexName string, indexKey string, config IndexConfig, ) *CreateIndexRequest`
+`func NewCreateIndexRequest(indexKey string, indexName string, ) *CreateIndexRequest`
 
 NewCreateIndexRequest instantiates a new CreateIndexRequest object
 This constructor will assign default values to properties that have it defined,
@@ -26,6 +28,61 @@ will change when the set of required properties is changed
 NewCreateIndexRequestWithDefaults instantiates a new CreateIndexRequest object
 This constructor will only assign default values to properties that have it defined,
 but it doesn't guarantee that properties required by API are set
+
+### GetIndexConfig
+
+`func (o *CreateIndexRequest) GetIndexConfig() IndexConfig`
+
+GetIndexConfig returns the IndexConfig field if non-nil, zero value otherwise.
+
+### GetIndexConfigOk
+
+`func (o *CreateIndexRequest) GetIndexConfigOk() (*IndexConfig, bool)`
+
+GetIndexConfigOk returns a tuple with the IndexConfig field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetIndexConfig
+
+`func (o *CreateIndexRequest) SetIndexConfig(v IndexConfig)`
+
+SetIndexConfig sets IndexConfig field to given value.
+
+### HasIndexConfig
+
+`func (o *CreateIndexRequest) HasIndexConfig() bool`
+
+HasIndexConfig returns a boolean if a field has been set.
+
+### SetIndexConfigNil
+
+`func (o *CreateIndexRequest) SetIndexConfigNil(b bool)`
+
+ SetIndexConfigNil sets the value for IndexConfig to be an explicit nil
+
+### UnsetIndexConfig
+`func (o *CreateIndexRequest) UnsetIndexConfig()`
+
+UnsetIndexConfig ensures that no value is present for IndexConfig, not even an explicit nil
+### GetIndexKey
+
+`func (o *CreateIndexRequest) GetIndexKey() string`
+
+GetIndexKey returns the IndexKey field if non-nil, zero value otherwise.
+
+### GetIndexKeyOk
+
+`func (o *CreateIndexRequest) GetIndexKeyOk() (*string, bool)`
+
+GetIndexKeyOk returns a tuple with the IndexKey field if it's non-nil, zero value otherwise
+and a boolean to check if the value has been set.
+
+### SetIndexKey
+
+`func (o *CreateIndexRequest) SetIndexKey(v string)`
+
+SetIndexKey sets IndexKey field to given value.
+
 
 ### GetIndexName
 
@@ -47,46 +104,76 @@ and a boolean to check if the value has been set.
 SetIndexName sets IndexName field to given value.
 
 
-### GetIndexKey
+### GetEmbeddingModel
 
-`func (o *CreateIndexRequest) GetIndexKey() string`
+`func (o *CreateIndexRequest) GetEmbeddingModel() string`
 
-GetIndexKey returns the IndexKey field if non-nil, zero value otherwise.
+GetEmbeddingModel returns the EmbeddingModel field if non-nil, zero value otherwise.
 
-### GetIndexKeyOk
+### GetEmbeddingModelOk
 
-`func (o *CreateIndexRequest) GetIndexKeyOk() (*string, bool)`
+`func (o *CreateIndexRequest) GetEmbeddingModelOk() (*string, bool)`
 
-GetIndexKeyOk returns a tuple with the IndexKey field if it's non-nil, zero value otherwise
+GetEmbeddingModelOk returns a tuple with the EmbeddingModel field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
-### SetIndexKey
+### SetEmbeddingModel
 
-`func (o *CreateIndexRequest) SetIndexKey(v string)`
+`func (o *CreateIndexRequest) SetEmbeddingModel(v string)`
 
-SetIndexKey sets IndexKey field to given value.
+SetEmbeddingModel sets EmbeddingModel field to given value.
 
+### HasEmbeddingModel
 
-### GetConfig
+`func (o *CreateIndexRequest) HasEmbeddingModel() bool`
 
-`func (o *CreateIndexRequest) GetConfig() IndexConfig`
+HasEmbeddingModel returns a boolean if a field has been set.
 
-GetConfig returns the Config field if non-nil, zero value otherwise.
+### SetEmbeddingModelNil
 
-### GetConfigOk
+`func (o *CreateIndexRequest) SetEmbeddingModelNil(b bool)`
 
-`func (o *CreateIndexRequest) GetConfigOk() (*IndexConfig, bool)`
+ SetEmbeddingModelNil sets the value for EmbeddingModel to be an explicit nil
 
-GetConfigOk returns a tuple with the Config field if it's non-nil, zero value otherwise
+### UnsetEmbeddingModel
+`func (o *CreateIndexRequest) UnsetEmbeddingModel()`
+
+UnsetEmbeddingModel ensures that no value is present for EmbeddingModel, not even an explicit nil
+### GetMetric
+
+`func (o *CreateIndexRequest) GetMetric() string`
+
+GetMetric returns the Metric field if non-nil, zero value otherwise.
+
+### GetMetricOk
+
+`func (o *CreateIndexRequest) GetMetricOk() (*string, bool)`
+
+GetMetricOk returns a tuple with the Metric field if it's non-nil, zero value otherwise
 and a boolean to check if the value has been set.
 
-### SetConfig
+### SetMetric
 
-`func (o *CreateIndexRequest) SetConfig(v IndexConfig)`
+`func (o *CreateIndexRequest) SetMetric(v string)`
 
-SetConfig sets Config field to given value.
+SetMetric sets Metric field to given value.
 
+### HasMetric
 
+`func (o *CreateIndexRequest) HasMetric() bool`
+
+HasMetric returns a boolean if a field has been set.
+
+### SetMetricNil
+
+`func (o *CreateIndexRequest) SetMetricNil(b bool)`
+
+ SetMetricNil sets the value for Metric to be an explicit nil
+
+### UnsetMetric
+`func (o *CreateIndexRequest) UnsetMetric()`
+
+UnsetMetric ensures that no value is present for Metric, not even an explicit nil
 
 [[Back to Model list]](../README.md#documentation-for-models) [[Back to API list]](../README.md#documentation-for-api-endpoints) [[Back to README]](../README.md)
 
