@@ -11,8 +11,7 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/google/uuid"
+	
 	"github.com/joho/godotenv"
 
 	cyborgdb "github.com/cyborginc/cyborgdb-go"
@@ -26,13 +25,6 @@ const (
 	longTimeout = 120 * time.Second
 )
 
-// Test setup helpers
-func generateUniqueName(prefix string) string {
-	if prefix == "" {
-		prefix = "test_"
-	}
-	return fmt.Sprintf("%s%s", prefix, uuid.New().String())
-}
 
 func generateRandomKey() []byte {
 	key := make([]byte, 32)
@@ -731,7 +723,7 @@ func TestEdgeCasesStrict(t *testing.T) {
 		}
 	})
 
-	
+
 	t.Run("TestLargeMetadataHandling", func(t *testing.T) {
 		testCases := []struct {
 			name     string
