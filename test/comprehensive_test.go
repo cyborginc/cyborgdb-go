@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/rand"
 	"crypto/tls"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -11,7 +12,7 @@ import (
 	"sync"
 	"testing"
 	"time"
-	
+
 	"github.com/joho/godotenv"
 
 	cyborgdb "github.com/cyborginc/cyborgdb-go"
@@ -19,12 +20,16 @@ import (
 
 // Test configuration
 const (
-	maxRetries = 3
-	baseTimeout = 10 * time.Second
+	maxRetries         = 3
+	baseTimeout        = 10 * time.Second
 	propagationTimeout = 15 * time.Second
-	longTimeout = 120 * time.Second
+	longTimeout        = 120 * time.Second
 )
 
+var (
+	// ErrAPIKeyRequired is returned when the API key is not set
+	ErrAPIKeyRequired = errors.New("CYBORGDB_API_KEY environment variable is required")
+)
 
 func generateRandomKey() []byte {
 	key := make([]byte, 32)
@@ -36,7 +41,7 @@ func generateRandomKey() []byte {
 func createClient() (*cyborgdb.Client, error) {
 	apiKey := os.Getenv("CYBORGDB_API_KEY")
 	if apiKey == "" {
-		return nil, fmt.Errorf("CYBORGDB_API_KEY environment variable is required")
+		return nil, ErrAPIKeyRequired
 	}
 	return cyborgdb.NewClient("http://localhost:8000", apiKey)
 }
@@ -46,32 +51,16 @@ func waitForPropagation(duration time.Duration) {
 	time.Sleep(duration)
 }
 
-// Retry helper for operations that might need time to propagate
-func retryOperation(operation func() error, maxRetries int, delay time.Duration) error {
-	var lastErr error
-	for i := 0; i < maxRetries; i++ {
-		if err := operation(); err != nil {
-			lastErr = err
-			if i < maxRetries-1 {
-				time.Sleep(delay)
-			}
-		} else {
-			return nil
-		}
-	}
-	return lastErr
-}
-
 func TestMain(m *testing.M) {
 	// Load environment variables
 	godotenv.Load("../.env.local")
-	
+
 	// Validate test environment
 	if os.Getenv("CYBORGDB_API_KEY") == "" {
 		fmt.Println("ERROR: CYBORGDB_API_KEY environment variable is required for testing")
 		os.Exit(1)
 	}
-	
+
 	// Run tests
 	code := m.Run()
 	os.Exit(code)
@@ -84,10 +73,10 @@ func TestSSLVerification(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Failed to create client with localhost URL: %v", err)
 		}
-		
+
 		ctx, cancel := context.WithTimeout(context.Background(), baseTimeout)
 		defer cancel()
-		
+
 		_, err = client.GetHealth(ctx)
 		if err != nil {
 			t.Errorf("Health check failed: %v", err)
@@ -103,30 +92,37 @@ func TestSSLVerification(t *testing.T) {
 			Transport: tr,
 			Timeout:   2 * time.Second,
 		}
-		
-		resp, err := testClient.Get("https://localhost:8000/v1/health")
+
+		// Use context for the request
+		ctx := context.Background()
+		req, err := http.NewRequestWithContext(ctx, "GET", "https://localhost:8000/v1/health", nil)
+		if err != nil {
+			t.Fatalf("Failed to create request: %v", err)
+		}
+
+		resp, err := testClient.Do(req)
 		if err != nil {
 			errorStr := strings.ToLower(err.Error())
 			// If server gave HTTP response to HTTPS client, HTTPS is not available
-			if strings.Contains(errorStr, "http response to https client") || 
-			   strings.Contains(errorStr, "connection refused") {
+			if strings.Contains(errorStr, "http response to https client") ||
+				strings.Contains(errorStr, "connection refused") {
 				t.Skip("HTTPS not available on localhost:8000 - skipping HTTPS test")
 			}
 		}
 		if resp != nil {
 			resp.Body.Close()
 		}
-		
+
 		// If we get here, HTTPS is available, so test it
 		client, err := cyborgdb.NewClient("https://localhost:8000", os.Getenv("CYBORGDB_API_KEY"))
 		if err != nil {
 			t.Fatalf("Failed to create client with HTTPS localhost URL: %v", err)
 		}
-		
-		ctx, cancel := context.WithTimeout(context.Background(), baseTimeout)
+
+		httpsCtx, cancel := context.WithTimeout(context.Background(), baseTimeout)
 		defer cancel()
-		
-		_, err = client.GetHealth(ctx)
+
+		_, err = client.GetHealth(httpsCtx)
 		if err != nil {
 			t.Errorf("HTTPS health check failed: %v", err)
 		}
@@ -137,17 +133,19 @@ func TestSSLVerification(t *testing.T) {
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 		}
 		httpClient := &http.Client{Transport: tr}
-		
-		if httpClient == nil {
+
+		// httpClient is always non-nil after initialization
+		if httpClient.Transport == nil {
 			t.Error("Failed to create HTTP client with SSL configuration")
 		}
-		
+
 		strictTr := &http.Transport{
 			TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
 		}
 		strictClient := &http.Client{Transport: strictTr}
-		
-		if strictClient == nil {
+
+		// strictClient is always non-nil after initialization
+		if strictClient.Transport == nil {
 			t.Error("Failed to create HTTP client with strict SSL")
 		}
 	})
@@ -157,7 +155,7 @@ func TestSSLVerification(t *testing.T) {
 func TestIndexTypes(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), longTimeout)
 	defer cancel()
-	
+
 	client, err := createClient()
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
@@ -168,17 +166,17 @@ func TestIndexTypes(t *testing.T) {
 	t.Run("TestIVFIndexOperations", func(t *testing.T) {
 		indexName := generateUniqueName("ivf_test_")
 		indexKey := generateRandomKey()
-		
+
 		indexConfig := cyborgdb.IndexIVF(dimension)
 		metric := "euclidean"
-		
+
 		createParams := &cyborgdb.CreateIndexParams{
 			IndexName:   indexName,
 			IndexKey:    indexKey,
 			IndexConfig: indexConfig,
 			Metric:      &metric,
 		}
-		
+
 		index, err := client.CreateIndex(ctx, createParams)
 		if err != nil {
 			t.Fatalf("Failed to create IVF index: %v", err)
@@ -215,7 +213,7 @@ func TestIndexTypes(t *testing.T) {
 			QueryVector: testVectors[0],
 			TopK:        5,
 		}
-		
+
 		results, err := index.Query(ctx, queryParams)
 		if err != nil {
 			t.Fatalf("Failed to query IVF index: %v", err)
@@ -229,17 +227,17 @@ func TestIndexTypes(t *testing.T) {
 	t.Run("TestIVFPQIndexOperations", func(t *testing.T) {
 		indexName := generateUniqueName("ivfpq_test_")
 		indexKey := generateRandomKey()
-		
+
 		indexConfig := cyborgdb.IndexIVFPQ(dimension, 32, 8)
 		metric := "euclidean"
-		
+
 		createParams := &cyborgdb.CreateIndexParams{
 			IndexName:   indexName,
 			IndexKey:    indexKey,
 			IndexConfig: indexConfig,
 			Metric:      &metric,
 		}
-		
+
 		index, err := client.CreateIndex(ctx, createParams)
 		if err != nil {
 			t.Fatalf("Failed to create IVFPQ index: %v", err)
@@ -275,11 +273,11 @@ func TestIndexTypes(t *testing.T) {
 			QueryVector: testVectors[0],
 			TopK:        5,
 		}
-		
+
 		// Use a longer timeout for IVFPQ queries
 		queryCtx, queryCancel := context.WithTimeout(ctx, 60*time.Second)
 		defer queryCancel()
-		
+
 		results, err := index.Query(queryCtx, queryParams)
 		if err != nil {
 			t.Fatalf("Failed to query IVFPQ index: %v", err)
@@ -292,7 +290,7 @@ func TestIndexTypes(t *testing.T) {
 
 	t.Run("TestIVFPQParameterValidation", func(t *testing.T) {
 		metric := "euclidean"
-		
+
 		testCases := []struct {
 			name       string
 			pqDim      int32
@@ -305,7 +303,7 @@ func TestIndexTypes(t *testing.T) {
 			{"Negative pqDim", -1, 8, true, "pqDim cannot be negative"},
 			{"Negative pqBits", 32, -1, true, "pqBits cannot be negative"},
 		}
-		
+
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				invalidConfig := cyborgdb.IndexIVFPQ(dimension, tc.pqDim, tc.pqBits)
@@ -315,13 +313,13 @@ func TestIndexTypes(t *testing.T) {
 					IndexConfig: invalidConfig,
 					Metric:      &metric,
 				}
-				
-				testIndex, err := client.CreateIndex(ctx, invalidParams)
+
+				testIndex, createErr := client.CreateIndex(ctx, invalidParams)
 				if testIndex != nil {
 					defer testIndex.DeleteIndex(ctx)
 				}
-				
-				if tc.shouldFail && err == nil {
+
+				if tc.shouldFail && createErr == nil {
 					t.Errorf("Expected error for %s, but creation succeeded", tc.reason)
 				}
 			})
@@ -339,7 +337,7 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Client creation should not fail with invalid API key: %v", err)
 		}
-		
+
 		// Try to create an index - this should require authentication
 		indexConfig := cyborgdb.IndexIVFFlat(128)
 		metric := "euclidean"
@@ -349,12 +347,12 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 			IndexConfig: indexConfig,
 			Metric:      &metric,
 		}
-		
+
 		_, err = client.CreateIndex(ctx, createParams)
 		if err == nil {
 			t.Fatal("Invalid API key was accepted - authentication is not working")
 		}
-		
+
 		errorStr := strings.ToLower(err.Error())
 		authErrors := []string{"unauthorized", "401", "forbidden", "403", "invalid", "key", "auth"}
 		hasAuthError := false
@@ -364,7 +362,7 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 				break
 			}
 		}
-		
+
 		if !hasAuthError {
 			t.Errorf("Expected authentication error for invalid API key, got: %v", err)
 		}
@@ -385,7 +383,7 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 			IndexConfig: invalidConfig,
 			Metric:      &metric,
 		}
-		
+
 		_, err = client.CreateIndex(ctx, createParams)
 		if err == nil {
 			t.Error("Server accepted negative dimension")
@@ -400,7 +398,7 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 			IndexConfig: validConfig,
 			Metric:      &invalidMetric,
 		}
-		
+
 		_, err = client.CreateIndex(ctx, invalidParams)
 		if err == nil {
 			t.Error("Server accepted invalid metric")
@@ -414,7 +412,7 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 			IndexConfig: cyborgdb.IndexIVFFlat(128),
 			Metric:      &metric2,
 		}
-		
+
 		_, err = client.CreateIndex(ctx, emptyNameParams)
 		if err == nil {
 			t.Error("Server accepted empty index name")
@@ -429,7 +427,7 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 			IndexConfig: cyborgdb.IndexIVFFlat(128),
 			Metric:      &metric3,
 		}
-		
+
 		_, err = client.CreateIndex(ctx, shortKeyParams)
 		if err == nil {
 			t.Error("Server accepted invalid key length")
@@ -446,14 +444,14 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 		indexName := generateUniqueName("dim_validation_")
 		indexKey := generateRandomKey()
 		metric := "euclidean"
-		
+
 		createParams := &cyborgdb.CreateIndexParams{
 			IndexName:   indexName,
 			IndexKey:    indexKey,
 			IndexConfig: indexConfig,
 			Metric:      &metric,
 		}
-		
+
 		index, err := client.CreateIndex(ctx, createParams)
 		if err != nil {
 			t.Fatalf("Failed to create test index: %v", err)
@@ -484,12 +482,12 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 					Metadata: map[string]interface{}{},
 				}}
 
-				err := index.Upsert(ctx, items)
-				
-				if tc.shouldFail && err == nil {
+				upsertErr := index.Upsert(ctx, items)
+
+				if tc.shouldFail && upsertErr == nil {
 					t.Errorf("Server accepted vector with %s", tc.name)
-				} else if !tc.shouldFail && err != nil {
-					t.Errorf("Expected success for %s, but got error: %v", tc.name, err)
+				} else if !tc.shouldFail && upsertErr != nil {
+					t.Errorf("Expected success for %s, but got error: %v", tc.name, upsertErr)
 				}
 			})
 		}
@@ -500,11 +498,11 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Client creation should not fail: %v", err)
 		}
-		
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+
+		networkCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
-		
-		_, err = client.GetHealth(ctx)
+
+		_, err = client.GetHealth(networkCtx)
 		if err == nil {
 			t.Error("Expected network connectivity error for non-existent server")
 		}
@@ -515,7 +513,7 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 func TestEdgeCasesStrict(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), longTimeout)
 	defer cancel()
-	
+
 	client, err := createClient()
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
@@ -525,14 +523,14 @@ func TestEdgeCasesStrict(t *testing.T) {
 	indexName := generateUniqueName("edge_test_")
 	indexKey := generateRandomKey()
 	metric := "euclidean"
-	
+
 	createParams := &cyborgdb.CreateIndexParams{
 		IndexName:   indexName,
 		IndexKey:    indexKey,
 		IndexConfig: indexConfig,
 		Metric:      &metric,
 	}
-	
+
 	index, err := client.CreateIndex(ctx, createParams)
 	if err != nil {
 		t.Fatalf("Failed to create test index: %v", err)
@@ -545,7 +543,7 @@ func TestEdgeCasesStrict(t *testing.T) {
 			QueryVector: queryVector,
 			TopK:        10,
 		}
-		
+
 		results, err := index.Query(ctx, queryParams)
 		if err != nil {
 			t.Fatalf("Failed to query empty index: %v", err)
@@ -569,7 +567,7 @@ func TestEdgeCasesStrict(t *testing.T) {
 			Vector:   originalVector,
 			Metadata: originalMetadata,
 		}}
-		
+
 		err := index.Upsert(ctx, items)
 		if err != nil {
 			t.Fatalf("Failed to upsert: %v", err)
@@ -596,7 +594,7 @@ func TestEdgeCasesStrict(t *testing.T) {
 		if len(retrievedVector) != len(originalVector) {
 			t.Fatalf("Vector length mismatch: expected %d, got %d", len(originalVector), len(retrievedVector))
 		}
-		
+
 		for i, expected := range originalVector {
 			actual := retrievedVector[i]
 			diff := actual - expected
@@ -610,7 +608,7 @@ func TestEdgeCasesStrict(t *testing.T) {
 
 		retrievedMetadata := retrieved.GetMetadata()
 		if retrievedMetadata["test_key"] != originalMetadata["test_key"] {
-			t.Errorf("Metadata corruption: test_key expected %v, got %v", 
+			t.Errorf("Metadata corruption: test_key expected %v, got %v",
 				originalMetadata["test_key"], retrievedMetadata["test_key"])
 		}
 	})
@@ -620,73 +618,73 @@ func TestEdgeCasesStrict(t *testing.T) {
 		var wg sync.WaitGroup
 		errorChan := make(chan error, numOperations)
 		successChan := make(chan string, numOperations)
-		
+
 		// Use a longer timeout for concurrent operations
 		concurrentCtx, concurrentCancel := context.WithTimeout(ctx, 90*time.Second)
 		defer concurrentCancel()
-		
+
 		for i := 0; i < numOperations; i++ {
 			wg.Add(1)
 			go func(id int) {
 				defer wg.Done()
-				
+
 				vector := generateTestVectors(1, 128)[0]
 				for j := range vector {
 					vector[j] += float32(id) / 1000.0
 				}
-				
+
 				items := []cyborgdb.VectorItem{{
 					Id:       fmt.Sprintf("concurrent_%d", id),
 					Vector:   vector,
 					Metadata: map[string]interface{}{"batch_id": id},
 				}}
-				
-				if err := index.Upsert(concurrentCtx, items); err != nil {
-					errorChan <- fmt.Errorf("operation %d failed: %v", id, err)
+
+				if upsertErr := index.Upsert(concurrentCtx, items); upsertErr != nil {
+					errorChan <- fmt.Errorf("operation %d failed: %w", id, upsertErr)
 				} else {
 					successChan <- fmt.Sprintf("concurrent_%d", id)
 				}
 			}(i)
 		}
-		
+
 		wg.Wait()
 		close(errorChan)
 		close(successChan)
-		
-		var errors []error
-		for err := range errorChan {
-			errors = append(errors, err)
+
+		var errs []error
+		for opErr := range errorChan {
+			errs = append(errs, opErr)
 		}
-		
+
 		var successIds []string
 		for id := range successChan {
 			successIds = append(successIds, id)
 		}
-		
-		if len(errors) > 0 {
-			for _, err := range errors {
-				t.Errorf("Concurrent operation error: %v", err)
+
+		if len(errs) > 0 {
+			for _, opErr := range errs {
+				t.Errorf("Concurrent operation error: %v", opErr)
 			}
 		}
-		
+
 		if len(successIds) != numOperations {
 			t.Errorf("Expected %d successful operations, got %d", numOperations, len(successIds))
 		}
-		
+
 		waitForPropagation(5 * time.Second)
-		
+
 		results, err := index.ListIDs(concurrentCtx)
 		if err != nil {
 			t.Fatalf("Failed to list IDs: %v", err)
 		}
-		
+
 		concurrentCount := 0
 		for _, id := range results.Ids {
 			if strings.HasPrefix(id, "concurrent_") {
 				concurrentCount++
 			}
 		}
-		
+
 		if concurrentCount != numOperations {
 			t.Errorf("Expected %d items in index, found %d", numOperations, concurrentCount)
 		}
@@ -711,18 +709,17 @@ func TestEdgeCasesStrict(t *testing.T) {
 					Vector:   tc.vector,
 					Metadata: map[string]interface{}{"type": tc.name},
 				}}
-				
-				err := index.Upsert(ctx, items)
-				
-				if tc.shouldSucceed && err != nil {
-					t.Errorf("Expected success for %s, got error: %v", tc.name, err)
-				} else if !tc.shouldSucceed && err == nil {
+
+				upsertErr := index.Upsert(ctx, items)
+
+				if tc.shouldSucceed && upsertErr != nil {
+					t.Errorf("Expected success for %s, got error: %v", tc.name, upsertErr)
+				} else if !tc.shouldSucceed && upsertErr == nil {
 					t.Errorf("Expected failure for %s, but operation succeeded", tc.name)
 				}
 			})
 		}
 	})
-
 
 	t.Run("TestLargeMetadataHandling", func(t *testing.T) {
 		testCases := []struct {
@@ -742,26 +739,26 @@ func TestEdgeCasesStrict(t *testing.T) {
 					Vector:   vector,
 					Metadata: tc.metadata,
 				}}
-				
-				err := index.Upsert(ctx, items)
-				if err != nil {
-					t.Errorf("Failed to upsert %s: %v", tc.name, err)
+
+				metadataErr := index.Upsert(ctx, items)
+				if metadataErr != nil {
+					t.Errorf("Failed to upsert %s: %v", tc.name, metadataErr)
 					return
 				}
-				
+
 				waitForPropagation(2 * time.Second)
 				include := []string{"metadata"}
-				results, err := index.Get(ctx, []string{items[0].Id}, include)
-				if err != nil {
-					t.Errorf("Failed to retrieve %s: %v", tc.name, err)
+				results, getErr := index.Get(ctx, []string{items[0].Id}, include)
+				if getErr != nil {
+					t.Errorf("Failed to retrieve %s: %v", tc.name, getErr)
 					return
 				}
-				
+
 				if results == nil {
 					t.Errorf("Results is nil for %s", tc.name)
 					return
 				}
-				
+
 				if len(results.Results) != 1 {
 					t.Errorf("Expected 1 result for %s, got %d", tc.name, len(results.Results))
 				}
@@ -774,7 +771,7 @@ func TestEdgeCasesStrict(t *testing.T) {
 func TestBackendCompatibility(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), longTimeout)
 	defer cancel()
-	
+
 	client, err := createClient()
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
@@ -785,7 +782,7 @@ func TestBackendCompatibility(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Health check failed: %v", err)
 		}
-		
+
 		if health == nil {
 			t.Fatal("Health response must not be nil")
 		}
@@ -796,42 +793,42 @@ func TestBackendCompatibility(t *testing.T) {
 		indexName := generateUniqueName("compatibility_")
 		indexKey := generateRandomKey()
 		metric := "euclidean"
-		
+
 		createParams := &cyborgdb.CreateIndexParams{
 			IndexName:   indexName,
 			IndexKey:    indexKey,
 			IndexConfig: indexConfig,
 			Metric:      &metric,
 		}
-		
+
 		index, err := client.CreateIndex(ctx, createParams)
 		if err != nil {
 			t.Fatalf("Basic IVFFlat index creation failed: %v", err)
 		}
 		defer index.DeleteIndex(ctx)
-		
+
 		vector := generateTestVectors(1, 128)[0]
 		items := []cyborgdb.VectorItem{{
 			Id:     "compatibility_test",
 			Vector: vector,
 		}}
-		
+
 		if err := index.Upsert(ctx, items); err != nil {
 			t.Fatalf("Basic upsert failed: %v", err)
 		}
-		
+
 		waitForPropagation(2 * time.Second)
-		
+
 		queryParams := cyborgdb.QueryParams{
 			QueryVector: vector,
 			TopK:        1,
 		}
-		
+
 		results, err := index.Query(ctx, queryParams)
 		if err != nil {
 			t.Fatalf("Basic query failed: %v", err)
 		}
-		
+
 		if results == nil {
 			t.Fatal("Query results must not be nil")
 		}
@@ -839,7 +836,7 @@ func TestBackendCompatibility(t *testing.T) {
 
 	t.Run("TestAdvancedIndexSupport", func(t *testing.T) {
 		dimension := int32(128)
-		
+
 		indexConfig := cyborgdb.IndexIVFPQ(dimension, 32, 8)
 		metric := "euclidean"
 		createParams := &cyborgdb.CreateIndexParams{
@@ -848,13 +845,13 @@ func TestBackendCompatibility(t *testing.T) {
 			IndexConfig: indexConfig,
 			Metric:      &metric,
 		}
-		
+
 		advancedIndex, err := client.CreateIndex(ctx, createParams)
 		if err != nil {
 			t.Fatalf("Failed to create advanced index: %v", err)
 		}
 		defer advancedIndex.DeleteIndex(ctx)
-		
+
 		vectors := generateTestVectors(100, 128)
 		items := make([]cyborgdb.VectorItem, len(vectors))
 		for i, vector := range vectors {
@@ -863,23 +860,23 @@ func TestBackendCompatibility(t *testing.T) {
 				Vector: vector,
 			}
 		}
-		
+
 		if err := advancedIndex.Upsert(ctx, items); err != nil {
 			t.Errorf("Advanced index upsert failed: %v", err)
 		}
-		
+
 		waitForPropagation(5 * time.Second)
-		
+
 		queryParams := cyborgdb.QueryParams{
 			QueryVector: vectors[0],
 			TopK:        5,
 		}
-		
+
 		results, err := advancedIndex.Query(ctx, queryParams)
 		if err != nil {
 			t.Errorf("Advanced index query failed: %v", err)
 		}
-		
+
 		if results == nil {
 			t.Error("Advanced index query results must not be nil")
 		}
