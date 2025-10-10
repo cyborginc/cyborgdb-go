@@ -95,14 +95,14 @@ func TestSSLVerification(t *testing.T) {
 
 		// Use context for the request
 		ctx := context.Background()
-		req, err := http.NewRequestWithContext(ctx, "GET", "https://localhost:8000/v1/health", nil)
-		if err != nil {
-			t.Fatalf("Failed to create request: %v", err)
+		req, reqErr := http.NewRequestWithContext(ctx, "GET", "https://localhost:8000/v1/health", nil)
+		if reqErr != nil {
+			t.Fatalf("Failed to create request: %v", reqErr)
 		}
 
-		resp, err := testClient.Do(req)
-		if err != nil {
-			errorStr := strings.ToLower(err.Error())
+		resp, doErr := testClient.Do(req)
+		if doErr != nil {
+			errorStr := strings.ToLower(doErr.Error())
 			// If server gave HTTP response to HTTPS client, HTTPS is not available
 			if strings.Contains(errorStr, "http response to https client") ||
 				strings.Contains(errorStr, "connection refused") {
@@ -114,17 +114,17 @@ func TestSSLVerification(t *testing.T) {
 		}
 
 		// If we get here, HTTPS is available, so test it
-		client, err := cyborgdb.NewClient("https://localhost:8000", os.Getenv("CYBORGDB_API_KEY"))
-		if err != nil {
-			t.Fatalf("Failed to create client with HTTPS localhost URL: %v", err)
+		client, clientErr := cyborgdb.NewClient("https://localhost:8000", os.Getenv("CYBORGDB_API_KEY"))
+		if clientErr != nil {
+			t.Fatalf("Failed to create client with HTTPS localhost URL: %v", clientErr)
 		}
 
 		httpsCtx, cancel := context.WithTimeout(context.Background(), baseTimeout)
 		defer cancel()
 
-		_, err = client.GetHealth(httpsCtx)
-		if err != nil {
-			t.Errorf("HTTPS health check failed: %v", err)
+		_, healthErr := client.GetHealth(httpsCtx)
+		if healthErr != nil {
+			t.Errorf("HTTPS health check failed: %v", healthErr)
 		}
 	})
 
@@ -177,9 +177,9 @@ func TestIndexTypes(t *testing.T) {
 			Metric:      &metric,
 		}
 
-		index, err := client.CreateIndex(ctx, createParams)
-		if err != nil {
-			t.Fatalf("Failed to create IVF index: %v", err)
+		index, createErr := client.CreateIndex(ctx, createParams)
+		if createErr != nil {
+			t.Fatalf("Failed to create IVF index: %v", createErr)
 		}
 		defer func() {
 			if delErr := index.DeleteIndex(ctx); delErr != nil {
@@ -202,9 +202,9 @@ func TestIndexTypes(t *testing.T) {
 			}
 		}
 
-		err = index.Upsert(ctx, items)
-		if err != nil {
-			t.Fatalf("Failed to upsert to IVF index: %v", err)
+		upsertErr := index.Upsert(ctx, items)
+		if upsertErr != nil {
+			t.Fatalf("Failed to upsert to IVF index: %v", upsertErr)
 		}
 
 		waitForPropagation(2 * time.Second)
@@ -214,9 +214,9 @@ func TestIndexTypes(t *testing.T) {
 			TopK:        5,
 		}
 
-		results, err := index.Query(ctx, queryParams)
-		if err != nil {
-			t.Fatalf("Failed to query IVF index: %v", err)
+		results, queryErr := index.Query(ctx, queryParams)
+		if queryErr != nil {
+			t.Fatalf("Failed to query IVF index: %v", queryErr)
 		}
 
 		if results == nil {
@@ -238,9 +238,9 @@ func TestIndexTypes(t *testing.T) {
 			Metric:      &metric,
 		}
 
-		index, err := client.CreateIndex(ctx, createParams)
-		if err != nil {
-			t.Fatalf("Failed to create IVFPQ index: %v", err)
+		index, createErr := client.CreateIndex(ctx, createParams)
+		if createErr != nil {
+			t.Fatalf("Failed to create IVFPQ index: %v", createErr)
 		}
 		defer func() {
 			if delErr := index.DeleteIndex(ctx); delErr != nil {
@@ -262,9 +262,9 @@ func TestIndexTypes(t *testing.T) {
 			}
 		}
 
-		err = index.Upsert(ctx, items)
-		if err != nil {
-			t.Fatalf("Failed to upsert to IVFPQ index: %v", err)
+		upsertErr := index.Upsert(ctx, items)
+		if upsertErr != nil {
+			t.Fatalf("Failed to upsert to IVFPQ index: %v", upsertErr)
 		}
 
 		waitForPropagation(3 * time.Second)
@@ -278,9 +278,9 @@ func TestIndexTypes(t *testing.T) {
 		queryCtx, queryCancel := context.WithTimeout(ctx, 60*time.Second)
 		defer queryCancel()
 
-		results, err := index.Query(queryCtx, queryParams)
-		if err != nil {
-			t.Fatalf("Failed to query IVFPQ index: %v", err)
+		results, queryErr := index.Query(queryCtx, queryParams)
+		if queryErr != nil {
+			t.Fatalf("Failed to query IVFPQ index: %v", queryErr)
 		}
 
 		if results == nil {
@@ -333,9 +333,9 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 	defer cancel()
 
 	t.Run("TestInvalidAPIKey", func(t *testing.T) {
-		client, err := cyborgdb.NewClient("http://localhost:8000", "definitely-invalid-key-12345")
-		if err != nil {
-			t.Fatalf("Client creation should not fail with invalid API key: %v", err)
+		client, clientErr := cyborgdb.NewClient("http://localhost:8000", "definitely-invalid-key-12345")
+		if clientErr != nil {
+			t.Fatalf("Client creation should not fail with invalid API key: %v", clientErr)
 		}
 
 		// Try to create an index - this should require authentication
@@ -348,12 +348,12 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 			Metric:      &metric,
 		}
 
-		_, err = client.CreateIndex(ctx, createParams)
-		if err == nil {
+		_, createErr := client.CreateIndex(ctx, createParams)
+		if createErr == nil {
 			t.Fatal("Invalid API key was accepted - authentication is not working")
 		}
 
-		errorStr := strings.ToLower(err.Error())
+		errorStr := strings.ToLower(createErr.Error())
 		authErrors := []string{"unauthorized", "401", "forbidden", "403", "invalid", "key", "auth"}
 		hasAuthError := false
 		for _, authErr := range authErrors {
@@ -364,14 +364,14 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 		}
 
 		if !hasAuthError {
-			t.Errorf("Expected authentication error for invalid API key, got: %v", err)
+			t.Errorf("Expected authentication error for invalid API key, got: %v", createErr)
 		}
 	})
 
 	t.Run("TestMalformedRequests", func(t *testing.T) {
-		client, err := createClient()
-		if err != nil {
-			t.Fatalf("Failed to create client: %v", err)
+		client, clientErr := createClient()
+		if clientErr != nil {
+			t.Fatalf("Failed to create client: %v", clientErr)
 		}
 
 		// Test invalid dimension
@@ -384,8 +384,8 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 			Metric:      &metric,
 		}
 
-		_, err = client.CreateIndex(ctx, createParams)
-		if err == nil {
+		_, createErr := client.CreateIndex(ctx, createParams)
+		if createErr == nil {
 			t.Error("Server accepted negative dimension")
 		}
 
@@ -399,8 +399,8 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 			Metric:      &invalidMetric,
 		}
 
-		_, err = client.CreateIndex(ctx, invalidParams)
-		if err == nil {
+		_, metricErr := client.CreateIndex(ctx, invalidParams)
+		if metricErr == nil {
 			t.Error("Server accepted invalid metric")
 		}
 
@@ -413,8 +413,8 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 			Metric:      &metric2,
 		}
 
-		_, err = client.CreateIndex(ctx, emptyNameParams)
-		if err == nil {
+		_, emptyErr := client.CreateIndex(ctx, emptyNameParams)
+		if emptyErr == nil {
 			t.Error("Server accepted empty index name")
 		}
 
@@ -428,16 +428,16 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 			Metric:      &metric3,
 		}
 
-		_, err = client.CreateIndex(ctx, shortKeyParams)
-		if err == nil {
+		_, keyErr := client.CreateIndex(ctx, shortKeyParams)
+		if keyErr == nil {
 			t.Error("Server accepted invalid key length")
 		}
 	})
 
 	t.Run("TestVectorDimensionValidation", func(t *testing.T) {
-		client, err := createClient()
-		if err != nil {
-			t.Fatalf("Failed to create client: %v", err)
+		client, clientErr := createClient()
+		if clientErr != nil {
+			t.Fatalf("Failed to create client: %v", clientErr)
 		}
 
 		indexConfig := cyborgdb.IndexIVFFlat(128)
@@ -452,9 +452,9 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 			Metric:      &metric,
 		}
 
-		index, err := client.CreateIndex(ctx, createParams)
-		if err != nil {
-			t.Fatalf("Failed to create test index: %v", err)
+		index, createErr := client.CreateIndex(ctx, createParams)
+		if createErr != nil {
+			t.Fatalf("Failed to create test index: %v", createErr)
 		}
 		defer index.DeleteIndex(ctx)
 
@@ -494,16 +494,16 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 	})
 
 	t.Run("TestNetworkConnectivity", func(t *testing.T) {
-		client, err := cyborgdb.NewClient("http://non-existent-server-12345.invalid:8000", "test-key")
-		if err != nil {
-			t.Fatalf("Client creation should not fail: %v", err)
+		client, clientErr := cyborgdb.NewClient("http://non-existent-server-12345.invalid:8000", "test-key")
+		if clientErr != nil {
+			t.Fatalf("Client creation should not fail: %v", clientErr)
 		}
 
 		networkCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 
-		_, err = client.GetHealth(networkCtx)
-		if err == nil {
+		_, healthErr := client.GetHealth(networkCtx)
+		if healthErr == nil {
 			t.Error("Expected network connectivity error for non-existent server")
 		}
 	})
@@ -544,9 +544,9 @@ func TestEdgeCasesStrict(t *testing.T) {
 			TopK:        10,
 		}
 
-		results, err := index.Query(ctx, queryParams)
-		if err != nil {
-			t.Fatalf("Failed to query empty index: %v", err)
+		results, queryErr := index.Query(ctx, queryParams)
+		if queryErr != nil {
+			t.Fatalf("Failed to query empty index: %v", queryErr)
 		}
 
 		if results == nil {
@@ -568,17 +568,17 @@ func TestEdgeCasesStrict(t *testing.T) {
 			Metadata: originalMetadata,
 		}}
 
-		err := index.Upsert(ctx, items)
-		if err != nil {
-			t.Fatalf("Failed to upsert: %v", err)
+		upsertErr := index.Upsert(ctx, items)
+		if upsertErr != nil {
+			t.Fatalf("Failed to upsert: %v", upsertErr)
 		}
 
 		waitForPropagation(2 * time.Second)
 
 		include := []string{"vector", "metadata"}
-		results, err := index.Get(ctx, []string{"integrity_test"}, include)
-		if err != nil {
-			t.Fatalf("Failed to get vector: %v", err)
+		results, getErr := index.Get(ctx, []string{"integrity_test"}, include)
+		if getErr != nil {
+			t.Fatalf("Failed to get vector: %v", getErr)
 		}
 
 		if len(results.Results) != 1 {
@@ -673,9 +673,9 @@ func TestEdgeCasesStrict(t *testing.T) {
 
 		waitForPropagation(5 * time.Second)
 
-		results, err := index.ListIDs(concurrentCtx)
-		if err != nil {
-			t.Fatalf("Failed to list IDs: %v", err)
+		results, listErr := index.ListIDs(concurrentCtx)
+		if listErr != nil {
+			t.Fatalf("Failed to list IDs: %v", listErr)
 		}
 
 		concurrentCount := 0
@@ -778,9 +778,9 @@ func TestBackendCompatibility(t *testing.T) {
 	}
 
 	t.Run("TestHealthCheck", func(t *testing.T) {
-		health, err := client.GetHealth(ctx)
-		if err != nil {
-			t.Fatalf("Health check failed: %v", err)
+		health, healthErr := client.GetHealth(ctx)
+		if healthErr != nil {
+			t.Fatalf("Health check failed: %v", healthErr)
 		}
 
 		if health == nil {
@@ -801,9 +801,9 @@ func TestBackendCompatibility(t *testing.T) {
 			Metric:      &metric,
 		}
 
-		index, err := client.CreateIndex(ctx, createParams)
-		if err != nil {
-			t.Fatalf("Basic IVFFlat index creation failed: %v", err)
+		index, createErr := client.CreateIndex(ctx, createParams)
+		if createErr != nil {
+			t.Fatalf("Basic IVFFlat index creation failed: %v", createErr)
 		}
 		defer index.DeleteIndex(ctx)
 
@@ -813,8 +813,8 @@ func TestBackendCompatibility(t *testing.T) {
 			Vector: vector,
 		}}
 
-		if err := index.Upsert(ctx, items); err != nil {
-			t.Fatalf("Basic upsert failed: %v", err)
+		if upsertErr := index.Upsert(ctx, items); upsertErr != nil {
+			t.Fatalf("Basic upsert failed: %v", upsertErr)
 		}
 
 		waitForPropagation(2 * time.Second)
@@ -824,9 +824,9 @@ func TestBackendCompatibility(t *testing.T) {
 			TopK:        1,
 		}
 
-		results, err := index.Query(ctx, queryParams)
-		if err != nil {
-			t.Fatalf("Basic query failed: %v", err)
+		results, queryErr := index.Query(ctx, queryParams)
+		if queryErr != nil {
+			t.Fatalf("Basic query failed: %v", queryErr)
 		}
 
 		if results == nil {
@@ -846,9 +846,9 @@ func TestBackendCompatibility(t *testing.T) {
 			Metric:      &metric,
 		}
 
-		advancedIndex, err := client.CreateIndex(ctx, createParams)
-		if err != nil {
-			t.Fatalf("Failed to create advanced index: %v", err)
+		advancedIndex, createErr := client.CreateIndex(ctx, createParams)
+		if createErr != nil {
+			t.Fatalf("Failed to create advanced index: %v", createErr)
 		}
 		defer advancedIndex.DeleteIndex(ctx)
 
@@ -861,8 +861,8 @@ func TestBackendCompatibility(t *testing.T) {
 			}
 		}
 
-		if err := advancedIndex.Upsert(ctx, items); err != nil {
-			t.Errorf("Advanced index upsert failed: %v", err)
+		if upsertErr := advancedIndex.Upsert(ctx, items); upsertErr != nil {
+			t.Errorf("Advanced index upsert failed: %v", upsertErr)
 		}
 
 		waitForPropagation(5 * time.Second)
@@ -872,9 +872,9 @@ func TestBackendCompatibility(t *testing.T) {
 			TopK:        5,
 		}
 
-		results, err := advancedIndex.Query(ctx, queryParams)
-		if err != nil {
-			t.Errorf("Advanced index query failed: %v", err)
+		results, queryErr := advancedIndex.Query(ctx, queryParams)
+		if queryErr != nil {
+			t.Errorf("Advanced index query failed: %v", queryErr)
 		}
 
 		if results == nil {
