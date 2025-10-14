@@ -116,7 +116,7 @@ jobs:
           fi
           
           # Run all tests
-          go test -v -race -coverprofile=coverage.txt -covermode=atomic ./...
+          go test -v -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=github.com/cyborginc/cyborgdb-go ./test
           
           # Stop standard server
           kill $(cat server-standard.pid) || true
