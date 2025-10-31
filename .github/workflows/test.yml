@@ -111,7 +111,7 @@ jobs:
           cd /tmp/demo_key_helper
           go mod init demo_key_helper
           go mod edit -replace github.com/cyborginc/cyborgdb-go=$GITHUB_WORKSPACE
-          go mod download
+          go get github.com/cyborginc/cyborgdb-go
           CYBORGDB_API_KEY=$(go run main.go)
           if [ -z "$CYBORGDB_API_KEY" ]; then
             echo "Failed to generate demo API key"
