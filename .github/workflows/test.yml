@@ -88,11 +88,39 @@ jobs:
       #     echo "=== Testing with Lite version ==="
       #     ...
 
+      - name: Load Demo API Key
+        run: |
+          echo "=== Loading Demo API Key ==="
+          # Build a small Go program to get the demo API key
+          cat > get_demo_key.go << 'EOF'
+          package main
+          import (
+            "fmt"
+            "log"
+            "github.com/cyborginc/cyborgdb-go"
+          )
+          func main() {
+            key, err := cyborgdb.GetDemoAPIKey("")
+            if err != nil {
+              log.Fatal(err)
+            }
+            fmt.Print(key)
+          }
+          EOF
+          go mod download
+          CYBORGDB_API_KEY=$(go run get_demo_key.go)
+          if [ -z "$CYBORGDB_API_KEY" ]; then
+            echo "Failed to generate demo API key"
+            exit 1
+          fi
+          echo "CYBORGDB_API_KEY=${CYBORGDB_API_KEY}" >> $GITHUB_ENV
+          echo "Demo API key loaded successfully"
+
       - name: Test with Standard version
         run: |
           echo "=== Testing with Standard version ==="
           # Set up environment for Standard
-          export CYBORGDB_API_KEY="${{ secrets.CYBORGDB_STANDARD_API_KEY }}"
+          export CYBORGDB_API_KEY="${CYBORGDB_API_KEY}"
           export CYBORGDB_DB_TYPE=postgres
           export CYBORGDB_CONNECTION_STRING="host=localhost port=5432 dbname=cyborgdb user=postgres password=postgres"
           export CYBORGDB_SERVICE_LOG_LEVEL=DEBUG
