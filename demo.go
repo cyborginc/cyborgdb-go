@@ -3,7 +3,9 @@ package cyborgdb
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,16 +14,25 @@ import (
 )
 
 const (
-	// DefaultDemoEndpoint is the default endpoint for generating demo API keys
+	// DefaultDemoEndpoint is the default endpoint for generating demo API keys.
 	DefaultDemoEndpoint = "https://api.cyborgdb.co/v1/api-key/manage/create-demo-key"
-	// DefaultDemoDescription is the default description for demo API keys
+	// DefaultDemoDescription is the default description for demo API keys.
 	DefaultDemoDescription = "Temporary demo API key"
+	// DefaultDemoTimeout is the default timeout for demo API key requests.
+	DefaultDemoTimeout = 30 * time.Second
 )
 
-// DemoAPIKeyResponse represents the response from the demo API key endpoint
+var (
+	// ErrDemoAPIKeyNotFound is returned when the demo API key is not found in the response.
+	ErrDemoAPIKeyNotFound = errors.New("demo API key not found in response")
+	// ErrDemoAPIKeyGeneration is returned when demo API key generation fails.
+	ErrDemoAPIKeyGeneration = errors.New("demo API key generation failed")
+)
+
+// DemoAPIKeyResponse represents the response from the demo API key endpoint.
 type DemoAPIKeyResponse struct {
-	APIKey    string  `json:"apiKey"`
-	ExpiresAt *int64  `json:"expiresAt,omitempty"`
+	APIKey    string `json:"apiKey"`
+	ExpiresAt *int64 `json:"expiresAt,omitempty"`
 }
 
 // GetDemoAPIKey generates a temporary demo API key from the CyborgDB demo API service.
@@ -31,7 +42,7 @@ type DemoAPIKeyResponse struct {
 //
 // Parameters:
 //   - description: Optional description for the demo API key.
-//                  If empty, defaults to "Temporary demo API key"
+//     If empty, defaults to "Temporary demo API key"
 //
 // Returns:
 //   - string: The generated demo API key
@@ -66,8 +77,12 @@ func GetDemoAPIKey(description string) (string, error) {
 		return "", fmt.Errorf("failed to marshal request payload: %w", err)
 	}
 
+	// Create context with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), DefaultDemoTimeout)
+	defer cancel()
+
 	// Create the HTTP request
-	req, err := http.NewRequest("POST", endpoint, bytes.NewBuffer(payloadBytes))
+	req, err := http.NewRequestWithContext(ctx, "POST", endpoint, bytes.NewBuffer(payloadBytes))
 	if err != nil {
 		return "", fmt.Errorf("failed to create request: %w", err)
 	}
@@ -76,10 +91,8 @@ func GetDemoAPIKey(description string) (string, error) {
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
 
-	// Create HTTP client with timeout
-	client := &http.Client{
-		Timeout: 30 * time.Second,
-	}
+	// Create HTTP client
+	client := &http.Client{}
 
 	// Make the POST request
 	resp, err := client.Do(req)
@@ -96,7 +109,7 @@ func GetDemoAPIKey(description string) (string, error) {
 
 	// Check if request was successful
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("demo API key generation failed with status %d: %s", resp.StatusCode, string(body))
+		return "", fmt.Errorf("%w with status %d: %s", ErrDemoAPIKeyGeneration, resp.StatusCode, string(body))
 	}
 
 	// Parse the response
@@ -107,7 +120,7 @@ func GetDemoAPIKey(description string) (string, error) {
 
 	// Validate the API key
 	if result.APIKey == "" {
-		return "", fmt.Errorf("demo API key not found in response")
+		return "", ErrDemoAPIKeyNotFound
 	}
 
 	// Log expiration info if available
