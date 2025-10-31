@@ -148,9 +148,15 @@ jobs:
             cat server-standard.log
             exit 1
           fi
-          
-          # Run all tests
-          go test -v -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=github.com/cyborginc/cyborgdb-go ./test
+
+          # Run tests based on trigger type
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "Running quick flow tests for PR..."
+            go test -v -race -run TestUnitFlow -coverprofile=coverage.txt -covermode=atomic -coverpkg=github.com/cyborginc/cyborgdb-go ./test
+          else
+            echo "Running all tests for main branch..."
+            go test -v -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=github.com/cyborginc/cyborgdb-go ./test
+          fi
           
           # Stop standard server
           kill $(cat server-standard.pid) || true
