@@ -92,7 +92,8 @@ jobs:
         run: |
           echo "=== Loading Demo API Key ==="
           # Build a small Go program to get the demo API key
-          cat > get_demo_key.go << 'EOF'
+          mkdir -p /tmp/demo_key_helper
+          cat > /tmp/demo_key_helper/main.go << 'EOF'
           package main
           import (
             "fmt"
@@ -107,8 +108,11 @@ jobs:
             fmt.Print(key)
           }
           EOF
+          cd /tmp/demo_key_helper
+          go mod init demo_key_helper
+          go mod edit -replace github.com/cyborginc/cyborgdb-go=$GITHUB_WORKSPACE
           go mod download
-          CYBORGDB_API_KEY=$(go run get_demo_key.go)
+          CYBORGDB_API_KEY=$(go run main.go)
           if [ -z "$CYBORGDB_API_KEY" ]; then
             echo "Failed to generate demo API key"
             exit 1
