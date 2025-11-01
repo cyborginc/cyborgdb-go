@@ -287,7 +287,6 @@ func TestIndexTypes(t *testing.T) {
 			t.Fatal("Query results must not be nil")
 		}
 	})
-
 }
 
 // Error Handling Testing
@@ -947,5 +946,4 @@ func TestGetDemoAPIKey(t *testing.T) {
 			t.Fatal("Health response is nil")
 		}
 	})
-
 }
