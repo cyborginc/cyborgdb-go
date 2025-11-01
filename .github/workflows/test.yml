@@ -88,11 +88,43 @@ jobs:
       #     echo "=== Testing with Lite version ==="
       #     ...
 
+      - name: Load Demo API Key
+        run: |
+          echo "=== Loading Demo API Key ==="
+          # Build a small Go program to get the demo API key
+          mkdir -p /tmp/demo_key_helper
+          cat > /tmp/demo_key_helper/main.go << 'EOF'
+          package main
+          import (
+            "fmt"
+            "log"
+            "github.com/cyborginc/cyborgdb-go"
+          )
+          func main() {
+            key, err := cyborgdb.GetDemoAPIKey("")
+            if err != nil {
+              log.Fatal(err)
+            }
+            fmt.Print(key)
+          }
+          EOF
+          cd /tmp/demo_key_helper
+          go mod init demo_key_helper
+          go mod edit -replace github.com/cyborginc/cyborgdb-go=$GITHUB_WORKSPACE
+          go get github.com/cyborginc/cyborgdb-go
+          CYBORGDB_API_KEY=$(go run main.go 2>&1 | grep -o 'cyborg_[a-zA-Z0-9_]*' | head -n1)
+          if [ -z "$CYBORGDB_API_KEY" ]; then
+            echo "Failed to generate demo API key"
+            exit 1
+          fi
+          echo "CYBORGDB_API_KEY=$CYBORGDB_API_KEY" >> $GITHUB_ENV
+          echo "Demo API key loaded successfully"
+
       - name: Test with Standard version
         run: |
           echo "=== Testing with Standard version ==="
           # Set up environment for Standard
-          export CYBORGDB_API_KEY="${{ secrets.CYBORGDB_STANDARD_API_KEY }}"
+          export CYBORGDB_API_KEY="${CYBORGDB_API_KEY}"
           export CYBORGDB_DB_TYPE=postgres
           export CYBORGDB_CONNECTION_STRING="host=localhost port=5432 dbname=cyborgdb user=postgres password=postgres"
           export CYBORGDB_SERVICE_LOG_LEVEL=DEBUG
@@ -116,9 +148,15 @@ jobs:
             cat server-standard.log
             exit 1
           fi
-          
-          # Run all tests
-          go test -v -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=github.com/cyborginc/cyborgdb-go ./test
+
+          # Run tests based on trigger type
+          if [ "${{ github.event_name }}" == "pull_request" ]; then
+            echo "Running quick flow tests for PR..."
+            go test -v -race -run TestUnitFlow -coverprofile=coverage.txt -covermode=atomic -coverpkg=github.com/cyborginc/cyborgdb-go ./test
+          else
+            echo "Running all tests for main branch..."
+            go test -v -race -coverprofile=coverage.txt -covermode=atomic -coverpkg=github.com/cyborginc/cyborgdb-go ./test
+          fi
           
           # Stop standard server
           kill $(cat server-standard.pid) || true

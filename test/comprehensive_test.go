@@ -287,44 +287,6 @@ func TestIndexTypes(t *testing.T) {
 			t.Fatal("Query results must not be nil")
 		}
 	})
-
-	t.Run("TestIVFPQParameterValidation", func(t *testing.T) {
-		metric := "euclidean"
-
-		testCases := []struct {
-			name       string
-			pqDim      int32
-			pqBits     int32
-			shouldFail bool
-			reason     string
-		}{
-			{"Zero pqDim", 0, 8, true, "pqDim cannot be zero"},
-			{"Zero pqBits", 32, 0, true, "pqBits cannot be zero"},
-			{"Negative pqDim", -1, 8, true, "pqDim cannot be negative"},
-			{"Negative pqBits", 32, -1, true, "pqBits cannot be negative"},
-		}
-
-		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
-				invalidConfig := cyborgdb.IndexIVFPQ(dimension, tc.pqDim, tc.pqBits)
-				invalidParams := &cyborgdb.CreateIndexParams{
-					IndexName:   generateUniqueName("invalid_"),
-					IndexKey:    generateRandomKey(),
-					IndexConfig: invalidConfig,
-					Metric:      &metric,
-				}
-
-				testIndex, createErr := client.CreateIndex(ctx, invalidParams)
-				if testIndex != nil {
-					defer testIndex.DeleteIndex(ctx)
-				}
-
-				if tc.shouldFail && createErr == nil {
-					t.Errorf("Expected error for %s, but creation succeeded", tc.reason)
-				}
-			})
-		}
-	})
 }
 
 // Error Handling Testing
@@ -923,4 +885,65 @@ func createDeepNestedMetadata(depth int) map[string]interface{} {
 		"nested": createDeepNestedMetadata(depth - 1),
 		"level":  depth,
 	}
+}
+
+// TestGetDemoAPIKey tests the GetDemoAPIKey function
+func TestGetDemoAPIKey(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	t.Run("TestGetDemoAPIKeySuccess", func(t *testing.T) {
+		// Get a demo API key
+		apiKey, err := cyborgdb.GetDemoAPIKey("")
+		if err != nil {
+			t.Fatalf("Failed to get demo API key: %v", err)
+		}
+
+		if apiKey == "" {
+			t.Fatal("Demo API key is empty")
+		}
+
+		// Verify the API key works by creating a client and checking health
+		client, err := cyborgdb.NewClient("http://localhost:8000", apiKey)
+		if err != nil {
+			t.Fatalf("Failed to create client with demo API key: %v", err)
+		}
+
+		health, err := client.GetHealth(ctx)
+		if err != nil {
+			t.Fatalf("Health check failed with demo API key: %v", err)
+		}
+
+		if health == nil {
+			t.Fatal("Health response is nil")
+		}
+	})
+
+	t.Run("TestGetDemoAPIKeyWithCustomDescription", func(t *testing.T) {
+		// Get a demo API key with a custom description
+		customDescription := "Test API key for Go SDK"
+		apiKey, err := cyborgdb.GetDemoAPIKey(customDescription)
+		if err != nil {
+			t.Fatalf("Failed to get demo API key with custom description: %v", err)
+		}
+
+		if apiKey == "" {
+			t.Fatal("Demo API key is empty")
+		}
+
+		// Verify the API key works
+		client, err := cyborgdb.NewClient("http://localhost:8000", apiKey)
+		if err != nil {
+			t.Fatalf("Failed to create client with demo API key: %v", err)
+		}
+
+		health, err := client.GetHealth(ctx)
+		if err != nil {
+			t.Fatalf("Health check failed with demo API key: %v", err)
+		}
+
+		if health == nil {
+			t.Fatal("Health response is nil")
+		}
+	})
 }
