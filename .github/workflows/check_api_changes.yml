@@ -1,0 +1,73 @@
+name: API Contract Test
+
+permissions:
+  contents: read
+  pull-requests: write
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+  push:
+    branches: [main]
+
+jobs:
+  check-contract:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Fetch all history for git diff
+
+      - name: Check for Contract Changes
+        if: github.event_name == 'pull_request'
+        id: check_changes
+        run: |
+          # Check if the API contract test file was modified
+          if git diff --name-only ${{ github.event.pull_request.base.sha }}..HEAD | grep -q "test/api_contract.test.go"; then
+            echo "contract_changed=true" >> $GITHUB_OUTPUT
+            echo "API contract test file was modified in this PR"
+          else
+            echo "contract_changed=false" >> $GITHUB_OUTPUT
+            echo "API contract test file was not modified"
+          fi
+
+      - name: Request Changes if Contract Changed
+        if: github.event_name == 'pull_request' && steps.check_changes.outputs.contract_changed == 'true'
+        uses: actions/github-script@v6
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          script: |
+            const body = `## ⚠️ API Contract Change Detected
+
+            This PR modifies the public API contract of the CyborgDB GO SDK.
+
+            **Please provide an explanation for this change:**
+            - Why is this change necessary?
+            - Is this a breaking change or backward compatible?
+            - Have you updated the documentation?
+
+            **This review must be dismissed or addressed before the PR can be merged.**`;
+
+            // Check if we already have a review requesting changes
+            const { data: reviews } = await github.rest.pulls.listReviews({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: context.issue.number,
+            });
+
+            const existingReview = reviews.find(review =>
+              review.user.type === 'Bot' &&
+              review.body.includes('API Contract Change Detected')
+            );
+
+            if (!existingReview) {
+              // Create a review requesting changes
+              await github.rest.pulls.createReview({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: context.issue.number,
+                body: body,
+                event: 'REQUEST_CHANGES'
+              });
+            }
