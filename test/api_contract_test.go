@@ -384,6 +384,15 @@ func TestClientCreateIndex(t *testing.T) {
 	})
 
 	t.Run("CreateIndexWithEmbeddingModel", func(t *testing.T) {
+		// KNOWN ISSUE: Go SDK currently requires IndexConfig even when embedding_model is provided
+		// Python/TypeScript SDKs allow creating index with just embedding_model
+		// Track this as a bug in the Go SDK implementation
+		defer func() {
+			if r := recover(); r != nil {
+				t.Errorf("KNOWN BUG - Panicked creating index with embedding model: %v", r)
+			}
+		}()
+
 		embeddingModel := "all-MiniLM-L6-v2"
 		params := &cyborgdb.CreateIndexParams{
 			IndexName:      embeddingName,
@@ -394,7 +403,18 @@ func TestClientCreateIndex(t *testing.T) {
 
 		index, err := testClient.CreateIndex(ctx, params)
 		if err != nil {
-			t.Fatalf("Failed to create index with embedding model: %v", err)
+			t.Errorf("KNOWN BUG - Failed to create index with embedding model: %v", err)
+			t.Log("Expected: Should create index with dimension auto-detected from embedding model")
+			t.Log("Actual: Returns 400 Bad Request")
+			t.Log("Python/TypeScript SDKs support this pattern")
+			
+			// Create embedding index with explicit config as workaround for remaining tests
+			config := cyborgdb.IndexIVFFlat(384)
+			params.IndexConfig = config
+			index, err = testClient.CreateIndex(ctx, params)
+			if err != nil {
+				t.Fatalf("Workaround also failed: %v", err)
+			}
 		}
 		embeddingIndex = index
 
