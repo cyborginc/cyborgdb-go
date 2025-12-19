@@ -84,7 +84,7 @@ func TestSSLVerification(t *testing.T) {
 			}
 		}
 		if resp != nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 
 		// If we get here, HTTPS is available, so test it
@@ -392,7 +392,7 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 		if createErr != nil {
 			t.Fatalf("Failed to create test index: %v", createErr)
 		}
-		defer index.DeleteIndex(ctx)
+		defer func() { _ = index.DeleteIndex(ctx) }()
 
 		testCases := []struct {
 			name       string
@@ -471,7 +471,7 @@ func TestEdgeCasesStrict(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test index: %v", err)
 	}
-	defer index.DeleteIndex(ctx)
+	defer func() { _ = index.DeleteIndex(ctx) }()
 
 	t.Run("TestEmptyIndexQuery", func(t *testing.T) {
 		queryVector := generateTestVectors(1, 128)[0]
@@ -741,7 +741,7 @@ func TestBackendCompatibility(t *testing.T) {
 		if createErr != nil {
 			t.Fatalf("Basic IVFFlat index creation failed: %v", createErr)
 		}
-		defer index.DeleteIndex(ctx)
+		defer func() { _ = index.DeleteIndex(ctx) }()
 
 		vector := generateTestVectors(1, 128)[0]
 		items := []cyborgdb.VectorItem{{
@@ -786,7 +786,7 @@ func TestBackendCompatibility(t *testing.T) {
 		if createErr != nil {
 			t.Fatalf("Failed to create advanced index: %v", createErr)
 		}
-		defer advancedIndex.DeleteIndex(ctx)
+		defer func() { _ = advancedIndex.DeleteIndex(ctx) }()
 
 		vectors := generateTestVectors(100, 128)
 		items := make([]cyborgdb.VectorItem, len(vectors))

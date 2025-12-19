@@ -99,7 +99,7 @@ func GetDemoAPIKey(description string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to generate demo API key: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Read response body
 	body, err := io.ReadAll(resp.Body)

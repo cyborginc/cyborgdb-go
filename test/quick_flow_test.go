@@ -219,8 +219,8 @@ type TestData struct {
 }
 
 func TestUnitFlow(t *testing.T) {
-	// Load environment variables from .env.local
-	godotenv.Load("../.env.local")
+	// Load environment variables from .env.local (ignore error - file may not exist)
+	_ = godotenv.Load("../.env.local")
 
 	// Create context for all operations
 	ctx := context.Background()
@@ -278,7 +278,7 @@ func TestUnitFlow(t *testing.T) {
 
 	indexName := generateUniqueName("")
 	indexKeyBytes := make([]byte, 32)
-	cryptoRand.Read(indexKeyBytes)
+	_, _ = cryptoRand.Read(indexKeyBytes)
 
 	metric := "euclidean"
 	createParams := &cyborgdb.CreateIndexParams{
@@ -296,7 +296,7 @@ func TestUnitFlow(t *testing.T) {
 	// Clean up at the end
 	defer func() {
 		if index != nil {
-			index.DeleteIndex(ctx)
+			_ = index.DeleteIndex(ctx)
 		}
 	}()
 

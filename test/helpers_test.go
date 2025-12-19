@@ -14,8 +14,8 @@ import (
 
 // TestMain is the single entry point for all tests in this package
 func TestMain(m *testing.M) {
-	// Load environment variables
-	godotenv.Load("../.env.local")
+	// Load environment variables (ignore error - file may not exist)
+	_ = godotenv.Load("../.env.local")
 
 	// Validate test environment
 	if os.Getenv("CYBORGDB_API_KEY") == "" {
@@ -35,7 +35,7 @@ func TestMain(m *testing.M) {
 // generateRandomKey generates a cryptographically secure 32-byte key
 func generateRandomKey() []byte {
 	key := make([]byte, 32)
-	rand.Read(key)
+	_, _ = rand.Read(key)
 	return key
 }
 
