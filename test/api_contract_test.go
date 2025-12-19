@@ -2,15 +2,14 @@ package test
 
 import (
 	"context"
-	"crypto/rand"
 	"fmt"
 	"os"
 	"reflect"
 	"testing"
 	"time"
 
-	"github.com/joho/godotenv"
 	cyborgdb "github.com/cyborginc/cyborgdb-go"
+	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
 // Test configuration constants
@@ -34,32 +33,18 @@ var (
 )
 
 func init() {
-	// Load environment variables
-	godotenv.Load("../.env.local")
-}
-
-// TestMain sets up test environment
-func TestMain(m *testing.M) {
-	if os.Getenv("CYBORGDB_API_KEY") == "" {
-		fmt.Println("ERROR: CYBORGDB_API_KEY environment variable is required")
-		os.Exit(1)
-	}
-
-	// Generate test data
+	// Initialize api contract test data
 	testVectors = generateTestVectors(10, dimension)
 	testMetadata = generateTestMetadata(10)
 	testIndexName = fmt.Sprintf("test_contract_%d", time.Now().UnixNano())
 	embeddingName = fmt.Sprintf("test_embed_%d", time.Now().UnixNano())
-
-	code := m.Run()
-
-	// Cleanup
-	cleanup()
-
-	os.Exit(code)
+	testIndexKey = generateRandomKey()
+	embeddingKey = generateRandomKey()
 }
 
-func cleanup() {
+
+// cleanupAPIContractTests cleans up resources created by API contract tests
+func cleanupAPIContractTests() {
 	ctx := context.Background()
 	if testIndex != nil {
 		testIndex.DeleteIndex(ctx)
@@ -70,16 +55,6 @@ func cleanup() {
 }
 
 // Helper functions
-func generateTestVectors(count, dim int) [][]float32 {
-	vectors := make([][]float32, count)
-	for i := 0; i < count; i++ {
-		vectors[i] = make([]float32, dim)
-		for j := 0; j < dim; j++ {
-			vectors[i][j] = float32(j) / 100.0
-		}
-	}
-	return vectors
-}
 
 func generateTestMetadata(count int) []map[string]interface{} {
 	metadata := make([]map[string]interface{}, count)
@@ -93,15 +68,7 @@ func generateTestMetadata(count int) []map[string]interface{} {
 	return metadata
 }
 
-func generateRandomKey() []byte {
-	key := make([]byte, 32)
-	rand.Read(key)
-	return key
-}
 
-func generateUniqueName(prefix string) string {
-	return fmt.Sprintf("%s%d", prefix, time.Now().UnixNano())
-}
 
 // Test Suite
 
@@ -109,15 +76,24 @@ func generateUniqueName(prefix string) string {
 func TestModuleExports(t *testing.T) {
 	t.Run("RequiredTypesExist", func(t *testing.T) {
 		// Verify key types are exported
+		// Verify exported types exist and have expected kinds
 		var client *cyborgdb.Client
 		var index *cyborgdb.EncryptedIndex
 		var params *cyborgdb.CreateIndexParams
 		var queryParams cyborgdb.QueryParams
 		var item cyborgdb.VectorItem
 
-		if client == nil && index == nil && params == nil {
-			// Types exist
+		// Pointer types should be pointers
+		if reflect.TypeOf(client).Kind() != reflect.Pointer {
+			t.Error("Client should be a pointer type")
 		}
+		if reflect.TypeOf(index).Kind() != reflect.Pointer {
+			t.Error("EncryptedIndex should be a pointer type")
+		}
+		if reflect.TypeOf(params).Kind() != reflect.Pointer {
+			t.Error("CreateIndexParams should be a pointer type")
+		}
+		// Struct types should be structs
 		if reflect.TypeOf(queryParams).Kind() != reflect.Struct {
 			t.Error("QueryParams should be a struct")
 		}
@@ -156,10 +132,19 @@ func TestClientConstructor(t *testing.T) {
 	})
 
 	t.Run("RequireBaseURL", func(t *testing.T) {
-		_, err := cyborgdb.NewClient("", apiKey)
-		// Note: SDK may not reject empty baseURL at construction time
-		// This is acceptable behavior - it will fail when making requests
-		_ = err
+		client, err := cyborgdb.NewClient("", apiKey)
+		// SDK behavior: either reject at construction time, or allow but fail on requests
+		if err != nil {
+			// Good: SDK validates baseURL at construction
+			t.Logf("SDK correctly rejected empty baseURL: %v", err)
+		} else if client != nil {
+			// SDK allows construction but should fail on actual request
+			ctx := context.Background()
+			_, healthErr := client.GetHealth(ctx)
+			if healthErr == nil {
+				t.Error("Expected error when making request with empty baseURL")
+			}
+		}
 	})
 
 	t.Run("StoreClientForLaterTests", func(t *testing.T) {
@@ -284,17 +269,36 @@ func TestClientListIndexes(t *testing.T) {
 func TestIndexConfigTypes(t *testing.T) {
 	t.Run("CreateIndexIVFConfig", func(t *testing.T) {
 		config := cyborgdb.IndexIVF(0)
-		_ = config
+		if config == nil {
+			t.Error("IndexIVF should return non-nil config")
+		}
+		// Verify config can be converted to IndexConfig
+		indexConfig := config.ToIndexConfig()
+		if indexConfig == nil {
+			t.Error("ToIndexConfig should return non-nil IndexConfig")
+		}
 	})
 
 	t.Run("CreateIndexIVFFlatConfigWithDimension", func(t *testing.T) {
 		config := cyborgdb.IndexIVFFlat(dimension)
-		_ = config
+		if config == nil {
+			t.Error("IndexIVFFlat should return non-nil config")
+		}
+		indexConfig := config.ToIndexConfig()
+		if indexConfig == nil {
+			t.Error("ToIndexConfig should return non-nil IndexConfig")
+		}
 	})
 
 	t.Run("CreateIndexIVFPQConfigWithRequiredParams", func(t *testing.T) {
 		config := cyborgdb.IndexIVFPQ(dimension, 64, 8)
-		_ = config
+		if config == nil {
+			t.Error("IndexIVFPQ should return non-nil config")
+		}
+		indexConfig := config.ToIndexConfig()
+		if indexConfig == nil {
+			t.Error("ToIndexConfig should return non-nil IndexConfig")
+		}
 	})
 }
 
@@ -428,11 +432,12 @@ func TestClientCreateIndex(t *testing.T) {
 	t.Run("RejectDuplicateIndexCreation", func(t *testing.T) {
 		dupName := generateUniqueName("dup_test_")
 		dupKey := generateRandomKey()
+		config := cyborgdb.IndexIVFFlat(dimension)
 
 		params := &cyborgdb.CreateIndexParams{
-			IndexName: dupName,
-			IndexKey:  dupKey,
-			// No IndexConfig - should work with defaults
+			IndexName:   dupName,
+			IndexKey:    dupKey,
+			IndexConfig: config,
 		}
 
 		index, err := testClient.CreateIndex(ctx, params)
@@ -454,10 +459,12 @@ func TestClientCreateIndex(t *testing.T) {
 		// Just verify that CreateIndexParams only accepts documented fields
 		tempName := generateUniqueName("temp_unexpected_")
 		tempKey := generateRandomKey()
+		config := cyborgdb.IndexIVFFlat(dimension)
 
 		params := &cyborgdb.CreateIndexParams{
-			IndexName: tempName,
-			IndexKey:  tempKey,
+			IndexName:   tempName,
+			IndexKey:    tempKey,
+			IndexConfig: config,
 		}
 
 		index, err := testClient.CreateIndex(ctx, params)
@@ -531,9 +538,10 @@ func TestEncryptedIndexProperties(t *testing.T) {
 	})
 
 	t.Run("ExposeIndexConfigViaGetter", func(t *testing.T) {
+		// GetIndexConfig returns IndexConfig (value type)
+		// The getter should work without panic - calling it verifies the method exists
 		config := testIndex.GetIndexConfig()
-		// Config is a struct, just verify it exists
-		_ = config
+		t.Logf("GetIndexConfig returned config: %+v", config)
 	})
 }
 
@@ -548,8 +556,15 @@ func TestEncryptedIndexIsTrained(t *testing.T) {
 
 	t.Run("IsTrainedNoArguments", func(t *testing.T) {
 		// IsTrained should not take arguments (compile-time check)
+		// For a newly created index, it should be untrained (false)
 		trained := testIndex.IsTrained()
-		_ = trained
+		// Just verify the function returns without error and returns a valid bool
+		// The actual value depends on whether train was called
+		if trained {
+			t.Log("Index is already trained")
+		} else {
+			t.Log("Index is not yet trained (expected for new index)")
+		}
 	})
 }
 
@@ -579,12 +594,15 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 
 	t.Run("UpsertWithItemsArrayFormat", func(t *testing.T) {
 		items := make([]cyborgdb.VectorItem, 2)
+		expectedIDs := make(map[string]bool)
 		for i := 0; i < 2; i++ {
+			id := fmt.Sprintf("%d", i)
 			items[i] = cyborgdb.VectorItem{
-				Id:       fmt.Sprintf("%d", i),
+				Id:       id,
 				Vector:   testVectors[i],
 				Metadata: testMetadata[i],
 			}
+			expectedIDs[id] = true
 		}
 
 		err := testIndex.Upsert(ctx, items)
@@ -592,16 +610,49 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 			t.Fatalf("Upsert failed: %v", err)
 		}
 
-		time.Sleep(propagationDelay)
+		// Poll until IDs are available instead of fixed sleep
+		found := pollUntil(pollTimeout, pollInterval, func() bool {
+			result, err := testIndex.ListIDs(ctx)
+			if err != nil {
+				return false
+			}
+			for id := range expectedIDs {
+				idFound := false
+				for _, existingID := range result.Ids {
+					if existingID == id {
+						idFound = true
+						break
+					}
+				}
+				if !idFound {
+					return false
+				}
+			}
+			return true
+		})
+		if !found {
+			t.Error("Upserted IDs not found after polling timeout")
+		}
 	})
 
 	t.Run("UpsertWithItemsArrayAutoEmbed", func(t *testing.T) {
 		items := make([]cyborgdb.VectorItem, 3)
+		expectedIDs := make(map[string]bool)
+		sampleTexts := []string{
+			"The quick brown fox jumps over the lazy dog",
+			"Machine learning models process natural language",
+			"Vector databases enable semantic search capabilities",
+		}
 		for i := 0; i < 3; i++ {
-			items[i] = cyborgdb.VectorItem{
-				Id:       fmt.Sprintf("embed_%d", i),
+			id := fmt.Sprintf("embed_%d", i)
+			item := cyborgdb.VectorItem{
+				Id:       id,
 				Metadata: map[string]interface{}{"type": "auto-embedded", "index": i},
 			}
+			// Set contents for auto-embedding
+			item.SetContents(internal.Contents{String: &sampleTexts[i]})
+			items[i] = item
+			expectedIDs[id] = true
 		}
 
 		err := embeddingIndex.Upsert(ctx, items)
@@ -609,17 +660,42 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 			t.Fatalf("Auto-embed upsert failed: %v", err)
 		}
 
-		time.Sleep(propagationDelay)
+		// Poll until IDs are available
+		found := pollUntil(pollTimeout, pollInterval, func() bool {
+			result, err := embeddingIndex.ListIDs(ctx)
+			if err != nil {
+				return false
+			}
+			for id := range expectedIDs {
+				idFound := false
+				for _, existingID := range result.Ids {
+					if existingID == id {
+						idFound = true
+						break
+					}
+				}
+				if !idFound {
+					return false
+				}
+			}
+			return true
+		})
+		if !found {
+			t.Error("Auto-embedded IDs not found after polling timeout")
+		}
 	})
 
 	t.Run("UpsertRemainingTestItems", func(t *testing.T) {
 		items := make([]cyborgdb.VectorItem, 8)
+		expectedIDs := make(map[string]bool)
 		for i := 2; i < 10; i++ {
+			id := fmt.Sprintf("%d", i)
 			items[i-2] = cyborgdb.VectorItem{
-				Id:       fmt.Sprintf("%d", i),
+				Id:       id,
 				Vector:   testVectors[i%len(testVectors)],
 				Metadata: testMetadata[i%len(testMetadata)],
 			}
+			expectedIDs[id] = true
 		}
 
 		err := testIndex.Upsert(ctx, items)
@@ -627,18 +703,43 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 			t.Fatalf("Batch upsert failed: %v", err)
 		}
 
-		time.Sleep(propagationDelay)
+		// Poll until all IDs are available
+		found := pollUntil(pollTimeout, pollInterval, func() bool {
+			result, err := testIndex.ListIDs(ctx)
+			if err != nil {
+				return false
+			}
+			for id := range expectedIDs {
+				idFound := false
+				for _, existingID := range result.Ids {
+					if existingID == id {
+						idFound = true
+						break
+					}
+				}
+				if !idFound {
+					return false
+				}
+			}
+			return true
+		})
+		if !found {
+			t.Error("Batch upserted IDs not found after polling timeout")
+		}
 	})
 
 	t.Run("UpsertWithParallelArraysFormat", func(t *testing.T) {
 		// Go SDK doesn't support separate ids/vectors arrays like Python/TS
 		// Use items array instead
 		items := make([]cyborgdb.VectorItem, 5)
+		expectedIDs := make(map[string]bool)
 		for i := 10; i < 15; i++ {
+			id := fmt.Sprintf("%d", i)
 			items[i-10] = cyborgdb.VectorItem{
-				Id:     fmt.Sprintf("%d", i),
+				Id:     id,
 				Vector: testVectors[i%len(testVectors)],
 			}
+			expectedIDs[id] = true
 		}
 
 		err := testIndex.Upsert(ctx, items)
@@ -646,7 +747,29 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 			t.Fatalf("Additional upsert failed: %v", err)
 		}
 
-		time.Sleep(propagationDelay)
+		// Poll until all IDs are available
+		found := pollUntil(pollTimeout, pollInterval, func() bool {
+			result, err := testIndex.ListIDs(ctx)
+			if err != nil {
+				return false
+			}
+			for id := range expectedIDs {
+				idFound := false
+				for _, existingID := range result.Ids {
+					if existingID == id {
+						idFound = true
+						break
+					}
+				}
+				if !idFound {
+					return false
+				}
+			}
+			return true
+		})
+		if !found {
+			t.Error("Additional upserted IDs not found after polling timeout")
+		}
 	})
 
 	t.Run("RejectVectorsWithWrongDimensions", func(t *testing.T) {
@@ -663,12 +786,16 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 	})
 
 	t.Run("RejectWhenNeitherItemsNorVectorsProvided", func(t *testing.T) {
-		// In Go SDK, empty items array is allowed (no-op)
-		// This is a compile-time check - can't pass wrong format
+		// Test empty items array behavior
 		items := []cyborgdb.VectorItem{}
 		err := testIndex.Upsert(ctx, items)
-		// Empty upsert is allowed, just a no-op
-		_ = err
+		// Document actual SDK behavior for empty upsert
+		if err != nil {
+			t.Logf("SDK rejects empty upsert: %v", err)
+		} else {
+			t.Log("SDK allows empty upsert as no-op")
+		}
+		// Either behavior is acceptable - just document it
 	})
 }
 
@@ -811,9 +938,10 @@ func TestEncryptedIndexQuery(t *testing.T) {
 	defer cancel()
 
 	t.Run("QueryWithSingleVectorFlatArray", func(t *testing.T) {
+		topK := int32(5)
 		params := cyborgdb.QueryParams{
 			QueryVector: testVectors[0],
-			TopK:        5,
+			TopK:        topK,
 		}
 
 		results, err := testIndex.Query(ctx, params)
@@ -824,13 +952,38 @@ func TestEncryptedIndexQuery(t *testing.T) {
 		if results == nil {
 			t.Fatal("Results must not be nil")
 		}
+
+		// Extract result items from union type
+		resultItems := getQueryResultItems(&results.Results)
+
+		// Verify result count respects TopK
+		if len(resultItems) == 0 {
+			t.Error("Expected at least one result")
+		}
+		if len(resultItems) > int(topK) {
+			t.Errorf("Result count %d exceeds TopK %d", len(resultItems), topK)
+		}
+
+		// Verify each result has required fields
+		for i, result := range resultItems {
+			if result.Id == "" {
+				t.Errorf("Result %d: missing ID", i)
+			}
+			// Distance should be non-negative for similarity search
+			// Use small epsilon to handle floating-point precision issues (e.g., -1e-10)
+			dist := result.GetDistance()
+			if dist < -1e-6 {
+				t.Errorf("Result %d: invalid distance %f", i, dist)
+			}
+		}
 	})
 
 	t.Run("QueryWithNestedArraySingleVector", func(t *testing.T) {
 		// Go SDK uses QueryVector for single, BatchQueryVectors for batch
+		topK := int32(3)
 		params := cyborgdb.QueryParams{
 			QueryVector: testVectors[1],
-			TopK:        3,
+			TopK:        topK,
 		}
 
 		results, err := testIndex.Query(ctx, params)
@@ -841,13 +994,31 @@ func TestEncryptedIndexQuery(t *testing.T) {
 		if results == nil {
 			t.Fatal("Results must not be nil")
 		}
+
+		resultItems := getQueryResultItems(&results.Results)
+
+		// Verify result count respects TopK
+		if len(resultItems) > int(topK) {
+			t.Errorf("Result count %d exceeds TopK %d", len(resultItems), topK)
+		}
+
+		// Verify results are ordered by distance (ascending)
+		for i := 1; i < len(resultItems); i++ {
+			currDist := resultItems[i].GetDistance()
+			prevDist := resultItems[i-1].GetDistance()
+			if currDist < prevDist {
+				t.Errorf("Results not sorted by distance: result[%d]=%f < result[%d]=%f",
+					i, currDist, i-1, prevDist)
+			}
+		}
 	})
 
 	t.Run("QueryWithBatchVectors", func(t *testing.T) {
 		batchVectors := [][]float32{testVectors[2], testVectors[3]}
+		topK := int32(2)
 		params := cyborgdb.QueryParams{
 			BatchQueryVectors: batchVectors,
-			TopK:              2,
+			TopK:              topK,
 		}
 
 		results, err := testIndex.Query(ctx, params)
@@ -858,12 +1029,38 @@ func TestEncryptedIndexQuery(t *testing.T) {
 		if results == nil {
 			t.Fatal("Results must not be nil")
 		}
+
+		// Use batch helper to get ALL result sets
+		batchResults := getBatchQueryResults(&results.Results)
+
+		// Verify we got results for each query vector in the batch
+		if len(batchResults) != len(batchVectors) {
+			t.Errorf("Expected %d result sets for %d query vectors, got %d",
+				len(batchVectors), len(batchVectors), len(batchResults))
+		}
+
+		// Validate each result set
+		for batchIdx, resultSet := range batchResults {
+			// Each result set should respect TopK
+			if len(resultSet) > int(topK) {
+				t.Errorf("Batch %d: result count %d exceeds TopK %d",
+					batchIdx, len(resultSet), topK)
+			}
+
+			// Verify each result has valid fields
+			for i, result := range resultSet {
+				if result.Id == "" {
+					t.Errorf("Batch %d, result %d: missing ID", batchIdx, i)
+				}
+			}
+		}
 	})
 
 	t.Run("QueryWithSpecificInclude", func(t *testing.T) {
+		topK := int32(5)
 		params := cyborgdb.QueryParams{
 			QueryVector: testVectors[0],
-			TopK:        5,
+			TopK:        topK,
 			Include:     []string{"metadata"},
 		}
 
@@ -875,13 +1072,35 @@ func TestEncryptedIndexQuery(t *testing.T) {
 		if results == nil {
 			t.Fatal("Results must not be nil")
 		}
+
+		resultItems := getQueryResultItems(&results.Results)
+
+		if len(resultItems) > int(topK) {
+			t.Errorf("Result count %d exceeds TopK %d", len(resultItems), topK)
+		}
+
+		// Verify metadata is included in results (for items that have metadata)
+		hasMetadata := false
+		for _, result := range resultItems {
+			if result.Id == "" {
+				t.Error("Result missing ID")
+			}
+			if result.Metadata != nil && len(result.Metadata) > 0 {
+				hasMetadata = true
+			}
+		}
+		if !hasMetadata && len(resultItems) > 0 {
+			t.Log("Warning: No metadata returned despite include=['metadata'] - may be expected if vectors have no metadata")
+		}
 	})
 
 	t.Run("QueryWithMetadataFilters", func(t *testing.T) {
-		filters := map[string]interface{}{"category": "cat_0"}
+		expectedCategory := "cat_0"
+		filters := map[string]interface{}{"category": expectedCategory}
+		topK := int32(10)
 		params := cyborgdb.QueryParams{
 			QueryVector: testVectors[0],
-			TopK:        10,
+			TopK:        topK,
 			Filters:     filters,
 			Include:     []string{"metadata"},
 		}
@@ -894,13 +1113,50 @@ func TestEncryptedIndexQuery(t *testing.T) {
 		if results == nil {
 			t.Fatal("Results must not be nil")
 		}
+
+		resultItems := getQueryResultItems(&results.Results)
+
+		if len(resultItems) > int(topK) {
+			t.Errorf("Result count %d exceeds TopK %d", len(resultItems), topK)
+		}
+
+		// Verify ALL returned results match the filter criteria
+		for i, result := range resultItems {
+			if result.Id == "" {
+				t.Errorf("Result %d: missing ID", i)
+				continue
+			}
+
+			if result.Metadata == nil {
+				t.Errorf("Result %d (ID=%s): metadata is nil, cannot verify filter", i, result.Id)
+				continue
+			}
+
+			category, ok := result.Metadata["category"]
+			if !ok {
+				t.Errorf("Result %d (ID=%s): missing 'category' field in metadata", i, result.Id)
+				continue
+			}
+
+			categoryStr, ok := category.(string)
+			if !ok {
+				t.Errorf("Result %d (ID=%s): category is not a string: %T", i, result.Id, category)
+				continue
+			}
+
+			if categoryStr != expectedCategory {
+				t.Errorf("Result %d (ID=%s): filter violation - expected category=%q, got %q",
+					i, result.Id, expectedCategory, categoryStr)
+			}
+		}
 	})
 
 	t.Run("QueryWithTextContentsAutoEmbed", func(t *testing.T) {
 		queryText := "test content for similarity search"
+		topK := int32(3)
 		params := cyborgdb.QueryParams{
 			QueryContents: &queryText,
-			TopK:          3,
+			TopK:          topK,
 		}
 
 		results, err := embeddingIndex.Query(ctx, params)
@@ -911,6 +1167,19 @@ func TestEncryptedIndexQuery(t *testing.T) {
 		if results == nil {
 			t.Fatal("Results must not be nil")
 		}
+
+		resultItems := getQueryResultItems(&results.Results)
+
+		if len(resultItems) > int(topK) {
+			t.Errorf("Result count %d exceeds TopK %d", len(resultItems), topK)
+		}
+
+		// Verify each result has valid ID
+		for i, result := range resultItems {
+			if result.Id == "" {
+				t.Errorf("Result %d: missing ID", i)
+			}
+		}
 	})
 }
 
@@ -920,48 +1189,82 @@ func TestEncryptedIndexQueryPatterns(t *testing.T) {
 	defer cancel()
 
 	t.Run("QueryWithMultipleTestPatterns", func(t *testing.T) {
-		// Test 1: Single vector
+		// Test 1: Single vector with TopK validation
+		topK1 := int32(3)
 		params1 := cyborgdb.QueryParams{
 			QueryVector: testVectors[4],
-			TopK:        3,
+			TopK:        topK1,
 		}
 		results1, err1 := testIndex.Query(ctx, params1)
 		if err1 != nil {
-			t.Errorf("Query 1 failed: %v", err1)
+			t.Fatalf("Query 1 failed: %v", err1)
 		}
 		if results1 == nil {
-			t.Error("Results 1 should not be nil")
+			t.Fatal("Results 1 should not be nil")
+		}
+		resultItems1 := getQueryResultItems(&results1.Results)
+		if len(resultItems1) > int(topK1) {
+			t.Errorf("Query 1: result count %d exceeds TopK %d", len(resultItems1), topK1)
+		}
+		for i, r := range resultItems1 {
+			if r.Id == "" {
+				t.Errorf("Query 1 result %d: missing ID", i)
+			}
 		}
 
-		time.Sleep(500 * time.Millisecond)
-
-		// Test 2: Batch vectors
+		// Test 2: Batch vectors with validation
+		topK2 := int32(2)
 		params2 := cyborgdb.QueryParams{
 			BatchQueryVectors: [][]float32{testVectors[5], testVectors[6]},
-			TopK:              2,
+			TopK:              topK2,
 		}
 		results2, err2 := testIndex.Query(ctx, params2)
 		if err2 != nil {
-			t.Errorf("Query 2 failed: %v", err2)
+			t.Fatalf("Query 2 failed: %v", err2)
 		}
 		if results2 == nil {
-			t.Error("Results 2 should not be nil")
+			t.Fatal("Results 2 should not be nil")
+		}
+		resultItems2 := getQueryResultItems(&results2.Results)
+		if len(resultItems2) == 0 {
+			t.Error("Query 2: expected results from batch query")
 		}
 
-		time.Sleep(500 * time.Millisecond)
-
-		// Test 3: With filters
+		// Test 3: With filters - verify filter criteria is respected
+		expectedCategory := "cat_1"
+		topK3 := int32(10)
 		params3 := cyborgdb.QueryParams{
 			QueryVector: testVectors[7],
-			TopK:        10,
-			Filters:     map[string]interface{}{"category": "cat_1"},
+			TopK:        topK3,
+			Filters:     map[string]interface{}{"category": expectedCategory},
+			Include:     []string{"metadata"},
 		}
 		results3, err3 := testIndex.Query(ctx, params3)
 		if err3 != nil {
-			t.Errorf("Query 3 failed: %v", err3)
+			t.Fatalf("Query 3 failed: %v", err3)
 		}
 		if results3 == nil {
-			t.Error("Results 3 should not be nil")
+			t.Fatal("Results 3 should not be nil")
+		}
+		resultItems3 := getQueryResultItems(&results3.Results)
+		if len(resultItems3) > int(topK3) {
+			t.Errorf("Query 3: result count %d exceeds TopK %d", len(resultItems3), topK3)
+		}
+
+		// Verify filter criteria for all results
+		for i, result := range resultItems3 {
+			if result.Metadata == nil {
+				continue // Skip if metadata not returned
+			}
+			category, ok := result.Metadata["category"]
+			if !ok {
+				continue // Skip if category not in metadata
+			}
+			categoryStr, ok := category.(string)
+			if ok && categoryStr != expectedCategory {
+				t.Errorf("Query 3 result %d (ID=%s): filter violation - expected category=%q, got %q",
+					i, result.Id, expectedCategory, categoryStr)
+			}
 		}
 	})
 }
@@ -1008,6 +1311,8 @@ func TestEncryptedIndexTrain(t *testing.T) {
 			t.Fatalf("Train with partial parameters failed: %v", err)
 		}
 
+		// Allow training to complete before subsequent tests run delete operations.
+		// Train() returns immediately but processing continues server-side.
 		time.Sleep(2 * time.Second)
 	})
 }
@@ -1018,17 +1323,37 @@ func TestEncryptedIndexDelete(t *testing.T) {
 	defer cancel()
 
 	t.Run("DeleteVectorsByIDs", func(t *testing.T) {
-		ids := []string{"0", "5"}
-		err := testIndex.Delete(ctx, ids)
+		deletedIDs := []string{"0", "5"}
+		err := testIndex.Delete(ctx, deletedIDs)
 		if err != nil {
 			t.Fatalf("Delete failed: %v", err)
 		}
 
-		time.Sleep(propagationDelay)
+		// Poll until IDs are confirmed deleted
+		deleted := pollUntil(pollTimeout, pollInterval, func() bool {
+			result, err := testIndex.ListIDs(ctx)
+			if err != nil {
+				return false
+			}
+			for _, deletedID := range deletedIDs {
+				for _, id := range result.Ids {
+					if id == deletedID {
+						return false // ID still exists
+					}
+				}
+			}
+			return true // All deleted IDs are gone
+		})
+		if !deleted {
+			t.Error("Deleted IDs still found after polling timeout")
+		}
 
-		// Verify deletion
-		result, _ := testIndex.ListIDs(ctx)
-		for _, deletedID := range ids {
+		// Final verification
+		result, err := testIndex.ListIDs(ctx)
+		if err != nil {
+			t.Fatalf("ListIDs failed: %v", err)
+		}
+		for _, deletedID := range deletedIDs {
 			for _, id := range result.Ids {
 				if id == deletedID {
 					t.Errorf("ID %s should have been deleted", deletedID)
@@ -1038,12 +1363,28 @@ func TestEncryptedIndexDelete(t *testing.T) {
 	})
 
 	t.Run("DeleteAdditionalVector", func(t *testing.T) {
-		err := testIndex.Delete(ctx, []string{"9"})
+		deleteID := "9"
+		err := testIndex.Delete(ctx, []string{deleteID})
 		if err != nil {
 			t.Fatalf("Additional delete failed: %v", err)
 		}
 
-		time.Sleep(propagationDelay)
+		// Poll until ID is confirmed deleted
+		deleted := pollUntil(pollTimeout, pollInterval, func() bool {
+			result, err := testIndex.ListIDs(ctx)
+			if err != nil {
+				return false
+			}
+			for _, id := range result.Ids {
+				if id == deleteID {
+					return false
+				}
+			}
+			return true
+		})
+		if !deleted {
+			t.Errorf("ID %s still found after polling timeout", deleteID)
+		}
 	})
 }
 
@@ -1096,17 +1437,36 @@ func TestEncryptedIndexDeleteIndex(t *testing.T) {
 	defer cancel()
 
 	t.Run("DeleteTheIndex", func(t *testing.T) {
+		indexToDelete := testIndexName
 		err := testIndex.DeleteIndex(ctx)
 		if err != nil {
 			t.Fatalf("DeleteIndex failed: %v", err)
 		}
 
-		time.Sleep(propagationDelay)
+		// Poll until index is confirmed deleted
+		deleted := pollUntil(pollTimeout, pollInterval, func() bool {
+			indexes, err := testClient.ListIndexes(ctx)
+			if err != nil {
+				return false
+			}
+			for _, name := range indexes {
+				if name == indexToDelete {
+					return false // Index still exists
+				}
+			}
+			return true
+		})
+		if !deleted {
+			t.Error("Index still found after polling timeout")
+		}
 
-		// Verify deletion
-		indexes, _ := testClient.ListIndexes(ctx)
+		// Final verification
+		indexes, err := testClient.ListIndexes(ctx)
+		if err != nil {
+			t.Fatalf("ListIndexes failed: %v", err)
+		}
 		for _, name := range indexes {
-			if name == testIndexName {
+			if name == indexToDelete {
 				t.Error("Index should have been deleted")
 			}
 		}
@@ -1135,6 +1495,23 @@ func TestEncryptedIndexDeleteIndex(t *testing.T) {
 		err = tempIndex.DeleteIndex(ctx)
 		if err != nil {
 			t.Errorf("DeleteIndex failed: %v", err)
+		}
+
+		// Poll to verify deletion
+		deleted := pollUntil(pollTimeout, pollInterval, func() bool {
+			indexes, err := testClient.ListIndexes(ctx)
+			if err != nil {
+				return false
+			}
+			for _, name := range indexes {
+				if name == tempName {
+					return false
+				}
+			}
+			return true
+		})
+		if !deleted {
+			t.Errorf("Temp index %s still found after polling timeout", tempName)
 		}
 	})
 }

@@ -16,18 +16,11 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 
 	cyborgdb "github.com/cyborginc/cyborgdb-go"
 )
 
-func generateUniqueName(prefix string) string {
-	if prefix == "" {
-		prefix = "test_"
-	}
-	return fmt.Sprintf("%s%s", prefix, uuid.New().String())
-}
 
 func checkQueryResults(results *cyborgdb.QueryResponse, neighbors [][]int32, numQueries int) float64 {
 	// Parse results to extract IDs from the returned dictionaries
