@@ -7,9 +7,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/cyborginc/cyborgdb-go/internal"
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
+
+	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
 // TestMain is the single entry point for all tests in this package
@@ -22,6 +23,9 @@ func TestMain(m *testing.M) {
 		fmt.Println("ERROR: CYBORGDB_API_KEY environment variable is required for testing")
 		os.Exit(1)
 	}
+
+	// Initialize api contract test data
+	initAPIContractTestData()
 
 	// Run tests
 	code := m.Run()
@@ -66,6 +70,8 @@ func waitForPropagation(duration time.Duration) {
 
 // pollUntil polls a condition function until it returns true or timeout is reached.
 // Returns true if condition was met, false if timeout occurred.
+//
+//nolint:unparam // timeout parameter kept for flexibility even though currently always pollTimeout
 func pollUntil(timeout time.Duration, interval time.Duration, condition func() bool) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {

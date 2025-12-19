@@ -21,7 +21,6 @@ import (
 	cyborgdb "github.com/cyborginc/cyborgdb-go"
 )
 
-
 func checkQueryResults(results *cyborgdb.QueryResponse, neighbors [][]int32, numQueries int) float64 {
 	// Parse results to extract IDs from the returned dictionaries
 	resultsData := results.GetResults()

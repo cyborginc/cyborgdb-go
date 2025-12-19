@@ -28,7 +28,6 @@ var (
 	ErrAPIKeyRequired = errors.New("CYBORGDB_API_KEY environment variable is required")
 )
 
-
 // Create a CyborgDB client with proper error handling
 func createClient() (*cyborgdb.Client, error) {
 	apiKey := os.Getenv("CYBORGDB_API_KEY")
@@ -37,8 +36,6 @@ func createClient() (*cyborgdb.Client, error) {
 	}
 	return cyborgdb.NewClient("http://localhost:8000", apiKey)
 }
-
-
 
 // SSL/TLS Configuration Testing
 func TestSSLVerification(t *testing.T) {

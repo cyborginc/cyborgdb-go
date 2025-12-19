@@ -32,8 +32,9 @@ var (
 	testMetadata   []map[string]interface{}
 )
 
-func init() {
-	// Initialize api contract test data
+// initAPIContractTestData initializes test data for API contract tests.
+// Called from TestMain in helpers_test.go.
+func initAPIContractTestData() {
 	testVectors = generateTestVectors(10, dimension)
 	testMetadata = generateTestMetadata(10)
 	testIndexName = fmt.Sprintf("test_contract_%d", time.Now().UnixNano())
@@ -41,7 +42,6 @@ func init() {
 	testIndexKey = generateRandomKey()
 	embeddingKey = generateRandomKey()
 }
-
 
 // cleanupAPIContractTests cleans up resources created by API contract tests
 func cleanupAPIContractTests() {
@@ -67,8 +67,6 @@ func generateTestMetadata(count int) []map[string]interface{} {
 	}
 	return metadata
 }
-
-
 
 // Test Suite
 
@@ -1320,8 +1318,8 @@ func TestEncryptedIndexDelete(t *testing.T) {
 
 		// Poll until IDs are confirmed deleted
 		deleted := pollUntil(pollTimeout, pollInterval, func() bool {
-			result, err := testIndex.ListIDs(ctx)
-			if err != nil {
+			result, listErr := testIndex.ListIDs(ctx)
+			if listErr != nil {
 				return false
 			}
 			for _, deletedID := range deletedIDs {
@@ -1434,8 +1432,8 @@ func TestEncryptedIndexDeleteIndex(t *testing.T) {
 
 		// Poll until index is confirmed deleted
 		deleted := pollUntil(pollTimeout, pollInterval, func() bool {
-			indexes, err := testClient.ListIndexes(ctx)
-			if err != nil {
+			indexes, listErr := testClient.ListIndexes(ctx)
+			if listErr != nil {
 				return false
 			}
 			for _, name := range indexes {
