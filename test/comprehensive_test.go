@@ -2,7 +2,6 @@ package test
 
 import (
 	"context"
-	"crypto/rand"
 	"crypto/tls"
 	"errors"
 	"fmt"
@@ -12,8 +11,6 @@ import (
 	"sync"
 	"testing"
 	"time"
-
-	"github.com/joho/godotenv"
 
 	cyborgdb "github.com/cyborginc/cyborgdb-go"
 )
@@ -31,12 +28,6 @@ var (
 	ErrAPIKeyRequired = errors.New("CYBORGDB_API_KEY environment variable is required")
 )
 
-func generateRandomKey() []byte {
-	key := make([]byte, 32)
-	rand.Read(key)
-	return key
-}
-
 // Create a CyborgDB client with proper error handling
 func createClient() (*cyborgdb.Client, error) {
 	apiKey := os.Getenv("CYBORGDB_API_KEY")
@@ -44,26 +35,6 @@ func createClient() (*cyborgdb.Client, error) {
 		return nil, ErrAPIKeyRequired
 	}
 	return cyborgdb.NewClient("http://localhost:8000", apiKey)
-}
-
-// Wait for operations to propagate with timeout
-func waitForPropagation(duration time.Duration) {
-	time.Sleep(duration)
-}
-
-func TestMain(m *testing.M) {
-	// Load environment variables
-	godotenv.Load("../.env.local")
-
-	// Validate test environment
-	if os.Getenv("CYBORGDB_API_KEY") == "" {
-		fmt.Println("ERROR: CYBORGDB_API_KEY environment variable is required for testing")
-		os.Exit(1)
-	}
-
-	// Run tests
-	code := m.Run()
-	os.Exit(code)
 }
 
 // SSL/TLS Configuration Testing
@@ -110,7 +81,7 @@ func TestSSLVerification(t *testing.T) {
 			}
 		}
 		if resp != nil {
-			resp.Body.Close()
+			_ = resp.Body.Close()
 		}
 
 		// If we get here, HTTPS is available, so test it
@@ -418,7 +389,7 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 		if createErr != nil {
 			t.Fatalf("Failed to create test index: %v", createErr)
 		}
-		defer index.DeleteIndex(ctx)
+		defer func() { _ = index.DeleteIndex(ctx) }()
 
 		testCases := []struct {
 			name       string
@@ -497,7 +468,7 @@ func TestEdgeCasesStrict(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to create test index: %v", err)
 	}
-	defer index.DeleteIndex(ctx)
+	defer func() { _ = index.DeleteIndex(ctx) }()
 
 	t.Run("TestEmptyIndexQuery", func(t *testing.T) {
 		queryVector := generateTestVectors(1, 128)[0]
@@ -767,7 +738,7 @@ func TestBackendCompatibility(t *testing.T) {
 		if createErr != nil {
 			t.Fatalf("Basic IVFFlat index creation failed: %v", createErr)
 		}
-		defer index.DeleteIndex(ctx)
+		defer func() { _ = index.DeleteIndex(ctx) }()
 
 		vector := generateTestVectors(1, 128)[0]
 		items := []cyborgdb.VectorItem{{
@@ -812,7 +783,7 @@ func TestBackendCompatibility(t *testing.T) {
 		if createErr != nil {
 			t.Fatalf("Failed to create advanced index: %v", createErr)
 		}
-		defer advancedIndex.DeleteIndex(ctx)
+		defer func() { _ = advancedIndex.DeleteIndex(ctx) }()
 
 		vectors := generateTestVectors(100, 128)
 		items := make([]cyborgdb.VectorItem, len(vectors))
@@ -846,16 +817,6 @@ func TestBackendCompatibility(t *testing.T) {
 }
 
 // Helper functions
-func generateTestVectors(count, dimension int) [][]float32 {
-	vectors := make([][]float32, count)
-	for i := 0; i < count; i++ {
-		vectors[i] = make([]float32, dimension)
-		for j := 0; j < dimension; j++ {
-			vectors[i][j] = float32(i*dimension+j) / 1000.0
-		}
-	}
-	return vectors
-}
 
 func generateVectorWithValue(dimension int, value float32) []float32 {
 	vector := make([]float32, dimension)

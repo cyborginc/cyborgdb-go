@@ -16,18 +16,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 
 	cyborgdb "github.com/cyborginc/cyborgdb-go"
 )
-
-func generateUniqueName(prefix string) string {
-	if prefix == "" {
-		prefix = "test_"
-	}
-	return fmt.Sprintf("%s%s", prefix, uuid.New().String())
-}
 
 func checkQueryResults(results *cyborgdb.QueryResponse, neighbors [][]int32, numQueries int) float64 {
 	// Parse results to extract IDs from the returned dictionaries
@@ -226,8 +218,8 @@ type TestData struct {
 }
 
 func TestUnitFlow(t *testing.T) {
-	// Load environment variables from .env.local
-	godotenv.Load("../.env.local")
+	// Load environment variables from .env.local (ignore error - file may not exist)
+	_ = godotenv.Load("../.env.local")
 
 	// Create context for all operations
 	ctx := context.Background()
@@ -285,7 +277,7 @@ func TestUnitFlow(t *testing.T) {
 
 	indexName := generateUniqueName("")
 	indexKeyBytes := make([]byte, 32)
-	cryptoRand.Read(indexKeyBytes)
+	_, _ = cryptoRand.Read(indexKeyBytes)
 
 	metric := "euclidean"
 	createParams := &cyborgdb.CreateIndexParams{
@@ -303,7 +295,7 @@ func TestUnitFlow(t *testing.T) {
 	// Clean up at the end
 	defer func() {
 		if index != nil {
-			index.DeleteIndex(ctx)
+			_ = index.DeleteIndex(ctx)
 		}
 	}()
 
