@@ -502,10 +502,13 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 06: Upsert for Train
-	t.Run("test_06_upsert_for_train", func(t *testing.T) {
-		items := make([]cyborgdb.VectorItem, numTrainedVectors)
-		for i := 0; i < numTrainedVectors; i++ {
+	// Test 06: Upsert to Trigger Auto Train
+	t.Run("test_06_upsert_to_trigger_auto_train", func(t *testing.T) {
+		// Upsert 2500 vectors to reach 10,000 total (triggers auto train)
+		autoTrainThreshold := 10000
+		numToUpsert := autoTrainThreshold - numUntrainedVectors
+		items := make([]cyborgdb.VectorItem, numToUpsert)
+		for i := 0; i < numToUpsert; i++ {
 			idx := numUntrainedVectors + i
 			items[i] = cyborgdb.VectorItem{
 				Id:       strconv.Itoa(idx),
@@ -515,7 +518,119 @@ func TestUnitFlow(t *testing.T) {
 		}
 		err := index.Upsert(ctx, items)
 		if err != nil {
-			t.Errorf("Failed to upsert training vectors: %v", err)
+			t.Errorf("Failed to upsert vectors: %v", err)
+		}
+
+		// Wait for 1 second to ensure upsert is processed
+		time.Sleep(1 * time.Second)
+
+		// Check if the index has all IDs up to autoTrainThreshold
+		results, err := index.ListIDs(ctx)
+		if err != nil {
+			t.Errorf("Failed to list IDs: %v", err)
+		}
+
+		expectedIds := make([]string, autoTrainThreshold)
+		for i := 0; i < autoTrainThreshold; i++ {
+			expectedIds[i] = strconv.Itoa(i)
+		}
+
+		sort.Strings(results.Ids)
+		sort.Strings(expectedIds)
+
+		if len(results.Ids) != len(expectedIds) {
+			t.Errorf("ID count mismatch: expected %d, got %d", len(expectedIds), len(results.Ids))
+		}
+	})
+
+	// Test 07: Wait for Auto Train
+	t.Run("test_07_wait_for_auto_train", func(t *testing.T) {
+		// WAIT FOR AUTO TRAINING TO COMPLETE (triggered at 10,000 vectors)
+		numRetries := 60
+		trained := false
+
+		for attempt := 0; attempt < numRetries; attempt++ {
+			time.Sleep(2 * time.Second)
+			trained = index.IsTrained()
+			if trained {
+				fmt.Println("Index is now trained (auto train complete).")
+				break
+			} else {
+				fmt.Printf("Index not trained yet, retrying... (%d/%d)\n", attempt+1, numRetries)
+			}
+		}
+
+		if !trained {
+			t.Errorf("Index did not become trained in time")
+		}
+	})
+
+	// Test 08: Retrain with N Lists
+	t.Run("test_08_retrain_with_n_lists", func(t *testing.T) {
+		// Retrain with explicit nLists to match core test behavior
+		fmt.Printf("Retraining index with nLists=%d...\n", nLists)
+		err := index.Train(ctx, int32(nLists))
+		if err != nil {
+			t.Errorf("Failed to start training: %v", err)
+		}
+
+		// Wait for training to finish by checking is_training status
+		numRetries := 60
+		trained := false
+
+		for attempt := 0; attempt < numRetries; attempt++ {
+			time.Sleep(2 * time.Second)
+
+			isTraining, err := index.CheckTrainingStatus(ctx)
+			if err != nil {
+				fmt.Printf("Error checking training status: %v, retrying... (%d/%d)\n", err, attempt+1, numRetries)
+				continue
+			}
+
+			if !isTraining {
+				// Training finished, verify it's trained
+				trained = index.IsTrained()
+				if trained {
+					fmt.Println("Index retrained successfully.")
+					break
+				}
+			} else {
+				fmt.Printf("Index still training, retrying... (%d/%d)\n", attempt+1, numRetries)
+			}
+		}
+
+		if !trained {
+			t.Errorf("Index did not become trained after retraining")
+		}
+
+		// Verify final state - n_lists should match what we specified
+		config := index.GetIndexConfig()
+		if config.IndexIVFFlatModel != nil {
+			finalNLists := config.IndexIVFFlatModel.GetNLists()
+			fmt.Printf("Final n_lists: %d\n", finalNLists)
+			if int(finalNLists) != nLists {
+				t.Errorf("Expected n_lists=%d, got %d", nLists, finalNLists)
+			}
+		}
+	})
+
+	// Test 09: Upsert Remaining Trained Vectors
+	t.Run("test_09_upsert_remaining_trained_vectors", func(t *testing.T) {
+		// Upsert remaining 40,000 vectors (from 10,000 to 50,000)
+		autoTrainThreshold := 10000
+		numToUpsert := totalNumVectors - autoTrainThreshold
+		items := make([]cyborgdb.VectorItem, numToUpsert)
+		for i := 0; i < numToUpsert; i++ {
+			idx := autoTrainThreshold + i
+			items[i] = cyborgdb.VectorItem{
+				Id:       strconv.Itoa(idx),
+				Vector:   vectors[idx],
+				Metadata: metadata[idx].(map[string]interface{}),
+			}
+		}
+		err := index.Upsert(ctx, items)
+		if err != nil {
+			t.Errorf("Failed to upsert remaining vectors: %v", err)
 		}
 
 		// Wait for 1 second to ensure upsert is processed
@@ -540,40 +655,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 07: Wait for Initial Training
-	t.Run("test_07_wait_for_initial_training", func(t *testing.T) {
-		numRetries := 60
-		trained := false
-
-		for attempt := 0; attempt < numRetries; attempt++ {
-			time.Sleep(2 * time.Second)
-
-			// Check training status with the server
-			isTraining, err := index.CheckTrainingStatus(ctx)
-			if err != nil {
-				fmt.Printf("Error checking training status: %v, retrying... (%d/%d)\n", err, attempt+1, numRetries)
-				continue
-			}
-
-			// If not training and index is marked as trained, we're done
-			if !isTraining && index.IsTrained() {
-				trained = true
-				fmt.Println("Index is now trained.")
-				break
-			} else if isTraining {
-				fmt.Printf("Index is being trained, waiting... (%d/%d)\n", attempt+1, numRetries)
-			} else {
-				fmt.Printf("Index not trained yet, retrying... (%d/%d)\n", attempt+1, numRetries)
-			}
-		}
-
-		if !trained {
-			t.Errorf("Index did not become trained in time")
-		}
-	})
-
-	// Test 08: Trained Query Should Get Perfect Recall
-	t.Run("test_08_trained_query_should_get_perfect_recall", func(t *testing.T) {
+	// Test 10: Trained Query Should Get Perfect Recall
+	t.Run("test_10_trained_query_should_get_perfect_recall", func(t *testing.T) {
 		nProbesVal := int32(nLists)
 		queryParams := cyborgdb.QueryParams{
 			BatchQueryVectors: queries,
@@ -594,8 +677,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 09: Trained Query No Metadata
-	t.Run("test_09_trained_query_no_metadata", func(t *testing.T) {
+	// Test 11: Trained Query No Metadata
+	t.Run("test_11_trained_query_no_metadata", func(t *testing.T) {
 		nProbesVal := int32(24)
 		queryParams := cyborgdb.QueryParams{
 			BatchQueryVectors: queries,
@@ -615,8 +698,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 10: Trained Query No Metadata Auto N_Probes
-	t.Run("test_10_trained_query_no_metadata_auto_n_probes", func(t *testing.T) {
+	// Test 12: Trained Query No Metadata Auto N_Probes
+	t.Run("test_12_trained_query_no_metadata_auto_n_probes", func(t *testing.T) {
 		queryParams := cyborgdb.QueryParams{
 			BatchQueryVectors: queries,
 			TopK:              100,
@@ -636,8 +719,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 11: Trained Query Metadata
-	t.Run("test_11_trained_query_metadata", func(t *testing.T) {
+	// Test 13: Trained Query Metadata
+	t.Run("test_13_trained_query_metadata", func(t *testing.T) {
 		results := make([]*cyborgdb.QueryResponse, 0)
 
 		for _, metadataQuery := range metadataQueries {
@@ -722,8 +805,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 12: Trained Query Metadata Auto N_Probes
-	t.Run("test_12_trained_query_metadata_auto_n_probes", func(t *testing.T) {
+	// Test 14: Trained Query Metadata Auto N_Probes
+	t.Run("test_14_trained_query_metadata_auto_n_probes", func(t *testing.T) {
 		results := make([]*cyborgdb.QueryResponse, 0)
 
 		for _, metadataQuery := range metadataQueries {
@@ -808,8 +891,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 13: Trained Get
-	t.Run("test_13_trained_get", func(t *testing.T) {
+	// Test 15: Trained Get
+	t.Run("test_15_trained_get", func(t *testing.T) {
 		numGet := 1000
 		getIndices := make([]int, 0, numGet)
 		usedIndices := make(map[int]bool)
@@ -860,8 +943,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 14: Delete
-	t.Run("test_14_delete", func(t *testing.T) {
+	// Test 16: Delete
+	t.Run("test_16_delete", func(t *testing.T) {
 		idsToDelete := make([]string, numUntrainedVectors)
 		for i := 0; i < numUntrainedVectors; i++ {
 			idsToDelete[i] = strconv.Itoa(i)
@@ -890,8 +973,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 15: Get Deleted
-	t.Run("test_15_get_deleted", func(t *testing.T) {
+	// Test 17: Get Deleted
+	t.Run("test_17_get_deleted", func(t *testing.T) {
 		numGet := 1000
 		getIndices := make([]int, 0, numGet)
 		usedIndices := make(map[int]bool)
@@ -920,8 +1003,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 16: Query Deleted
-	t.Run("test_16_query_deleted", func(t *testing.T) {
+	// Test 18: Query Deleted
+	t.Run("test_18_query_deleted", func(t *testing.T) {
 		nProbesVal := int32(24)
 		queryParams := cyborgdb.QueryParams{
 			BatchQueryVectors: queries,
@@ -951,8 +1034,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 17: List Indexes
-	t.Run("test_17_list_indexes", func(t *testing.T) {
+	// Test 19: List Indexes
+	t.Run("test_19_list_indexes", func(t *testing.T) {
 		indexes, err := client.ListIndexes(ctx)
 		if err != nil {
 			t.Errorf("Failed to list indexes: %v", err)
@@ -975,8 +1058,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 18: Index Properties
-	t.Run("test_18_index_properties", func(t *testing.T) {
+	// Test 20: Index Properties
+	t.Run("test_20_index_properties", func(t *testing.T) {
 		name := index.GetIndexName()
 		if name != indexName {
 			t.Errorf("Index name does not match: expected %s, got %s", indexName, name)
@@ -994,8 +1077,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 19: Load Index
-	t.Run("test_19_load_index", func(t *testing.T) {
+	// Test 21: Load Index
+	t.Run("test_21_load_index", func(t *testing.T) {
 		loadedIndex, err := client.LoadIndex(ctx, indexName, indexKeyBytes)
 		if err != nil {
 			t.Errorf("Failed to load index: %v", err)
