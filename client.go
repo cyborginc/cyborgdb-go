@@ -190,6 +190,8 @@ func (c *Client) CreateIndex(
 		idx.indexType = *indexConfig.IndexIVFFlatModel.Type
 	} else if indexConfig.IndexIVFPQModel != nil && indexConfig.IndexIVFPQModel.Type != nil {
 		idx.indexType = *indexConfig.IndexIVFPQModel.Type
+	} else if indexConfig.IndexIVFSQModel != nil && indexConfig.IndexIVFSQModel.Type != nil {
+		idx.indexType = *indexConfig.IndexIVFSQModel.Type
 	}
 
 	return idx, nil
