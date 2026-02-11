@@ -87,14 +87,31 @@ func (e *EncryptedIndex) GetIndexConfig() internal.IndexConfig {
 	return internal.IndexConfig{}
 }
 
-// IsTrained reports whether this index has been optimized through training.
+// IsTrained checks whether this index has been optimized through training.
 //
-// This is a cached value that doesn't require an API call. The value is
-// updated automatically when Train() completes successfully.
+// This method calls the describe endpoint to get the current training status,
+// matching the behavior of the Python and JavaScript SDKs.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
 //
 // Returns:
 //   - bool: true if the index has been trained, false otherwise
-func (e *EncryptedIndex) IsTrained() bool { return e.trained }
+//   - error: Any error encountered during the status check
+func (e *EncryptedIndex) IsTrained(ctx context.Context) (bool, error) {
+	describeReq := internal.IndexOperationRequest{
+		IndexName: e.indexName,
+		IndexKey:  e.indexKey,
+	}
+	resp, _, err := e.client.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
+		IndexOperationRequest(describeReq).
+		Execute()
+	if err != nil {
+		return false, fmt.Errorf("failed to get index training status: %w", err)
+	}
+	e.trained = resp.GetIsTrained()
+	return e.trained, nil
+}
 
 // CheckTrainingStatus queries the server to check if this index is currently being trained
 // and updates the cached training status if training has completed.
@@ -109,38 +126,30 @@ func (e *EncryptedIndex) CheckTrainingStatus(ctx context.Context) (bool, error) 
 		return false, fmt.Errorf("failed to get training status: %w", err)
 	}
 
-	// Parse the result to check if this index is being trained
-	if statusMap, ok := result.(map[string]interface{}); ok {
-		if trainingIndexes, ok := statusMap["training_indexes"].([]interface{}); ok {
-			isTraining := false
-			for _, idx := range trainingIndexes {
-				if idxName, ok := idx.(string); ok && idxName == e.indexName {
-					isTraining = true
-					break
-				}
-			}
-
-			// If not training anymore but was previously untrained, update the cached status
-			if !isTraining && !e.trained {
-				// Check if the index is actually trained by querying its info
-				describeReq := internal.IndexOperationRequest{
-					IndexName: e.indexName,
-					IndexKey:  e.indexKey,
-				}
-
-				resp, _, err := e.client.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
-					IndexOperationRequest(describeReq).
-					Execute()
-				if err == nil && resp != nil {
-					e.trained = resp.GetIsTrained()
-				}
-			}
-
-			return isTraining, nil
+	// Check if this index is being trained
+	isTraining := false
+	for _, idx := range result.TrainingIndexes {
+		if idx == e.indexName {
+			isTraining = true
+			break
 		}
 	}
 
-	return false, ErrUnexpectedTrainingStatus
+	// If not training anymore but was previously untrained, update the cached status
+	if !isTraining && !e.trained {
+		describeReq := internal.IndexOperationRequest{
+			IndexName: e.indexName,
+			IndexKey:  e.indexKey,
+		}
+		resp, _, err := e.client.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
+			IndexOperationRequest(describeReq).
+			Execute()
+		if err == nil && resp != nil {
+			e.trained = resp.GetIsTrained()
+		}
+	}
+
+	return isTraining, nil
 }
 
 // Upsert inserts new vectors or updates existing ones in the index.
@@ -169,20 +178,10 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 		IndexKey:  e.indexKey,
 		Items:     items,
 	}
-	resp, _, err := e.client.APIClient.DefaultAPI.UpsertVectorsV1VectorsUpsertPost(ctx).
+	_, _, err := e.client.APIClient.DefaultAPI.UpsertVectorsV1VectorsUpsertPost(ctx).
 		UpsertRequest(req).
 		Execute()
-	if err != nil {
-		return err
-	}
-
-	// If training was triggered, we can note that the index is no longer trained
-	// (it will be retrained automatically)
-	if resp != nil && resp.HasTrainingTriggered() && resp.GetTrainingTriggered() {
-		e.trained = false
-	}
-
-	return nil
+	return err
 }
 
 // Query performs similarity search to find the nearest neighbors to query vector(s).

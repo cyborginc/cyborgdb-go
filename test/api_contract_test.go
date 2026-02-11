@@ -534,17 +534,26 @@ func TestEncryptedIndexProperties(t *testing.T) {
 
 // Test 09: EncryptedIndex.IsTrained()
 func TestEncryptedIndexIsTrained(t *testing.T) {
-	t.Run("ReturnBoolean", func(t *testing.T) {
-		trained := testIndex.IsTrained()
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	t.Run("ReturnBooleanAndError", func(t *testing.T) {
+		trained, err := testIndex.IsTrained(ctx)
+		if err != nil {
+			t.Fatalf("IsTrained failed: %v", err)
+		}
 		if reflect.TypeOf(trained).Kind() != reflect.Bool {
 			t.Error("IsTrained should return bool")
 		}
 	})
 
-	t.Run("IsTrainedNoArguments", func(t *testing.T) {
-		// IsTrained should not take arguments (compile-time check)
+	t.Run("IsTrainedWithContext", func(t *testing.T) {
+		// IsTrained takes a context and returns (bool, error)
 		// For a newly created index, it should be untrained (false)
-		trained := testIndex.IsTrained()
+		trained, err := testIndex.IsTrained(ctx)
+		if err != nil {
+			t.Fatalf("IsTrained failed: %v", err)
+		}
 		// Just verify the function returns without error and returns a valid bool
 		// The actual value depends on whether train was called
 		if trained {
