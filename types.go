@@ -102,6 +102,72 @@ type TrainParams struct {
 	NLists *int32 `json:"n_lists,omitempty"`
 }
 
+// BinaryUpsertParams defines the parameters for binary format vector upserts.
+//
+// This is more efficient than regular Upsert for large batches as vectors are
+// sent as base64-encoded binary data instead of JSON arrays.
+//
+// Parameters:
+//   - IDs: Slice of unique identifiers for each vector (required)
+//   - Vectors: 2D slice of float32 vectors, shape [n_vectors][dimension] (required)
+//   - Metadata: Optional metadata for each vector (must match IDs length if provided)
+//   - Contents: Optional contents for each vector (must match IDs length if provided)
+type BinaryUpsertParams struct {
+	// IDs contains unique identifiers for each vector.
+	// Length must match the number of vectors.
+	IDs []string
+
+	// Vectors contains the vector data as a 2D slice.
+	// Shape should be [n_vectors][dimension].
+	Vectors [][]float32
+
+	// Metadata contains optional metadata for each vector.
+	// If provided, length must match IDs length.
+	// Use nil for vectors without metadata.
+	Metadata []map[string]interface{}
+
+	// Contents contains optional content strings for each vector.
+	// If provided, length must match IDs length.
+	// Use nil for vectors without contents.
+	Contents []string
+}
+
+// BinaryQueryParams defines the parameters for binary format similarity search.
+//
+// This is more efficient than regular Query for batch queries as vectors are
+// sent as base64-encoded binary data instead of JSON arrays.
+//
+// Parameters:
+//   - QueryVectors: 2D slice of query vectors, shape [n_queries][dimension] (required)
+//   - TopK: Number of nearest neighbors to return (optional, defaults to 100)
+//   - NProbes: Number of IVF lists to probe (optional)
+//   - Greedy: Enable greedy search mode (optional)
+//   - Filters: Metadata filters to apply (optional)
+//   - Include: Fields to include in response (optional)
+type BinaryQueryParams struct {
+	// QueryVectors contains the query vectors as a 2D slice.
+	// Shape should be [n_queries][dimension].
+	QueryVectors [][]float32
+
+	// TopK specifies the number of nearest neighbors to return.
+	// Defaults to 100 if not specified.
+	TopK int32
+
+	// NProbes controls the search accuracy vs speed trade-off for IVF indexes.
+	// Higher values = more accurate but slower.
+	NProbes *int32
+
+	// Greedy enables greedy search mode for potentially faster results.
+	Greedy *bool
+
+	// Filters applies metadata-based filtering to search results.
+	Filters map[string]interface{}
+
+	// Include specifies which fields to return in results.
+	// Common values: ["metadata"], ["vector"], ["metadata", "vector"].
+	Include []string
+}
+
 // QueryParams defines the parameters for similarity search queries.
 //
 // Supports both single vector queries and batch queries. Exactly one of

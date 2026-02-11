@@ -5,7 +5,10 @@ package cyborgdb
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/binary"
 	"fmt"
+	"math"
 
 	"github.com/cyborginc/cyborgdb-go/internal"
 )
@@ -184,6 +187,40 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 	return err
 }
 
+// UpsertVectors inserts vectors using separate ID and vector arrays.
+//
+// This method automatically uses binary format for efficient transfer when
+// vectors are provided as a 2D slice. This is more efficient than regular
+// Upsert for large batches.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - ids: Slice of unique identifiers for each vector
+//   - vectors: 2D slice of float32 vectors, shape [n_vectors][dimension]
+//   - metadata: Optional metadata for each vector (can be nil)
+//
+// Returns:
+//   - error: Any error encountered during the operation
+//
+// Example:
+//
+//	ids := []string{"doc1", "doc2", "doc3"}
+//	vectors := [][]float32{
+//		{0.1, 0.2, 0.3},
+//		{0.4, 0.5, 0.6},
+//		{0.7, 0.8, 0.9},
+//	}
+//	err := index.UpsertVectors(ctx, ids, vectors, nil)
+func (e *EncryptedIndex) UpsertVectors(ctx context.Context, ids []string, vectors [][]float32, metadata []map[string]interface{}) error {
+	// Use binary format for efficiency
+	params := BinaryUpsertParams{
+		IDs:      ids,
+		Vectors:  vectors,
+		Metadata: metadata,
+	}
+	return e.UpsertBinary(ctx, params)
+}
+
 // Query performs similarity search to find the nearest neighbors to query vector(s).
 //
 // This method supports three types of queries:
@@ -213,7 +250,8 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 //	}
 //	results, err := index.Query(ctx, params)
 func (e *EncryptedIndex) Query(ctx context.Context, params QueryParams) (*QueryResponse, error) {
-	// Handle batch queries separately
+	// Handle batch queries using BatchQueryRequest (non-binary format)
+	// For binary format with large batches, use QueryBinary() directly
 	if len(params.BatchQueryVectors) > 0 {
 		batchReq := internal.BatchQueryRequest{
 			IndexName:    e.indexName,
@@ -476,6 +514,196 @@ func (e *EncryptedIndex) ListIDs(ctx context.Context) (*ListIDsResponse, error) 
 	}
 	result, _, err := e.client.APIClient.DefaultAPI.ListIdsV1VectorsListIdsPost(ctx).
 		ListIDsRequest(req).
+		Execute()
+	return result, err
+}
+
+// vectorsToBase64 converts a 2D slice of float32 vectors to a base64-encoded string.
+// The vectors are flattened and encoded as little-endian float32 bytes.
+func vectorsToBase64(vectors [][]float32) string {
+	if len(vectors) == 0 {
+		return ""
+	}
+
+	// Calculate total number of floats
+	numVectors := len(vectors)
+	dimension := len(vectors[0])
+	totalFloats := numVectors * dimension
+
+	// Create byte buffer (4 bytes per float32)
+	buf := make([]byte, totalFloats*4)
+
+	// Convert each float32 to little-endian bytes
+	offset := 0
+	for _, vec := range vectors {
+		for _, val := range vec {
+			binary.LittleEndian.PutUint32(buf[offset:], math.Float32bits(val))
+			offset += 4
+		}
+	}
+
+	return base64.StdEncoding.EncodeToString(buf)
+}
+
+// UpsertBinary inserts new vectors or updates existing ones using binary format.
+//
+// This method is more efficient than regular Upsert for large batches as vectors
+// are sent as base64-encoded binary data instead of JSON arrays. This reduces
+// payload size and improves performance for large datasets.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - params: BinaryUpsertParams containing IDs, vectors, and optional metadata
+//
+// Returns:
+//   - error: Any error encountered during the operation
+//
+// Example:
+//
+//	params := BinaryUpsertParams{
+//		IDs: []string{"doc1", "doc2", "doc3"},
+//		Vectors: [][]float32{
+//			{0.1, 0.2, 0.3},
+//			{0.4, 0.5, 0.6},
+//			{0.7, 0.8, 0.9},
+//		},
+//		Metadata: []map[string]interface{}{
+//			{"type": "document"},
+//			{"type": "article"},
+//			nil, // No metadata for doc3
+//		},
+//	}
+//	err := index.UpsertBinary(ctx, params)
+func (e *EncryptedIndex) UpsertBinary(ctx context.Context, params BinaryUpsertParams) error {
+	if len(params.IDs) == 0 {
+		return fmt.Errorf("IDs cannot be empty")
+	}
+	if len(params.Vectors) == 0 {
+		return fmt.Errorf("vectors cannot be empty")
+	}
+	if len(params.IDs) != len(params.Vectors) {
+		return fmt.Errorf("IDs length (%d) must match vectors length (%d)", len(params.IDs), len(params.Vectors))
+	}
+	if len(params.Metadata) > 0 && len(params.Metadata) != len(params.IDs) {
+		return fmt.Errorf("metadata length (%d) must match IDs length (%d)", len(params.Metadata), len(params.IDs))
+	}
+	if len(params.Contents) > 0 && len(params.Contents) != len(params.IDs) {
+		return fmt.Errorf("contents length (%d) must match IDs length (%d)", len(params.Contents), len(params.IDs))
+	}
+
+	// Get dimension from first vector
+	dimension := int32(len(params.Vectors[0]))
+
+	// Convert vectors to base64
+	vectorsB64 := vectorsToBase64(params.Vectors)
+
+	// Build the batch
+	batch := internal.BinaryVectorBatch{
+		Ids:        params.IDs,
+		VectorsB64: vectorsB64,
+		Dimension:  dimension,
+	}
+
+	// Add metadata if provided
+	if len(params.Metadata) > 0 {
+		metadata := make([]*map[string]interface{}, len(params.Metadata))
+		for i, m := range params.Metadata {
+			if m != nil {
+				metadata[i] = &m
+			}
+		}
+		batch.Metadata = metadata
+	}
+
+	// Add contents if provided
+	if len(params.Contents) > 0 {
+		contents := make([]internal.BinaryVectorBatchContentsInner, len(params.Contents))
+		for i, c := range params.Contents {
+			if c != "" {
+				contents[i] = internal.BinaryVectorBatchContentsInner{String: &c}
+			}
+		}
+		batch.Contents = contents
+	}
+
+	req := internal.BinaryUpsertRequest{
+		IndexName: e.indexName,
+		IndexKey:  e.indexKey,
+		Batch:     batch,
+	}
+
+	_, _, err := e.client.APIClient.DefaultAPI.UpsertVectorsBinaryV1VectorsUpsertBinaryPost(ctx).
+		BinaryUpsertRequest(req).
+		Execute()
+	return err
+}
+
+// QueryBinary performs similarity search using binary format for query vectors.
+//
+// This method is more efficient than regular Query for batch queries as vectors
+// are sent as base64-encoded binary data instead of JSON arrays. This reduces
+// payload size and improves performance for large batch queries.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - params: BinaryQueryParams containing query vectors and search options
+//
+// Returns:
+//   - *QueryResponse: Search results with IDs, distances, and requested fields
+//   - error: Any error encountered during the search
+//
+// Example:
+//
+//	params := BinaryQueryParams{
+//		QueryVectors: [][]float32{
+//			{0.1, 0.2, 0.3},
+//			{0.4, 0.5, 0.6},
+//		},
+//		TopK: 10,
+//		Include: []string{"metadata"},
+//		Filters: map[string]interface{}{"category": "document"},
+//	}
+//	results, err := index.QueryBinary(ctx, params)
+func (e *EncryptedIndex) QueryBinary(ctx context.Context, params BinaryQueryParams) (*QueryResponse, error) {
+	if len(params.QueryVectors) == 0 {
+		return nil, fmt.Errorf("queryVectors cannot be empty")
+	}
+
+	// Get dimension from first vector
+	dimension := int32(len(params.QueryVectors[0]))
+
+	// Convert vectors to base64
+	vectorsB64 := vectorsToBase64(params.QueryVectors)
+
+	// Build the batch
+	batch := internal.BinaryQueryBatch{
+		VectorsB64: vectorsB64,
+		Dimension:  dimension,
+	}
+
+	req := internal.BinaryQueryRequest{
+		IndexName: e.indexName,
+		IndexKey:  e.indexKey,
+		Batch:     batch,
+		Filters:   params.Filters,
+		Include:   params.Include,
+	}
+
+	// Handle optional fields
+	if params.TopK != 0 {
+		req.TopK = *internal.NewNullableInt32(&params.TopK)
+	}
+
+	if params.NProbes != nil {
+		req.NProbes = *internal.NewNullableInt32(params.NProbes)
+	}
+
+	if params.Greedy != nil {
+		req.Greedy = *internal.NewNullableBool(params.Greedy)
+	}
+
+	result, _, err := e.client.APIClient.DefaultAPI.QueryVectorsBinaryV1VectorsQueryBinaryPost(ctx).
+		BinaryQueryRequest(req).
 		Execute()
 	return result, err
 }
