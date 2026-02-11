@@ -298,6 +298,17 @@ func TestIndexConfigTypes(t *testing.T) {
 			t.Error("ToIndexConfig should return non-nil IndexConfig")
 		}
 	})
+
+	t.Run("CreateIndexIVFSQConfigWithRequiredParams", func(t *testing.T) {
+		config := cyborgdb.IndexIVFSQ(dimension, 8)
+		if config == nil {
+			t.Error("IndexIVFSQ should return non-nil config")
+		}
+		indexConfig := config.ToIndexConfig()
+		if indexConfig == nil {
+			t.Error("ToIndexConfig should return non-nil IndexConfig")
+		}
+	})
 }
 
 // Test 07: Client.CreateIndex()
@@ -380,6 +391,30 @@ func TestClientCreateIndex(t *testing.T) {
 
 		if index.GetIndexType() != "ivfpq" {
 			t.Errorf("Expected index type ivfpq, got %s", index.GetIndexType())
+		}
+
+		time.Sleep(1 * time.Second)
+	})
+
+	t.Run("CreateIndexWithIVFSQConfig", func(t *testing.T) {
+		tempName := generateUniqueName("temp_ivfsq_")
+		tempKey := generateRandomKey()
+		config := cyborgdb.IndexIVFSQ(dimension, 8)
+
+		params := &cyborgdb.CreateIndexParams{
+			IndexName:   tempName,
+			IndexKey:    tempKey,
+			IndexConfig: config,
+		}
+
+		index, err := testClient.CreateIndex(ctx, params)
+		if err != nil {
+			t.Fatalf("Failed to create IVFSQ index: %v", err)
+		}
+		defer func() { _ = index.DeleteIndex(ctx) }()
+
+		if index.GetIndexType() != "ivfsq" {
+			t.Errorf("Expected index type ivfsq, got %s", index.GetIndexType())
 		}
 
 		time.Sleep(1 * time.Second)

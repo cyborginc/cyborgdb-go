@@ -238,6 +238,12 @@ type indexIVFPQ struct {
 	*internal.IndexIVFPQModel
 }
 
+// indexIVFSQ wraps the IVFSQ (IVF with Scalar Quantization) index configuration.
+// IVFSQ provides memory-efficient storage by using scalar quantization compression.
+type indexIVFSQ struct {
+	*internal.IndexIVFSQModel
+}
+
 // IndexIVF creates a new IVF (Inverted File) index configuration.
 //
 // IVF indexes partition vectors into clusters for fast approximate search.
@@ -307,6 +313,29 @@ func IndexIVFPQ(dimension int32, pqDim int32, pqBits int32) *indexIVFPQ {
 	return &indexIVFPQ{IndexIVFPQModel: model}
 }
 
+// IndexIVFSQ creates a new IVFSQ (IVF with Scalar Quantization) index configuration.
+//
+// IVFSQ provides memory-efficient storage by using scalar quantization to compress
+// vectors. It offers a good balance between compression and accuracy.
+//
+// Parameters:
+//   - dimension: The dimensionality of vectors that will be stored
+//   - sqBits: Bits per dimension for scalar quantization (typically 8)
+//
+// Returns:
+//   - *indexIVFSQ: IVFSQ index configuration implementing IndexModel
+//
+// Usage:
+//
+//	config := IndexIVFSQ(768, 8) // 768-dim vectors, 8 bits per dimension
+func IndexIVFSQ(dimension int32, sqBits int32) *indexIVFSQ {
+	model := &internal.IndexIVFSQModel{}
+	model.SetDimension(dimension)
+	model.SetType("ivfsq")
+	model.SetSqBits(sqBits)
+	return &indexIVFSQ{IndexIVFSQModel: model}
+}
+
 // ToIndexConfig converts the IVF index configuration to the internal IndexConfig format.
 // This method implements the IndexModel interface.
 func (m *indexIVF) ToIndexConfig() *internal.IndexConfig {
@@ -328,5 +357,13 @@ func (m *indexIVFFlat) ToIndexConfig() *internal.IndexConfig {
 func (m *indexIVFPQ) ToIndexConfig() *internal.IndexConfig {
 	return &internal.IndexConfig{
 		IndexIVFPQModel: m.IndexIVFPQModel,
+	}
+}
+
+// ToIndexConfig converts the IVFSQ index configuration to the internal IndexConfig format.
+// This method implements the IndexModel interface.
+func (m *indexIVFSQ) ToIndexConfig() *internal.IndexConfig {
+	return &internal.IndexConfig{
+		IndexIVFSQModel: m.IndexIVFSQModel,
 	}
 }
