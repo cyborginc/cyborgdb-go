@@ -122,7 +122,7 @@ func TestSSLVerification(t *testing.T) {
 	})
 }
 
-// Index Type Testing - IVF and IVFPQ
+// Index Type Testing - IVFPQ
 func TestIndexTypes(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), longTimeout)
 	defer cancel()
@@ -133,67 +133,6 @@ func TestIndexTypes(t *testing.T) {
 	}
 
 	dimension := int32(128)
-
-	t.Run("TestIVFIndexOperations", func(t *testing.T) {
-		indexName := generateUniqueName("ivf_test_")
-		indexKey := generateRandomKey()
-
-		indexConfig := cyborgdb.IndexIVF(dimension)
-		metric := "euclidean"
-
-		createParams := &cyborgdb.CreateIndexParams{
-			IndexName:   indexName,
-			IndexKey:    indexKey,
-			IndexConfig: indexConfig,
-			Metric:      &metric,
-		}
-
-		index, createErr := client.CreateIndex(ctx, createParams)
-		if createErr != nil {
-			t.Fatalf("Failed to create IVF index: %v", createErr)
-		}
-		defer func() {
-			if delErr := index.DeleteIndex(ctx); delErr != nil {
-				t.Logf("Warning: Failed to cleanup index: %v", delErr)
-			}
-		}()
-
-		indexType := index.GetIndexType()
-		if indexType != "ivf" {
-			t.Errorf("Expected index type 'ivf', got '%s'", indexType)
-		}
-
-		testVectors := generateTestVectors(10, int(dimension))
-		items := make([]cyborgdb.VectorItem, len(testVectors))
-		for i, vector := range testVectors {
-			items[i] = cyborgdb.VectorItem{
-				Id:       fmt.Sprintf("ivf_%d", i),
-				Vector:   vector,
-				Metadata: map[string]interface{}{"test_id": i},
-			}
-		}
-
-		upsertErr := index.Upsert(ctx, items)
-		if upsertErr != nil {
-			t.Fatalf("Failed to upsert to IVF index: %v", upsertErr)
-		}
-
-		waitForPropagation(2 * time.Second)
-
-		queryParams := cyborgdb.QueryParams{
-			QueryVector: testVectors[0],
-			TopK:        5,
-		}
-
-		results, queryErr := index.Query(ctx, queryParams)
-		if queryErr != nil {
-			t.Fatalf("Failed to query IVF index: %v", queryErr)
-		}
-
-		if results == nil {
-			t.Fatal("Query results must not be nil")
-		}
-	})
 
 	t.Run("TestIVFPQIndexOperations", func(t *testing.T) {
 		indexName := generateUniqueName("ivfpq_test_")

@@ -25,7 +25,7 @@ type QueryResultItem = internal.QueryResultItem
 type ListIDsResponse = internal.ListIDsResponse
 
 // IndexModel is the interface implemented by all index configuration types.
-// It allows type-safe creation of different index configurations (IVF, IVFFlat, IVFPQ)
+// It allows type-safe creation of different index configurations (IVFFlat, IVFPQ, IVFSQ)
 // while maintaining compatibility with the internal OpenAPI models.
 type IndexModel interface {
 	// ToIndexConfig converts the public type to the internal IndexConfig structure.
@@ -54,7 +54,7 @@ type CreateIndexParams struct {
 	IndexKey []byte `json:"index_key"`
 
 	// IndexConfig specifies the index type and configuration.
-	// Can be created using IndexIVF(), IndexIVFFlat(), or IndexIVFPQ() functions.
+	// Can be created using IndexIVFFlat(), IndexIVFPQ(), or IndexIVFSQ() functions.
 	// If nil, the server will use default configuration.
 	IndexConfig IndexModel `json:"index_config,omitempty"`
 
@@ -220,12 +220,6 @@ type QueryParams struct {
 // Index model wrapper types provide type-safe access to different index configurations.
 // These types wrap the internal OpenAPI generated models and implement the IndexModel interface.
 
-// indexIVF wraps the IVF (Inverted File) index configuration.
-// IVF indexes provide fast approximate search by partitioning vectors into clusters.
-type indexIVF struct {
-	*internal.IndexIVFModel
-}
-
 // indexIVFFlat wraps the IVFFlat index configuration.
 // IVFFlat combines IVF clustering with flat (exact) search within clusters.
 type indexIVFFlat struct {
@@ -242,27 +236,6 @@ type indexIVFPQ struct {
 // IVFSQ provides memory-efficient storage by using scalar quantization compression.
 type indexIVFSQ struct {
 	*internal.IndexIVFSQModel
-}
-
-// IndexIVF creates a new IVF (Inverted File) index configuration.
-//
-// IVF indexes partition vectors into clusters for fast approximate search.
-// They offer a good balance of speed and accuracy for most use cases.
-//
-// Parameters:
-//   - dimension: The dimensionality of vectors that will be stored (e.g., 768 for many embedding models)
-//
-// Returns:
-//   - *indexIVF: IVF index configuration implementing IndexModel
-//
-// Usage:
-//
-//	config := IndexIVF(768) // For 768-dimensional vectors
-func IndexIVF(dimension int32) *indexIVF {
-	model := &internal.IndexIVFModel{}
-	model.SetDimension(dimension)
-	model.SetType("ivf")
-	return &indexIVF{IndexIVFModel: model}
 }
 
 // IndexIVFFlat creates a new IVFFlat index configuration.
@@ -334,14 +307,6 @@ func IndexIVFSQ(dimension int32, sqBits int32) *indexIVFSQ {
 	model.SetType("ivfsq")
 	model.SetSqBits(sqBits)
 	return &indexIVFSQ{IndexIVFSQModel: model}
-}
-
-// ToIndexConfig converts the IVF index configuration to the internal IndexConfig format.
-// This method implements the IndexModel interface.
-func (m *indexIVF) ToIndexConfig() *internal.IndexConfig {
-	return &internal.IndexConfig{
-		IndexIVFModel: m.IndexIVFModel,
-	}
 }
 
 // ToIndexConfig converts the IVFFlat index configuration to the internal IndexConfig format.

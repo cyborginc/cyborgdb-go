@@ -113,15 +113,15 @@ func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 
 // CreateIndex creates a new encrypted vector index using a single request object.
 //
-// The new index is empty and ready for vector operations. Index types (IVF, IVFPQ,
-// IVFFlat) offer different trade-offs across speed, accuracy, and memory.
+// The new index is empty and ready for vector operations. Index types (IVFFlat,
+// IVFPQ, IVFSQ) offer different trade-offs across speed, accuracy, and memory.
 //
 // Parameters:
 //   - ctx: Context for cancellation/timeouts
 //   - params: Complete payload containing:
 //   - IndexName (required): unique index name
 //   - IndexKey  (required): 32-byte encryption key
-//   - IndexConfig (optional): index configuration (IndexIVF, IndexIVFFlat, or IndexIVFPQ)
+//   - IndexConfig (optional): index configuration (IndexIVFFlat, IndexIVFPQ, or IndexIVFSQ)
 //   - Metric (optional): distance metric (e.g., "euclidean", "cosine")
 //   - EmbeddingModel (optional): embedding model name to associate
 //
@@ -184,9 +184,7 @@ func (c *Client) CreateIndex(
 	}
 
 	// Set index type if available
-	if indexConfig.IndexIVFModel != nil && indexConfig.IndexIVFModel.Type != nil {
-		idx.indexType = *indexConfig.IndexIVFModel.Type
-	} else if indexConfig.IndexIVFFlatModel != nil && indexConfig.IndexIVFFlatModel.Type != nil {
+	if indexConfig.IndexIVFFlatModel != nil && indexConfig.IndexIVFFlatModel.Type != nil {
 		idx.indexType = *indexConfig.IndexIVFFlatModel.Type
 	} else if indexConfig.IndexIVFPQModel != nil && indexConfig.IndexIVFPQModel.Type != nil {
 		idx.indexType = *indexConfig.IndexIVFPQModel.Type

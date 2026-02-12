@@ -1099,7 +1099,7 @@ func TestUnitFlow(t *testing.T) {
 
 		config := index.GetIndexConfig()
 		// Check if config is empty (all fields are nil)
-		if config.IndexIVFFlatModel == nil && config.IndexIVFModel == nil && config.IndexIVFPQModel == nil {
+		if config.IndexIVFFlatModel == nil && config.IndexIVFPQModel == nil && config.IndexIVFSQModel == nil {
 			t.Errorf("Index config is empty")
 		}
 	})

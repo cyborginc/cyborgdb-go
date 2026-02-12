@@ -47,7 +47,7 @@ type EncryptedIndex struct {
 	// indexKey is the hex-encoded encryption key for end-to-end encryption
 	indexKey string
 
-	// indexType indicates the index algorithm ("ivf", "ivfflat", "ivfpq")
+	// indexType indicates the index algorithm ("ivfflat", "ivfpq", "ivfsq")
 	indexType string
 
 	// config holds the detailed index configuration, may be nil for loaded indexes
@@ -73,7 +73,7 @@ func (e *EncryptedIndex) GetIndexName() string { return e.indexName }
 // This is a cached value that doesn't require an API call.
 //
 // Returns:
-//   - string: Index type ("ivf", "ivfflat", or "ivfpq")
+//   - string: Index type ("ivfflat", "ivfpq", or "ivfsq")
 func (e *EncryptedIndex) GetIndexType() string { return e.indexType }
 
 // GetIndexConfig returns the detailed configuration of this index.
