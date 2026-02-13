@@ -197,6 +197,70 @@ func TestIndexTypes(t *testing.T) {
 			t.Fatal("Query results must not be nil")
 		}
 	})
+
+	t.Run("TestIVFSQIndexOperations", func(t *testing.T) {
+		indexName := generateUniqueName("ivfsq_test_")
+		indexKey := generateRandomKey()
+
+		indexConfig := cyborgdb.IndexIVFSQ(dimension, 8)
+		metric := "euclidean"
+
+		createParams := &cyborgdb.CreateIndexParams{
+			IndexName:   indexName,
+			IndexKey:    indexKey,
+			IndexConfig: indexConfig,
+			Metric:      &metric,
+		}
+
+		index, createErr := client.CreateIndex(ctx, createParams)
+		if createErr != nil {
+			t.Fatalf("Failed to create IVFSQ index: %v", createErr)
+		}
+		defer func() {
+			if delErr := index.DeleteIndex(ctx); delErr != nil {
+				t.Logf("Warning: Failed to cleanup index: %v", delErr)
+			}
+		}()
+
+		if index.GetIndexType() != "ivfsq" {
+			t.Errorf("Expected index type 'ivfsq', got '%s'", index.GetIndexType())
+		}
+
+		testVectors := generateTestVectors(50, int(dimension))
+		items := make([]cyborgdb.VectorItem, len(testVectors))
+		for i, vector := range testVectors {
+			items[i] = cyborgdb.VectorItem{
+				Id:       fmt.Sprintf("ivfsq_%d", i),
+				Vector:   vector,
+				Metadata: map[string]interface{}{"test_id": i},
+			}
+		}
+
+		upsertErr := index.Upsert(ctx, items)
+		if upsertErr != nil {
+			t.Fatalf("Failed to upsert to IVFSQ index: %v", upsertErr)
+		}
+
+		waitForPropagation(3 * time.Second)
+
+		queryParams := cyborgdb.QueryParams{
+			QueryVector: testVectors[0],
+			TopK:        5,
+		}
+
+		// Use a longer timeout for IVFSQ queries
+		queryCtx, queryCancel := context.WithTimeout(ctx, 60*time.Second)
+		defer queryCancel()
+
+		results, queryErr := index.Query(queryCtx, queryParams)
+		if queryErr != nil {
+			t.Fatalf("Failed to query IVFSQ index: %v", queryErr)
+		}
+
+		if results == nil {
+			t.Fatal("Query results must not be nil")
+		}
+	})
 }
 
 // Error Handling Testing
