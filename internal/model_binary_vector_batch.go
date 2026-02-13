@@ -11,8 +11,8 @@ API version: 0.15.0
 package internal
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -21,11 +21,11 @@ var _ MappedNullable = &BinaryVectorBatch{}
 
 // BinaryVectorBatch Represents a batch of vectors in binary format for efficient transfer.  Attributes:     ids (List[str]): List of unique identifiers for each vector.     vectors_b64 (str): Base64-encoded float32 numpy array (shape: n_vectors x dimension).     dimension (int): The dimension of each vector.     metadata (Optional[List[Optional[Dict[str, Any]]]]): Optional metadata for each vector.     contents (Optional[List[Optional[Union[str, bytes]]]]): Optional contents for each vector.
 type BinaryVectorBatch struct {
-	Ids []string `json:"ids"`
-	VectorsB64 string `json:"vectors_b64"`
-	Dimension int32 `json:"dimension"`
-	Metadata []*map[string]interface{} `json:"metadata,omitempty"`
-	Contents []BinaryVectorBatchContentsInner `json:"contents,omitempty"`
+	Ids        []string                         `json:"ids"`
+	VectorsB64 string                           `json:"vectors_b64"`
+	Dimension  int32                            `json:"dimension"`
+	Metadata   []*map[string]interface{}        `json:"metadata,omitempty"`
+	Contents   []BinaryVectorBatchContentsInner `json:"contents,omitempty"`
 }
 
 type _BinaryVectorBatch BinaryVectorBatch
@@ -189,7 +189,7 @@ func (o *BinaryVectorBatch) SetContents(v []BinaryVectorBatchContentsInner) {
 }
 
 func (o BinaryVectorBatch) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -225,10 +225,10 @@ func (o *BinaryVectorBatch) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err;
+		return err
 	}
 
-	for _, requiredProperty := range(requiredProperties) {
+	for _, requiredProperty := range requiredProperties {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -237,7 +237,7 @@ func (o *BinaryVectorBatch) UnmarshalJSON(data []byte) (err error) {
 	varBinaryVectorBatch := _BinaryVectorBatch{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	
+
 	err = decoder.Decode(&varBinaryVectorBatch)
 
 	if err != nil {
@@ -284,5 +284,3 @@ func (v *NullableBinaryVectorBatch) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

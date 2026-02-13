@@ -38,9 +38,19 @@ type NullableBinaryVectorBatchContentsInner struct {
 }
 
 func (v NullableBinaryVectorBatchContentsInner) Get() *BinaryVectorBatchContentsInner { return v.value }
-func (v *NullableBinaryVectorBatchContentsInner) Set(val *BinaryVectorBatchContentsInner) { v.value = val; v.isSet = true }
+func (v *NullableBinaryVectorBatchContentsInner) Set(val *BinaryVectorBatchContentsInner) {
+	v.value = val
+	v.isSet = true
+}
 func (v NullableBinaryVectorBatchContentsInner) IsSet() bool { return v.isSet }
-func (v *NullableBinaryVectorBatchContentsInner) Unset() { v.value = nil; v.isSet = false }
-func NewNullableBinaryVectorBatchContentsInner(val *BinaryVectorBatchContentsInner) *NullableBinaryVectorBatchContentsInner { return &NullableBinaryVectorBatchContentsInner{value: val, isSet: true} }
-func (v NullableBinaryVectorBatchContentsInner) MarshalJSON() ([]byte, error) { return json.Marshal(v.value) }
-func (v *NullableBinaryVectorBatchContentsInner) UnmarshalJSON(src []byte) error { v.isSet = true; return json.Unmarshal(src, &v.value) }
+func (v *NullableBinaryVectorBatchContentsInner) Unset()     { v.value = nil; v.isSet = false }
+func NewNullableBinaryVectorBatchContentsInner(val *BinaryVectorBatchContentsInner) *NullableBinaryVectorBatchContentsInner {
+	return &NullableBinaryVectorBatchContentsInner{value: val, isSet: true}
+}
+func (v NullableBinaryVectorBatchContentsInner) MarshalJSON() ([]byte, error) {
+	return json.Marshal(v.value)
+}
+func (v *NullableBinaryVectorBatchContentsInner) UnmarshalJSON(src []byte) error {
+	v.isSet = true
+	return json.Unmarshal(src, &v.value)
+}

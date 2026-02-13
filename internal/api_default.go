@@ -18,13 +18,12 @@ import (
 	"net/url"
 )
 
-
 // DefaultAPIService DefaultAPI service
 type DefaultAPIService service
 
 type ApiCreateIndexV1IndexesCreatePostRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx                context.Context
+	ApiService         *DefaultAPIService
 	createIndexRequest *CreateIndexRequest
 }
 
@@ -42,24 +41,25 @@ CreateIndexV1IndexesCreatePost Create Encrypted Index
 
 Create a new encrypted index with the provided configuration.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiCreateIndexV1IndexesCreatePostRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiCreateIndexV1IndexesCreatePostRequest
 */
 func (a *DefaultAPIService) CreateIndexV1IndexesCreatePost(ctx context.Context) ApiCreateIndexV1IndexesCreatePostRequest {
 	return ApiCreateIndexV1IndexesCreatePostRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return CyborgdbServiceApiSchemasIndexSuccessResponseModel
+//
+//	@return CyborgdbServiceApiSchemasIndexSuccessResponseModel
 func (a *DefaultAPIService) CreateIndexV1IndexesCreatePostExecute(r ApiCreateIndexV1IndexesCreatePostRequest) (*CyborgdbServiceApiSchemasIndexSuccessResponseModel, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *CyborgdbServiceApiSchemasIndexSuccessResponseModel
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *CyborgdbServiceApiSchemasIndexSuccessResponseModel
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.CreateIndexV1IndexesCreatePost")
@@ -138,8 +138,8 @@ func (a *DefaultAPIService) CreateIndexV1IndexesCreatePostExecute(r ApiCreateInd
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 500 {
@@ -149,8 +149,8 @@ func (a *DefaultAPIService) CreateIndexV1IndexesCreatePostExecute(r ApiCreateInd
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 409 {
@@ -160,8 +160,8 @@ func (a *DefaultAPIService) CreateIndexV1IndexesCreatePostExecute(r ApiCreateInd
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 422 {
@@ -171,8 +171,8 @@ func (a *DefaultAPIService) CreateIndexV1IndexesCreatePostExecute(r ApiCreateInd
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
@@ -190,8 +190,8 @@ func (a *DefaultAPIService) CreateIndexV1IndexesCreatePostExecute(r ApiCreateInd
 }
 
 type ApiDeleteIndexV1IndexesDeletePostRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx                   context.Context
+	ApiService            *DefaultAPIService
 	indexOperationRequest *IndexOperationRequest
 }
 
@@ -209,24 +209,25 @@ DeleteIndexV1IndexesDeletePost Delete Encrypted Index
 
 Delete a specific index.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiDeleteIndexV1IndexesDeletePostRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiDeleteIndexV1IndexesDeletePostRequest
 */
 func (a *DefaultAPIService) DeleteIndexV1IndexesDeletePost(ctx context.Context) ApiDeleteIndexV1IndexesDeletePostRequest {
 	return ApiDeleteIndexV1IndexesDeletePostRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return CyborgdbServiceApiSchemasIndexSuccessResponseModel
+//
+//	@return CyborgdbServiceApiSchemasIndexSuccessResponseModel
 func (a *DefaultAPIService) DeleteIndexV1IndexesDeletePostExecute(r ApiDeleteIndexV1IndexesDeletePostRequest) (*CyborgdbServiceApiSchemasIndexSuccessResponseModel, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *CyborgdbServiceApiSchemasIndexSuccessResponseModel
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *CyborgdbServiceApiSchemasIndexSuccessResponseModel
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.DeleteIndexV1IndexesDeletePost")
@@ -305,8 +306,8 @@ func (a *DefaultAPIService) DeleteIndexV1IndexesDeletePostExecute(r ApiDeleteInd
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 500 {
@@ -316,8 +317,8 @@ func (a *DefaultAPIService) DeleteIndexV1IndexesDeletePostExecute(r ApiDeleteInd
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 404 {
@@ -327,8 +328,8 @@ func (a *DefaultAPIService) DeleteIndexV1IndexesDeletePostExecute(r ApiDeleteInd
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 422 {
@@ -338,8 +339,8 @@ func (a *DefaultAPIService) DeleteIndexV1IndexesDeletePostExecute(r ApiDeleteInd
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
@@ -357,8 +358,8 @@ func (a *DefaultAPIService) DeleteIndexV1IndexesDeletePostExecute(r ApiDeleteInd
 }
 
 type ApiDeleteVectorsV1VectorsDeletePostRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx           context.Context
+	ApiService    *DefaultAPIService
 	deleteRequest *DeleteRequest
 }
 
@@ -376,24 +377,25 @@ DeleteVectorsV1VectorsDeletePost Delete Items from Encrypted Index
 
 Delete vectors by their IDs.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiDeleteVectorsV1VectorsDeletePostRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiDeleteVectorsV1VectorsDeletePostRequest
 */
 func (a *DefaultAPIService) DeleteVectorsV1VectorsDeletePost(ctx context.Context) ApiDeleteVectorsV1VectorsDeletePostRequest {
 	return ApiDeleteVectorsV1VectorsDeletePostRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return CyborgdbServiceApiSchemasVectorsSuccessResponseModel
+//
+//	@return CyborgdbServiceApiSchemasVectorsSuccessResponseModel
 func (a *DefaultAPIService) DeleteVectorsV1VectorsDeletePostExecute(r ApiDeleteVectorsV1VectorsDeletePostRequest) (*CyborgdbServiceApiSchemasVectorsSuccessResponseModel, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *CyborgdbServiceApiSchemasVectorsSuccessResponseModel
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *CyborgdbServiceApiSchemasVectorsSuccessResponseModel
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.DeleteVectorsV1VectorsDeletePost")
@@ -472,8 +474,8 @@ func (a *DefaultAPIService) DeleteVectorsV1VectorsDeletePostExecute(r ApiDeleteV
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 500 {
@@ -483,8 +485,8 @@ func (a *DefaultAPIService) DeleteVectorsV1VectorsDeletePostExecute(r ApiDeleteV
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 422 {
@@ -494,8 +496,8 @@ func (a *DefaultAPIService) DeleteVectorsV1VectorsDeletePostExecute(r ApiDeleteV
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
@@ -513,8 +515,8 @@ func (a *DefaultAPIService) DeleteVectorsV1VectorsDeletePostExecute(r ApiDeleteV
 }
 
 type ApiGetIndexInfoV1IndexesDescribePostRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx                   context.Context
+	ApiService            *DefaultAPIService
 	indexOperationRequest *IndexOperationRequest
 }
 
@@ -532,24 +534,25 @@ GetIndexInfoV1IndexesDescribePost Describe Encrypted Index
 
 Get information about a specific index.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiGetIndexInfoV1IndexesDescribePostRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiGetIndexInfoV1IndexesDescribePostRequest
 */
 func (a *DefaultAPIService) GetIndexInfoV1IndexesDescribePost(ctx context.Context) ApiGetIndexInfoV1IndexesDescribePostRequest {
 	return ApiGetIndexInfoV1IndexesDescribePostRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return IndexInfoResponseModel
+//
+//	@return IndexInfoResponseModel
 func (a *DefaultAPIService) GetIndexInfoV1IndexesDescribePostExecute(r ApiGetIndexInfoV1IndexesDescribePostRequest) (*IndexInfoResponseModel, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *IndexInfoResponseModel
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *IndexInfoResponseModel
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.GetIndexInfoV1IndexesDescribePost")
@@ -628,8 +631,8 @@ func (a *DefaultAPIService) GetIndexInfoV1IndexesDescribePostExecute(r ApiGetInd
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 500 {
@@ -639,8 +642,8 @@ func (a *DefaultAPIService) GetIndexInfoV1IndexesDescribePostExecute(r ApiGetInd
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 404 {
@@ -650,8 +653,8 @@ func (a *DefaultAPIService) GetIndexInfoV1IndexesDescribePostExecute(r ApiGetInd
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 422 {
@@ -661,8 +664,8 @@ func (a *DefaultAPIService) GetIndexInfoV1IndexesDescribePostExecute(r ApiGetInd
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
@@ -680,8 +683,8 @@ func (a *DefaultAPIService) GetIndexInfoV1IndexesDescribePostExecute(r ApiGetInd
 }
 
 type ApiGetIndexSizeV1VectorsNumVectorsPostRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx                   context.Context
+	ApiService            *DefaultAPIService
 	indexOperationRequest *IndexOperationRequest
 }
 
@@ -699,24 +702,25 @@ GetIndexSizeV1VectorsNumVectorsPost Get the number of vectors in an index
 
 Get the number of vectors stored in an index
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiGetIndexSizeV1VectorsNumVectorsPostRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiGetIndexSizeV1VectorsNumVectorsPostRequest
 */
 func (a *DefaultAPIService) GetIndexSizeV1VectorsNumVectorsPost(ctx context.Context) ApiGetIndexSizeV1VectorsNumVectorsPostRequest {
 	return ApiGetIndexSizeV1VectorsNumVectorsPostRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return CyborgdbServiceApiSchemasVectorsSuccessResponseModel
+//
+//	@return CyborgdbServiceApiSchemasVectorsSuccessResponseModel
 func (a *DefaultAPIService) GetIndexSizeV1VectorsNumVectorsPostExecute(r ApiGetIndexSizeV1VectorsNumVectorsPostRequest) (*CyborgdbServiceApiSchemasVectorsSuccessResponseModel, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *CyborgdbServiceApiSchemasVectorsSuccessResponseModel
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *CyborgdbServiceApiSchemasVectorsSuccessResponseModel
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.GetIndexSizeV1VectorsNumVectorsPost")
@@ -795,8 +799,8 @@ func (a *DefaultAPIService) GetIndexSizeV1VectorsNumVectorsPostExecute(r ApiGetI
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 500 {
@@ -806,8 +810,8 @@ func (a *DefaultAPIService) GetIndexSizeV1VectorsNumVectorsPostExecute(r ApiGetI
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 422 {
@@ -817,8 +821,8 @@ func (a *DefaultAPIService) GetIndexSizeV1VectorsNumVectorsPostExecute(r ApiGetI
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
@@ -836,7 +840,7 @@ func (a *DefaultAPIService) GetIndexSizeV1VectorsNumVectorsPostExecute(r ApiGetI
 }
 
 type ApiGetTrainingStatusV1IndexesTrainingStatusGetRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *DefaultAPIService
 }
 
@@ -851,28 +855,30 @@ Get the current training status including indexes being trained
 and the retrain threshold configuration.
 
 Returns:
-    dict: Training status information including:
-        - training_indexes: List of index names currently being trained
-        - retrain_threshold: The multiplier used for the retraining threshold
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiGetTrainingStatusV1IndexesTrainingStatusGetRequest
+	   dict: Training status information including:
+	       - training_indexes: List of index names currently being trained
+	       - retrain_threshold: The multiplier used for the retraining threshold
+
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiGetTrainingStatusV1IndexesTrainingStatusGetRequest
 */
 func (a *DefaultAPIService) GetTrainingStatusV1IndexesTrainingStatusGet(ctx context.Context) ApiGetTrainingStatusV1IndexesTrainingStatusGetRequest {
 	return ApiGetTrainingStatusV1IndexesTrainingStatusGetRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return IndexTrainingStatusResponseModel
+//
+//	@return IndexTrainingStatusResponseModel
 func (a *DefaultAPIService) GetTrainingStatusV1IndexesTrainingStatusGetExecute(r ApiGetTrainingStatusV1IndexesTrainingStatusGetRequest) (*IndexTrainingStatusResponseModel, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *IndexTrainingStatusResponseModel
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *IndexTrainingStatusResponseModel
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.GetTrainingStatusV1IndexesTrainingStatusGet")
@@ -932,8 +938,8 @@ func (a *DefaultAPIService) GetTrainingStatusV1IndexesTrainingStatusGetExecute(r
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 500 {
@@ -943,8 +949,8 @@ func (a *DefaultAPIService) GetTrainingStatusV1IndexesTrainingStatusGetExecute(r
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
@@ -962,7 +968,7 @@ func (a *DefaultAPIService) GetTrainingStatusV1IndexesTrainingStatusGetExecute(r
 }
 
 type ApiGetVectorsV1VectorsGetPostRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *DefaultAPIService
 	getRequest *GetRequest
 }
@@ -981,24 +987,25 @@ GetVectorsV1VectorsGetPost Get Items from Encrypted Index
 
 Retrieve vectors by their IDs.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiGetVectorsV1VectorsGetPostRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiGetVectorsV1VectorsGetPostRequest
 */
 func (a *DefaultAPIService) GetVectorsV1VectorsGetPost(ctx context.Context) ApiGetVectorsV1VectorsGetPostRequest {
 	return ApiGetVectorsV1VectorsGetPostRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return GetResponseModel
+//
+//	@return GetResponseModel
 func (a *DefaultAPIService) GetVectorsV1VectorsGetPostExecute(r ApiGetVectorsV1VectorsGetPostRequest) (*GetResponseModel, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *GetResponseModel
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *GetResponseModel
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.GetVectorsV1VectorsGetPost")
@@ -1077,8 +1084,8 @@ func (a *DefaultAPIService) GetVectorsV1VectorsGetPostExecute(r ApiGetVectorsV1V
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 500 {
@@ -1088,8 +1095,8 @@ func (a *DefaultAPIService) GetVectorsV1VectorsGetPostExecute(r ApiGetVectorsV1V
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 422 {
@@ -1099,8 +1106,8 @@ func (a *DefaultAPIService) GetVectorsV1VectorsGetPostExecute(r ApiGetVectorsV1V
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
@@ -1118,7 +1125,7 @@ func (a *DefaultAPIService) GetVectorsV1VectorsGetPostExecute(r ApiGetVectorsV1V
 }
 
 type ApiHealthCheckV1HealthGetRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *DefaultAPIService
 }
 
@@ -1131,24 +1138,25 @@ HealthCheckV1HealthGet Health check endpoint
 
 Check if the API is running.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiHealthCheckV1HealthGetRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiHealthCheckV1HealthGetRequest
 */
 func (a *DefaultAPIService) HealthCheckV1HealthGet(ctx context.Context) ApiHealthCheckV1HealthGetRequest {
 	return ApiHealthCheckV1HealthGetRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return map[string]string
+//
+//	@return map[string]string
 func (a *DefaultAPIService) HealthCheckV1HealthGetExecute(r ApiHealthCheckV1HealthGetRequest) (map[string]string, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  map[string]string
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue map[string]string
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.HealthCheckV1HealthGet")
@@ -1217,8 +1225,8 @@ func (a *DefaultAPIService) HealthCheckV1HealthGetExecute(r ApiHealthCheckV1Heal
 }
 
 type ApiListIdsV1VectorsListIdsPostRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx            context.Context
+	ApiService     *DefaultAPIService
 	listIDsRequest *ListIDsRequest
 }
 
@@ -1238,24 +1246,25 @@ List all item IDs currently stored in the index.
 
 Returns a list of all IDs and the total count.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiListIdsV1VectorsListIdsPostRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiListIdsV1VectorsListIdsPostRequest
 */
 func (a *DefaultAPIService) ListIdsV1VectorsListIdsPost(ctx context.Context) ApiListIdsV1VectorsListIdsPostRequest {
 	return ApiListIdsV1VectorsListIdsPostRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return ListIDsResponse
+//
+//	@return ListIDsResponse
 func (a *DefaultAPIService) ListIdsV1VectorsListIdsPostExecute(r ApiListIdsV1VectorsListIdsPostRequest) (*ListIDsResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *ListIDsResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *ListIDsResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.ListIdsV1VectorsListIdsPost")
@@ -1334,8 +1343,8 @@ func (a *DefaultAPIService) ListIdsV1VectorsListIdsPostExecute(r ApiListIdsV1Vec
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
@@ -1353,7 +1362,7 @@ func (a *DefaultAPIService) ListIdsV1VectorsListIdsPostExecute(r ApiListIdsV1Vec
 }
 
 type ApiListIndexesV1IndexesListGetRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *DefaultAPIService
 }
 
@@ -1366,24 +1375,25 @@ ListIndexesV1IndexesListGet List Encrypted Indexes
 
 List all available indexes.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiListIndexesV1IndexesListGetRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiListIndexesV1IndexesListGetRequest
 */
 func (a *DefaultAPIService) ListIndexesV1IndexesListGet(ctx context.Context) ApiListIndexesV1IndexesListGetRequest {
 	return ApiListIndexesV1IndexesListGetRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return IndexListResponseModel
+//
+//	@return IndexListResponseModel
 func (a *DefaultAPIService) ListIndexesV1IndexesListGetExecute(r ApiListIndexesV1IndexesListGetRequest) (*IndexListResponseModel, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodGet
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *IndexListResponseModel
+		localVarHTTPMethod  = http.MethodGet
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *IndexListResponseModel
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.ListIndexesV1IndexesListGet")
@@ -1457,8 +1467,8 @@ func (a *DefaultAPIService) ListIndexesV1IndexesListGetExecute(r ApiListIndexesV
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 500 {
@@ -1468,8 +1478,8 @@ func (a *DefaultAPIService) ListIndexesV1IndexesListGetExecute(r ApiListIndexesV
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
@@ -1487,8 +1497,8 @@ func (a *DefaultAPIService) ListIndexesV1IndexesListGetExecute(r ApiListIndexesV
 }
 
 type ApiQueryVectorsBinaryV1VectorsQueryBinaryPostRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx                context.Context
+	ApiService         *DefaultAPIService
 	binaryQueryRequest *BinaryQueryRequest
 }
 
@@ -1510,24 +1520,25 @@ This endpoint is optimized for large batch queries. Query vectors are sent
 as base64-encoded float32 numpy arrays, which is more efficient than
 JSON arrays for large batches.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiQueryVectorsBinaryV1VectorsQueryBinaryPostRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiQueryVectorsBinaryV1VectorsQueryBinaryPostRequest
 */
 func (a *DefaultAPIService) QueryVectorsBinaryV1VectorsQueryBinaryPost(ctx context.Context) ApiQueryVectorsBinaryV1VectorsQueryBinaryPostRequest {
 	return ApiQueryVectorsBinaryV1VectorsQueryBinaryPostRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return QueryResponse
+//
+//	@return QueryResponse
 func (a *DefaultAPIService) QueryVectorsBinaryV1VectorsQueryBinaryPostExecute(r ApiQueryVectorsBinaryV1VectorsQueryBinaryPostRequest) (*QueryResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *QueryResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *QueryResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.QueryVectorsBinaryV1VectorsQueryBinaryPost")
@@ -1606,8 +1617,8 @@ func (a *DefaultAPIService) QueryVectorsBinaryV1VectorsQueryBinaryPostExecute(r 
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 500 {
@@ -1617,8 +1628,8 @@ func (a *DefaultAPIService) QueryVectorsBinaryV1VectorsQueryBinaryPostExecute(r 
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 422 {
@@ -1628,8 +1639,8 @@ func (a *DefaultAPIService) QueryVectorsBinaryV1VectorsQueryBinaryPostExecute(r 
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
@@ -1647,9 +1658,9 @@ func (a *DefaultAPIService) QueryVectorsBinaryV1VectorsQueryBinaryPostExecute(r 
 }
 
 type ApiQueryVectorsV1VectorsQueryPostRequest struct {
-	ctx context.Context
+	ctx        context.Context
 	ApiService *DefaultAPIService
-	request *Request
+	request    *Request
 }
 
 func (r ApiQueryVectorsV1VectorsQueryPostRequest) Request(request Request) ApiQueryVectorsV1VectorsQueryPostRequest {
@@ -1666,24 +1677,25 @@ QueryVectorsV1VectorsQueryPost Query Encrypted Index
 
 Search for nearest neighbors in the index.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiQueryVectorsV1VectorsQueryPostRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiQueryVectorsV1VectorsQueryPostRequest
 */
 func (a *DefaultAPIService) QueryVectorsV1VectorsQueryPost(ctx context.Context) ApiQueryVectorsV1VectorsQueryPostRequest {
 	return ApiQueryVectorsV1VectorsQueryPostRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return QueryResponse
+//
+//	@return QueryResponse
 func (a *DefaultAPIService) QueryVectorsV1VectorsQueryPostExecute(r ApiQueryVectorsV1VectorsQueryPostRequest) (*QueryResponse, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *QueryResponse
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *QueryResponse
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.QueryVectorsV1VectorsQueryPost")
@@ -1762,8 +1774,8 @@ func (a *DefaultAPIService) QueryVectorsV1VectorsQueryPostExecute(r ApiQueryVect
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 500 {
@@ -1773,8 +1785,8 @@ func (a *DefaultAPIService) QueryVectorsV1VectorsQueryPostExecute(r ApiQueryVect
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 422 {
@@ -1784,8 +1796,8 @@ func (a *DefaultAPIService) QueryVectorsV1VectorsQueryPostExecute(r ApiQueryVect
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
@@ -1803,8 +1815,8 @@ func (a *DefaultAPIService) QueryVectorsV1VectorsQueryPostExecute(r ApiQueryVect
 }
 
 type ApiTrainIndexV1IndexesTrainPostRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx          context.Context
+	ApiService   *DefaultAPIService
 	trainRequest *TrainRequest
 }
 
@@ -1828,24 +1840,25 @@ being trained or queued, returns the current status.
 Note: Automatic training is also triggered based on vector count thresholds
 after upserts.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiTrainIndexV1IndexesTrainPostRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiTrainIndexV1IndexesTrainPostRequest
 */
 func (a *DefaultAPIService) TrainIndexV1IndexesTrainPost(ctx context.Context) ApiTrainIndexV1IndexesTrainPostRequest {
 	return ApiTrainIndexV1IndexesTrainPostRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return CyborgdbServiceApiSchemasIndexSuccessResponseModel
+//
+//	@return CyborgdbServiceApiSchemasIndexSuccessResponseModel
 func (a *DefaultAPIService) TrainIndexV1IndexesTrainPostExecute(r ApiTrainIndexV1IndexesTrainPostRequest) (*CyborgdbServiceApiSchemasIndexSuccessResponseModel, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *CyborgdbServiceApiSchemasIndexSuccessResponseModel
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *CyborgdbServiceApiSchemasIndexSuccessResponseModel
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.TrainIndexV1IndexesTrainPost")
@@ -1924,8 +1937,8 @@ func (a *DefaultAPIService) TrainIndexV1IndexesTrainPostExecute(r ApiTrainIndexV
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 500 {
@@ -1935,8 +1948,8 @@ func (a *DefaultAPIService) TrainIndexV1IndexesTrainPostExecute(r ApiTrainIndexV
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 422 {
@@ -1946,8 +1959,8 @@ func (a *DefaultAPIService) TrainIndexV1IndexesTrainPostExecute(r ApiTrainIndexV
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
@@ -1965,8 +1978,8 @@ func (a *DefaultAPIService) TrainIndexV1IndexesTrainPostExecute(r ApiTrainIndexV
 }
 
 type ApiUpsertVectorsBinaryV1VectorsUpsertBinaryPostRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx                 context.Context
+	ApiService          *DefaultAPIService
 	binaryUpsertRequest *BinaryUpsertRequest
 }
 
@@ -1991,24 +2004,25 @@ JSON arrays for large datasets.
 After upserting, checks if the index needs training/retraining based on the
 number of vectors and triggers automatic training if needed.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiUpsertVectorsBinaryV1VectorsUpsertBinaryPostRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiUpsertVectorsBinaryV1VectorsUpsertBinaryPostRequest
 */
 func (a *DefaultAPIService) UpsertVectorsBinaryV1VectorsUpsertBinaryPost(ctx context.Context) ApiUpsertVectorsBinaryV1VectorsUpsertBinaryPostRequest {
 	return ApiUpsertVectorsBinaryV1VectorsUpsertBinaryPostRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return CyborgdbServiceApiSchemasVectorsSuccessResponseModel
+//
+//	@return CyborgdbServiceApiSchemasVectorsSuccessResponseModel
 func (a *DefaultAPIService) UpsertVectorsBinaryV1VectorsUpsertBinaryPostExecute(r ApiUpsertVectorsBinaryV1VectorsUpsertBinaryPostRequest) (*CyborgdbServiceApiSchemasVectorsSuccessResponseModel, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *CyborgdbServiceApiSchemasVectorsSuccessResponseModel
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *CyborgdbServiceApiSchemasVectorsSuccessResponseModel
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.UpsertVectorsBinaryV1VectorsUpsertBinaryPost")
@@ -2087,8 +2101,8 @@ func (a *DefaultAPIService) UpsertVectorsBinaryV1VectorsUpsertBinaryPostExecute(
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 500 {
@@ -2098,8 +2112,8 @@ func (a *DefaultAPIService) UpsertVectorsBinaryV1VectorsUpsertBinaryPostExecute(
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 422 {
@@ -2109,8 +2123,8 @@ func (a *DefaultAPIService) UpsertVectorsBinaryV1VectorsUpsertBinaryPostExecute(
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}
@@ -2128,8 +2142,8 @@ func (a *DefaultAPIService) UpsertVectorsBinaryV1VectorsUpsertBinaryPostExecute(
 }
 
 type ApiUpsertVectorsV1VectorsUpsertPostRequest struct {
-	ctx context.Context
-	ApiService *DefaultAPIService
+	ctx           context.Context
+	ApiService    *DefaultAPIService
 	upsertRequest *UpsertRequest
 }
 
@@ -2150,24 +2164,25 @@ Add or update vectors in the index.
 After upserting, checks if the index needs training/retraining based on the
 number of vectors and triggers automatic training if needed.
 
- @param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
- @return ApiUpsertVectorsV1VectorsUpsertPostRequest
+	@param ctx context.Context - for authentication, logging, cancellation, deadlines, tracing, etc. Passed from http.Request or context.Background().
+	@return ApiUpsertVectorsV1VectorsUpsertPostRequest
 */
 func (a *DefaultAPIService) UpsertVectorsV1VectorsUpsertPost(ctx context.Context) ApiUpsertVectorsV1VectorsUpsertPostRequest {
 	return ApiUpsertVectorsV1VectorsUpsertPostRequest{
 		ApiService: a,
-		ctx: ctx,
+		ctx:        ctx,
 	}
 }
 
 // Execute executes the request
-//  @return CyborgdbServiceApiSchemasVectorsSuccessResponseModel
+//
+//	@return CyborgdbServiceApiSchemasVectorsSuccessResponseModel
 func (a *DefaultAPIService) UpsertVectorsV1VectorsUpsertPostExecute(r ApiUpsertVectorsV1VectorsUpsertPostRequest) (*CyborgdbServiceApiSchemasVectorsSuccessResponseModel, *http.Response, error) {
 	var (
-		localVarHTTPMethod   = http.MethodPost
-		localVarPostBody     interface{}
-		formFiles            []formFile
-		localVarReturnValue  *CyborgdbServiceApiSchemasVectorsSuccessResponseModel
+		localVarHTTPMethod  = http.MethodPost
+		localVarPostBody    interface{}
+		formFiles           []formFile
+		localVarReturnValue *CyborgdbServiceApiSchemasVectorsSuccessResponseModel
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.UpsertVectorsV1VectorsUpsertPost")
@@ -2246,8 +2261,8 @@ func (a *DefaultAPIService) UpsertVectorsV1VectorsUpsertPostExecute(r ApiUpsertV
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 500 {
@@ -2257,8 +2272,8 @@ func (a *DefaultAPIService) UpsertVectorsV1VectorsUpsertPostExecute(r ApiUpsertV
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 			return localVarReturnValue, localVarHTTPResponse, newErr
 		}
 		if localVarHTTPResponse.StatusCode == 422 {
@@ -2268,8 +2283,8 @@ func (a *DefaultAPIService) UpsertVectorsV1VectorsUpsertPostExecute(r ApiUpsertV
 				newErr.error = err.Error()
 				return localVarReturnValue, localVarHTTPResponse, newErr
 			}
-					newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
-					newErr.model = v
+			newErr.error = formatErrorMessage(localVarHTTPResponse.Status, &v)
+			newErr.model = v
 		}
 		return localVarReturnValue, localVarHTTPResponse, newErr
 	}

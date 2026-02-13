@@ -12,7 +12,7 @@ package internal
 
 import (
 	"encoding/json"
-	
+
 	"bytes"
 	"fmt"
 )
@@ -22,10 +22,10 @@ var _ MappedNullable = &GetResultItemModel{}
 
 // GetResultItemModel Represents an individual item retrieved from the encrypted index.  Attributes:     id (str): The unique identifier of the item.     metadata (Optional[Dict[str, Any]]): Additional metadata associated with the item.     contents (Optional[bytes]): The raw byte contents of the item.     vector (Optional[List[float]]): The vector representation of the item.
 type GetResultItemModel struct {
-	Id string `json:"id"`
+	Id       string                 `json:"id"`
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
-	Contents NullableString `json:"contents,omitempty"`
-	Vector []float32 `json:"vector,omitempty"`
+	Contents NullableString         `json:"contents,omitempty"`
+	Vector   []float32              `json:"vector,omitempty"`
 }
 
 type _GetResultItemModel GetResultItemModel
@@ -137,6 +137,7 @@ func (o *GetResultItemModel) HasContents() bool {
 func (o *GetResultItemModel) SetContents(v string) {
 	o.Contents.Set(&v)
 }
+
 // SetContentsNil sets the value for Contents to be an explicit nil
 func (o *GetResultItemModel) SetContentsNil() {
 	o.Contents.Set(nil)
@@ -181,7 +182,7 @@ func (o *GetResultItemModel) SetVector(v []float32) {
 }
 
 func (o GetResultItemModel) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -216,10 +217,10 @@ func (o *GetResultItemModel) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err;
+		return err
 	}
 
-	for _, requiredProperty := range(requiredProperties) {
+	for _, requiredProperty := range requiredProperties {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -228,7 +229,7 @@ func (o *GetResultItemModel) UnmarshalJSON(data []byte) (err error) {
 	varGetResultItemModel := _GetResultItemModel{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	
+
 	err = decoder.Decode(&varGetResultItemModel)
 
 	if err != nil {
@@ -275,5 +276,3 @@ func (v *NullableGetResultItemModel) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

@@ -11,8 +11,8 @@ API version: 0.15.0
 package internal
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -21,9 +21,9 @@ var _ MappedNullable = &IndexInfoResponseModel{}
 
 // IndexInfoResponseModel Response model for retrieving information about an index.  Attributes:     index_name (str): The name of the index.     index_type (str): The type of index (e.g., IVF, IVFFlat, IVFPQ, IVFSQ).     is_trained (bool): Indicates whether the index has been trained.     index_config (Dict[str, Any]): The full configuration details of the index.
 type IndexInfoResponseModel struct {
-	IndexName string `json:"index_name"`
-	IndexType string `json:"index_type"`
-	IsTrained bool `json:"is_trained"`
+	IndexName   string                 `json:"index_name"`
+	IndexType   string                 `json:"index_type"`
+	IsTrained   bool                   `json:"is_trained"`
 	IndexConfig map[string]interface{} `json:"index_config"`
 }
 
@@ -147,7 +147,7 @@ func (o *IndexInfoResponseModel) SetIndexConfig(v map[string]interface{}) {
 }
 
 func (o IndexInfoResponseModel) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -179,10 +179,10 @@ func (o *IndexInfoResponseModel) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err;
+		return err
 	}
 
-	for _, requiredProperty := range(requiredProperties) {
+	for _, requiredProperty := range requiredProperties {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -191,7 +191,7 @@ func (o *IndexInfoResponseModel) UnmarshalJSON(data []byte) (err error) {
 	varIndexInfoResponseModel := _IndexInfoResponseModel{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	
+
 	err = decoder.Decode(&varIndexInfoResponseModel)
 
 	if err != nil {
@@ -238,5 +238,3 @@ func (v *NullableIndexInfoResponseModel) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

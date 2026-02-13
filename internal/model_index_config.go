@@ -15,13 +15,12 @@ import (
 	"fmt"
 )
 
-
 // IndexConfig struct for IndexConfig
 type IndexConfig struct {
 	IndexIVFFlatModel *IndexIVFFlatModel
-	IndexIVFModel *IndexIVFModel
-	IndexIVFPQModel *IndexIVFPQModel
-	IndexIVFSQModel *IndexIVFSQModel
+	IndexIVFModel     *IndexIVFModel
+	IndexIVFPQModel   *IndexIVFPQModel
+	IndexIVFSQModel   *IndexIVFSQModel
 }
 
 // Unmarshal JSON data into any of the pointers in the struct
@@ -33,7 +32,7 @@ func (dst *IndexConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	// try to unmarshal JSON data into IndexIVFFlatModel
-	err = json.Unmarshal(data, &dst.IndexIVFFlatModel);
+	err = json.Unmarshal(data, &dst.IndexIVFFlatModel)
 	if err == nil {
 		jsonIndexIVFFlatModel, _ := json.Marshal(dst.IndexIVFFlatModel)
 		if string(jsonIndexIVFFlatModel) == "{}" { // empty struct
@@ -46,7 +45,7 @@ func (dst *IndexConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	// try to unmarshal JSON data into IndexIVFModel
-	err = json.Unmarshal(data, &dst.IndexIVFModel);
+	err = json.Unmarshal(data, &dst.IndexIVFModel)
 	if err == nil {
 		jsonIndexIVFModel, _ := json.Marshal(dst.IndexIVFModel)
 		if string(jsonIndexIVFModel) == "{}" { // empty struct
@@ -59,7 +58,7 @@ func (dst *IndexConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	// try to unmarshal JSON data into IndexIVFPQModel
-	err = json.Unmarshal(data, &dst.IndexIVFPQModel);
+	err = json.Unmarshal(data, &dst.IndexIVFPQModel)
 	if err == nil {
 		jsonIndexIVFPQModel, _ := json.Marshal(dst.IndexIVFPQModel)
 		if string(jsonIndexIVFPQModel) == "{}" { // empty struct
@@ -72,7 +71,7 @@ func (dst *IndexConfig) UnmarshalJSON(data []byte) error {
 	}
 
 	// try to unmarshal JSON data into IndexIVFSQModel
-	err = json.Unmarshal(data, &dst.IndexIVFSQModel);
+	err = json.Unmarshal(data, &dst.IndexIVFSQModel)
 	if err == nil {
 		jsonIndexIVFSQModel, _ := json.Marshal(dst.IndexIVFSQModel)
 		if string(jsonIndexIVFSQModel) == "{}" { // empty struct
@@ -107,7 +106,6 @@ func (src IndexConfig) MarshalJSON() ([]byte, error) {
 
 	return nil, nil // no data in anyOf schemas
 }
-
 
 type NullableIndexConfig struct {
 	value *IndexConfig
@@ -144,5 +142,3 @@ func (v *NullableIndexConfig) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

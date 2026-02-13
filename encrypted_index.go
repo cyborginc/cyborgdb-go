@@ -7,23 +7,47 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"math"
 
 	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
+const (
+	// float32ByteSize is the number of bytes in a float32.
+	float32ByteSize = 4
+)
+
 var (
 	// ErrQueryVectorsInvalidType is returned when QueryParams contains invalid query vector types.
 	// This occurs when query vectors are not properly formatted as []float32 or [][]float32.
-	ErrQueryVectorsInvalidType = fmt.Errorf("queryVectors must be []float32 for single vector queries or [][]float32 for batch queries")
+	ErrQueryVectorsInvalidType = errors.New("queryVectors must be []float32 for single vector queries or [][]float32 for batch queries")
 
 	// ErrMissingQueryInput is returned when no query input is provided in QueryParams.
 	// At least one of QueryVector, BatchQueryVectors, or QueryContents must be specified.
-	ErrMissingQueryInput = fmt.Errorf("either queryVectors or queryContents must be provided")
+	ErrMissingQueryInput = errors.New("either queryVectors or queryContents must be provided")
 
 	// ErrUnexpectedTrainingStatus is returned when the training status response format is unexpected.
-	ErrUnexpectedTrainingStatus = fmt.Errorf("unexpected training status response format")
+	ErrUnexpectedTrainingStatus = errors.New("unexpected training status response format")
+
+	// ErrEmptyIDs is returned when IDs slice is empty.
+	ErrEmptyIDs = errors.New("IDs cannot be empty")
+
+	// ErrEmptyVectors is returned when vectors slice is empty.
+	ErrEmptyVectors = errors.New("vectors cannot be empty")
+
+	// ErrEmptyQueryVectors is returned when query vectors slice is empty.
+	ErrEmptyQueryVectors = errors.New("queryVectors cannot be empty")
+
+	// ErrIDsVectorsLengthMismatch is returned when IDs and vectors have different lengths.
+	ErrIDsVectorsLengthMismatch = errors.New("IDs length must match vectors length")
+
+	// ErrMetadataLengthMismatch is returned when metadata length doesn't match IDs length.
+	ErrMetadataLengthMismatch = errors.New("metadata length must match IDs length")
+
+	// ErrContentsLengthMismatch is returned when contents length doesn't match IDs length.
+	ErrContentsLengthMismatch = errors.New("contents length must match IDs length")
 )
 
 // EncryptedIndex provides a handle for performing operations on an encrypted vector index.
@@ -530,15 +554,15 @@ func vectorsToBase64(vectors [][]float32) string {
 	dimension := len(vectors[0])
 	totalFloats := numVectors * dimension
 
-	// Create byte buffer (4 bytes per float32)
-	buf := make([]byte, totalFloats*4)
+	// Create byte buffer (float32ByteSize bytes per float32)
+	buf := make([]byte, totalFloats*float32ByteSize)
 
 	// Convert each float32 to little-endian bytes
 	offset := 0
 	for _, vec := range vectors {
 		for _, val := range vec {
 			binary.LittleEndian.PutUint32(buf[offset:], math.Float32bits(val))
-			offset += 4
+			offset += float32ByteSize
 		}
 	}
 
@@ -576,19 +600,19 @@ func vectorsToBase64(vectors [][]float32) string {
 //	err := index.UpsertBinary(ctx, params)
 func (e *EncryptedIndex) UpsertBinary(ctx context.Context, params BinaryUpsertParams) error {
 	if len(params.IDs) == 0 {
-		return fmt.Errorf("IDs cannot be empty")
+		return ErrEmptyIDs
 	}
 	if len(params.Vectors) == 0 {
-		return fmt.Errorf("vectors cannot be empty")
+		return ErrEmptyVectors
 	}
 	if len(params.IDs) != len(params.Vectors) {
-		return fmt.Errorf("IDs length (%d) must match vectors length (%d)", len(params.IDs), len(params.Vectors))
+		return fmt.Errorf("%w: got %d IDs and %d vectors", ErrIDsVectorsLengthMismatch, len(params.IDs), len(params.Vectors))
 	}
 	if len(params.Metadata) > 0 && len(params.Metadata) != len(params.IDs) {
-		return fmt.Errorf("metadata length (%d) must match IDs length (%d)", len(params.Metadata), len(params.IDs))
+		return fmt.Errorf("%w: got %d metadata and %d IDs", ErrMetadataLengthMismatch, len(params.Metadata), len(params.IDs))
 	}
 	if len(params.Contents) > 0 && len(params.Contents) != len(params.IDs) {
-		return fmt.Errorf("contents length (%d) must match IDs length (%d)", len(params.Contents), len(params.IDs))
+		return fmt.Errorf("%w: got %d contents and %d IDs", ErrContentsLengthMismatch, len(params.Contents), len(params.IDs))
 	}
 
 	// Get dimension from first vector
@@ -666,7 +690,7 @@ func (e *EncryptedIndex) UpsertBinary(ctx context.Context, params BinaryUpsertPa
 //	results, err := index.QueryBinary(ctx, params)
 func (e *EncryptedIndex) QueryBinary(ctx context.Context, params BinaryQueryParams) (*QueryResponse, error) {
 	if len(params.QueryVectors) == 0 {
-		return nil, fmt.Errorf("queryVectors cannot be empty")
+		return nil, ErrEmptyQueryVectors
 	}
 
 	// Get dimension from first vector

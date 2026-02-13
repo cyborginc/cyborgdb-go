@@ -11,8 +11,8 @@ API version: 0.15.0
 package internal
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -69,7 +69,7 @@ func (o *QueryResponse) SetResults(v Results) {
 }
 
 func (o QueryResponse) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -95,10 +95,10 @@ func (o *QueryResponse) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err;
+		return err
 	}
 
-	for _, requiredProperty := range(requiredProperties) {
+	for _, requiredProperty := range requiredProperties {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -107,7 +107,7 @@ func (o *QueryResponse) UnmarshalJSON(data []byte) (err error) {
 	varQueryResponse := _QueryResponse{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	
+
 	err = decoder.Decode(&varQueryResponse)
 
 	if err != nil {
@@ -154,5 +154,3 @@ func (v *NullableQueryResponse) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

@@ -37,10 +37,15 @@ type NullableContents struct {
 	isSet bool
 }
 
-func (v NullableContents) Get() *Contents { return v.value }
+func (v NullableContents) Get() *Contents     { return v.value }
 func (v *NullableContents) Set(val *Contents) { v.value = val; v.isSet = true }
-func (v NullableContents) IsSet() bool { return v.isSet }
-func (v *NullableContents) Unset() { v.value = nil; v.isSet = false }
-func NewNullableContents(val *Contents) *NullableContents { return &NullableContents{value: val, isSet: true} }
+func (v NullableContents) IsSet() bool        { return v.isSet }
+func (v *NullableContents) Unset()            { v.value = nil; v.isSet = false }
+func NewNullableContents(val *Contents) *NullableContents {
+	return &NullableContents{value: val, isSet: true}
+}
 func (v NullableContents) MarshalJSON() ([]byte, error) { return json.Marshal(v.value) }
-func (v *NullableContents) UnmarshalJSON(src []byte) error { v.isSet = true; return json.Unmarshal(src, &v.value) }
+func (v *NullableContents) UnmarshalJSON(src []byte) error {
+	v.isSet = true
+	return json.Unmarshal(src, &v.value)
+}

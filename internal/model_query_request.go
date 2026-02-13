@@ -11,8 +11,8 @@ API version: 0.15.0
 package internal
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -24,14 +24,14 @@ type QueryRequest struct {
 	// 32-byte encryption key as hex string
 	IndexKey string `json:"index_key"`
 	// ID name
-	IndexName string `json:"index_name"`
-	QueryVectors []float32 `json:"query_vectors,omitempty"`
-	QueryContents NullableString `json:"query_contents,omitempty"`
-	TopK NullableInt32 `json:"top_k,omitempty"`
-	NProbes NullableInt32 `json:"n_probes,omitempty"`
-	Greedy NullableBool `json:"greedy,omitempty"`
-	Filters map[string]interface{} `json:"filters,omitempty"`
-	Include []string `json:"include,omitempty"`
+	IndexName     string                 `json:"index_name"`
+	QueryVectors  []float32              `json:"query_vectors,omitempty"`
+	QueryContents NullableString         `json:"query_contents,omitempty"`
+	TopK          NullableInt32          `json:"top_k,omitempty"`
+	NProbes       NullableInt32          `json:"n_probes,omitempty"`
+	Greedy        NullableBool           `json:"greedy,omitempty"`
+	Filters       map[string]interface{} `json:"filters,omitempty"`
+	Include       []string               `json:"include,omitempty"`
 }
 
 type _QueryRequest QueryRequest
@@ -168,6 +168,7 @@ func (o *QueryRequest) HasQueryContents() bool {
 func (o *QueryRequest) SetQueryContents(v string) {
 	o.QueryContents.Set(&v)
 }
+
 // SetQueryContentsNil sets the value for QueryContents to be an explicit nil
 func (o *QueryRequest) SetQueryContentsNil() {
 	o.QueryContents.Set(nil)
@@ -210,6 +211,7 @@ func (o *QueryRequest) HasTopK() bool {
 func (o *QueryRequest) SetTopK(v int32) {
 	o.TopK.Set(&v)
 }
+
 // SetTopKNil sets the value for TopK to be an explicit nil
 func (o *QueryRequest) SetTopKNil() {
 	o.TopK.Set(nil)
@@ -252,6 +254,7 @@ func (o *QueryRequest) HasNProbes() bool {
 func (o *QueryRequest) SetNProbes(v int32) {
 	o.NProbes.Set(&v)
 }
+
 // SetNProbesNil sets the value for NProbes to be an explicit nil
 func (o *QueryRequest) SetNProbesNil() {
 	o.NProbes.Set(nil)
@@ -294,6 +297,7 @@ func (o *QueryRequest) HasGreedy() bool {
 func (o *QueryRequest) SetGreedy(v bool) {
 	o.Greedy.Set(&v)
 }
+
 // SetGreedyNil sets the value for Greedy to be an explicit nil
 func (o *QueryRequest) SetGreedyNil() {
 	o.Greedy.Set(nil)
@@ -370,7 +374,7 @@ func (o *QueryRequest) SetInclude(v []string) {
 }
 
 func (o QueryRequest) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -419,10 +423,10 @@ func (o *QueryRequest) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err;
+		return err
 	}
 
-	for _, requiredProperty := range(requiredProperties) {
+	for _, requiredProperty := range requiredProperties {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -431,7 +435,7 @@ func (o *QueryRequest) UnmarshalJSON(data []byte) (err error) {
 	varQueryRequest := _QueryRequest{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	
+
 	err = decoder.Decode(&varQueryRequest)
 
 	if err != nil {
@@ -478,5 +482,3 @@ func (v *NullableQueryRequest) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

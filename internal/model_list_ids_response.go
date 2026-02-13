@@ -11,8 +11,8 @@ API version: 0.15.0
 package internal
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -21,8 +21,8 @@ var _ MappedNullable = &ListIDsResponse{}
 
 // ListIDsResponse Response model for listing all IDs in the index.  Attributes:     ids (List[str]): List of all item IDs in the index.     count (int): Total number of IDs in the index.
 type ListIDsResponse struct {
-	Ids []string `json:"ids"`
-	Count int32 `json:"count"`
+	Ids   []string `json:"ids"`
+	Count int32    `json:"count"`
 }
 
 type _ListIDsResponse ListIDsResponse
@@ -95,7 +95,7 @@ func (o *ListIDsResponse) SetCount(v int32) {
 }
 
 func (o ListIDsResponse) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -123,10 +123,10 @@ func (o *ListIDsResponse) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err;
+		return err
 	}
 
-	for _, requiredProperty := range(requiredProperties) {
+	for _, requiredProperty := range requiredProperties {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -135,7 +135,7 @@ func (o *ListIDsResponse) UnmarshalJSON(data []byte) (err error) {
 	varListIDsResponse := _ListIDsResponse{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	
+
 	err = decoder.Decode(&varListIDsResponse)
 
 	if err != nil {
@@ -182,5 +182,3 @@ func (v *NullableListIDsResponse) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

@@ -20,7 +20,7 @@ var _ MappedNullable = &IndexIVFFlatModel{}
 // IndexIVFFlatModel Model for configuring an IVFFlat (Inverted File with Flat quantization) index.  Attributes:     type (str): Index type identifier. Defaults to \"ivfflat\".
 type IndexIVFFlatModel struct {
 	Dimension NullableInt32 `json:"dimension,omitempty"`
-	Type *string `json:"type,omitempty"`
+	Type      *string       `json:"type,omitempty"`
 }
 
 // NewIndexIVFFlatModel instantiates a new IndexIVFFlatModel object
@@ -76,6 +76,7 @@ func (o *IndexIVFFlatModel) HasDimension() bool {
 func (o *IndexIVFFlatModel) SetDimension(v int32) {
 	o.Dimension.Set(&v)
 }
+
 // SetDimensionNil sets the value for Dimension to be an explicit nil
 func (o *IndexIVFFlatModel) SetDimensionNil() {
 	o.Dimension.Set(nil)
@@ -119,7 +120,7 @@ func (o *IndexIVFFlatModel) SetType(v string) {
 }
 
 func (o IndexIVFFlatModel) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -172,5 +173,3 @@ func (v *NullableIndexIVFFlatModel) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

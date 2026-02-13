@@ -11,8 +11,8 @@ API version: 0.15.0
 package internal
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -21,10 +21,10 @@ var _ MappedNullable = &QueryResultItem{}
 
 // QueryResultItem Represents a single result from a similarity search.  Attributes:     id (str): The identifier of the retrieved item.     distance (Optional[float]): Distance from the query vector (smaller = more similar).     metadata (Optional[Dict[str, Any]]): Additional metadata for the result.     vector (Optional[List[float]]): The retrieved vector (if included in response).
 type QueryResultItem struct {
-	Id string `json:"id"`
-	Distance NullableFloat32 `json:"distance,omitempty"`
+	Id       string                 `json:"id"`
+	Distance NullableFloat32        `json:"distance,omitempty"`
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
-	Vector []float32 `json:"vector,omitempty"`
+	Vector   []float32              `json:"vector,omitempty"`
 }
 
 type _QueryResultItem QueryResultItem
@@ -103,6 +103,7 @@ func (o *QueryResultItem) HasDistance() bool {
 func (o *QueryResultItem) SetDistance(v float32) {
 	o.Distance.Set(&v)
 }
+
 // SetDistanceNil sets the value for Distance to be an explicit nil
 func (o *QueryResultItem) SetDistanceNil() {
 	o.Distance.Set(nil)
@@ -180,7 +181,7 @@ func (o *QueryResultItem) SetVector(v []float32) {
 }
 
 func (o QueryResultItem) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -215,10 +216,10 @@ func (o *QueryResultItem) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err;
+		return err
 	}
 
-	for _, requiredProperty := range(requiredProperties) {
+	for _, requiredProperty := range requiredProperties {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -227,7 +228,7 @@ func (o *QueryResultItem) UnmarshalJSON(data []byte) (err error) {
 	varQueryResultItem := _QueryResultItem{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	
+
 	err = decoder.Decode(&varQueryResultItem)
 
 	if err != nil {
@@ -274,5 +275,3 @@ func (v *NullableQueryResultItem) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

@@ -11,8 +11,8 @@ API version: 0.15.0
 package internal
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -21,13 +21,13 @@ var _ MappedNullable = &IndexTrainingStatusResponseModel{}
 
 // IndexTrainingStatusResponseModel Response model for retrieving the training status of indexes.  Attributes:     training_indexes (List[str]): List of index names currently being trained or queued.     retrain_threshold (int): The multiplier used for the retraining threshold.     currently_training (Optional[str]): Name of the index currently being trained.     queued_indexes (List[str]): List of indexes queued for training.     worker_running (bool): Whether the training worker thread is running.     worker_pid (int): Deprecated - kept for backward compatibility with SDK.     global_training (Dict[str, Any]): Deprecated - kept for backward compatibility with SDK.
 type IndexTrainingStatusResponseModel struct {
-	TrainingIndexes []string `json:"training_indexes"`
-	RetrainThreshold int32 `json:"retrain_threshold"`
-	CurrentlyTraining NullableString `json:"currently_training,omitempty"`
-	QueuedIndexes []string `json:"queued_indexes,omitempty"`
-	WorkerRunning *bool `json:"worker_running,omitempty"`
-	WorkerPid *int32 `json:"worker_pid,omitempty"`
-	GlobalTraining map[string]interface{} `json:"global_training,omitempty"`
+	TrainingIndexes   []string               `json:"training_indexes"`
+	RetrainThreshold  int32                  `json:"retrain_threshold"`
+	CurrentlyTraining NullableString         `json:"currently_training,omitempty"`
+	QueuedIndexes     []string               `json:"queued_indexes,omitempty"`
+	WorkerRunning     *bool                  `json:"worker_running,omitempty"`
+	WorkerPid         *int32                 `json:"worker_pid,omitempty"`
+	GlobalTraining    map[string]interface{} `json:"global_training,omitempty"`
 }
 
 type _IndexTrainingStatusResponseModel IndexTrainingStatusResponseModel
@@ -139,6 +139,7 @@ func (o *IndexTrainingStatusResponseModel) HasCurrentlyTraining() bool {
 func (o *IndexTrainingStatusResponseModel) SetCurrentlyTraining(v string) {
 	o.CurrentlyTraining.Set(&v)
 }
+
 // SetCurrentlyTrainingNil sets the value for CurrentlyTraining to be an explicit nil
 func (o *IndexTrainingStatusResponseModel) SetCurrentlyTrainingNil() {
 	o.CurrentlyTraining.Set(nil)
@@ -278,7 +279,7 @@ func (o *IndexTrainingStatusResponseModel) SetGlobalTraining(v map[string]interf
 }
 
 func (o IndexTrainingStatusResponseModel) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -321,10 +322,10 @@ func (o *IndexTrainingStatusResponseModel) UnmarshalJSON(data []byte) (err error
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err;
+		return err
 	}
 
-	for _, requiredProperty := range(requiredProperties) {
+	for _, requiredProperty := range requiredProperties {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -333,7 +334,7 @@ func (o *IndexTrainingStatusResponseModel) UnmarshalJSON(data []byte) (err error
 	varIndexTrainingStatusResponseModel := _IndexTrainingStatusResponseModel{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	
+
 	err = decoder.Decode(&varIndexTrainingStatusResponseModel)
 
 	if err != nil {
@@ -380,5 +381,3 @@ func (v *NullableIndexTrainingStatusResponseModel) UnmarshalJSON(src []byte) err
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

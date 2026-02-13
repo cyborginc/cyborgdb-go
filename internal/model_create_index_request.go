@@ -11,8 +11,8 @@ API version: 0.15.0
 package internal
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -25,9 +25,9 @@ type CreateIndexRequest struct {
 	// 32-byte encryption key as hex string
 	IndexKey string `json:"index_key"`
 	// ID name
-	IndexName string `json:"index_name"`
+	IndexName      string         `json:"index_name"`
 	EmbeddingModel NullableString `json:"embedding_model,omitempty"`
-	Metric NullableString `json:"metric,omitempty"`
+	Metric         NullableString `json:"metric,omitempty"`
 }
 
 type _CreateIndexRequest CreateIndexRequest
@@ -83,6 +83,7 @@ func (o *CreateIndexRequest) HasIndexConfig() bool {
 func (o *CreateIndexRequest) SetIndexConfig(v IndexConfig) {
 	o.IndexConfig.Set(&v)
 }
+
 // SetIndexConfigNil sets the value for IndexConfig to be an explicit nil
 func (o *CreateIndexRequest) SetIndexConfigNil() {
 	o.IndexConfig.Set(nil)
@@ -173,6 +174,7 @@ func (o *CreateIndexRequest) HasEmbeddingModel() bool {
 func (o *CreateIndexRequest) SetEmbeddingModel(v string) {
 	o.EmbeddingModel.Set(&v)
 }
+
 // SetEmbeddingModelNil sets the value for EmbeddingModel to be an explicit nil
 func (o *CreateIndexRequest) SetEmbeddingModelNil() {
 	o.EmbeddingModel.Set(nil)
@@ -215,6 +217,7 @@ func (o *CreateIndexRequest) HasMetric() bool {
 func (o *CreateIndexRequest) SetMetric(v string) {
 	o.Metric.Set(&v)
 }
+
 // SetMetricNil sets the value for Metric to be an explicit nil
 func (o *CreateIndexRequest) SetMetricNil() {
 	o.Metric.Set(nil)
@@ -226,7 +229,7 @@ func (o *CreateIndexRequest) UnsetMetric() {
 }
 
 func (o CreateIndexRequest) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -263,10 +266,10 @@ func (o *CreateIndexRequest) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err;
+		return err
 	}
 
-	for _, requiredProperty := range(requiredProperties) {
+	for _, requiredProperty := range requiredProperties {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -275,7 +278,7 @@ func (o *CreateIndexRequest) UnmarshalJSON(data []byte) (err error) {
 	varCreateIndexRequest := _CreateIndexRequest{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	
+
 	err = decoder.Decode(&varCreateIndexRequest)
 
 	if err != nil {
@@ -322,5 +325,3 @@ func (v *NullableCreateIndexRequest) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

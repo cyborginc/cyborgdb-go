@@ -11,8 +11,8 @@ API version: 0.15.0
 package internal
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -24,12 +24,12 @@ type TrainRequest struct {
 	// 32-byte encryption key as hex string
 	IndexKey string `json:"index_key"`
 	// ID name
-	IndexName string `json:"index_name"`
-	NLists NullableInt32 `json:"n_lists,omitempty"`
-	BatchSize NullableInt32 `json:"batch_size,omitempty"`
-	MaxIters NullableInt32 `json:"max_iters,omitempty"`
+	IndexName string          `json:"index_name"`
+	NLists    NullableInt32   `json:"n_lists,omitempty"`
+	BatchSize NullableInt32   `json:"batch_size,omitempty"`
+	MaxIters  NullableInt32   `json:"max_iters,omitempty"`
 	Tolerance NullableFloat32 `json:"tolerance,omitempty"`
-	MaxMemory NullableInt32 `json:"max_memory,omitempty"`
+	MaxMemory NullableInt32   `json:"max_memory,omitempty"`
 }
 
 type _TrainRequest TrainRequest
@@ -133,6 +133,7 @@ func (o *TrainRequest) HasNLists() bool {
 func (o *TrainRequest) SetNLists(v int32) {
 	o.NLists.Set(&v)
 }
+
 // SetNListsNil sets the value for NLists to be an explicit nil
 func (o *TrainRequest) SetNListsNil() {
 	o.NLists.Set(nil)
@@ -175,6 +176,7 @@ func (o *TrainRequest) HasBatchSize() bool {
 func (o *TrainRequest) SetBatchSize(v int32) {
 	o.BatchSize.Set(&v)
 }
+
 // SetBatchSizeNil sets the value for BatchSize to be an explicit nil
 func (o *TrainRequest) SetBatchSizeNil() {
 	o.BatchSize.Set(nil)
@@ -217,6 +219,7 @@ func (o *TrainRequest) HasMaxIters() bool {
 func (o *TrainRequest) SetMaxIters(v int32) {
 	o.MaxIters.Set(&v)
 }
+
 // SetMaxItersNil sets the value for MaxIters to be an explicit nil
 func (o *TrainRequest) SetMaxItersNil() {
 	o.MaxIters.Set(nil)
@@ -259,6 +262,7 @@ func (o *TrainRequest) HasTolerance() bool {
 func (o *TrainRequest) SetTolerance(v float32) {
 	o.Tolerance.Set(&v)
 }
+
 // SetToleranceNil sets the value for Tolerance to be an explicit nil
 func (o *TrainRequest) SetToleranceNil() {
 	o.Tolerance.Set(nil)
@@ -301,6 +305,7 @@ func (o *TrainRequest) HasMaxMemory() bool {
 func (o *TrainRequest) SetMaxMemory(v int32) {
 	o.MaxMemory.Set(&v)
 }
+
 // SetMaxMemoryNil sets the value for MaxMemory to be an explicit nil
 func (o *TrainRequest) SetMaxMemoryNil() {
 	o.MaxMemory.Set(nil)
@@ -312,7 +317,7 @@ func (o *TrainRequest) UnsetMaxMemory() {
 }
 
 func (o TrainRequest) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -355,10 +360,10 @@ func (o *TrainRequest) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err;
+		return err
 	}
 
-	for _, requiredProperty := range(requiredProperties) {
+	for _, requiredProperty := range requiredProperties {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -367,7 +372,7 @@ func (o *TrainRequest) UnmarshalJSON(data []byte) (err error) {
 	varTrainRequest := _TrainRequest{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	
+
 	err = decoder.Decode(&varTrainRequest)
 
 	if err != nil {
@@ -414,5 +419,3 @@ func (v *NullableTrainRequest) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

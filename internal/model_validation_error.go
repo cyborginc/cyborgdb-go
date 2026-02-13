@@ -11,8 +11,8 @@ API version: 0.15.0
 package internal
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -21,11 +21,11 @@ var _ MappedNullable = &ValidationError{}
 
 // ValidationError struct for ValidationError
 type ValidationError struct {
-	Loc []ValidationErrorLocInner `json:"loc"`
-	Msg string `json:"msg"`
-	Type string `json:"type"`
-	Input interface{} `json:"input,omitempty"`
-	Ctx map[string]interface{} `json:"ctx,omitempty"`
+	Loc   []ValidationErrorLocInner `json:"loc"`
+	Msg   string                    `json:"msg"`
+	Type  string                    `json:"type"`
+	Input interface{}               `json:"input,omitempty"`
+	Ctx   map[string]interface{}    `json:"ctx,omitempty"`
 }
 
 type _ValidationError ValidationError
@@ -188,7 +188,7 @@ func (o *ValidationError) SetCtx(v map[string]interface{}) {
 }
 
 func (o ValidationError) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -224,10 +224,10 @@ func (o *ValidationError) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err;
+		return err
 	}
 
-	for _, requiredProperty := range(requiredProperties) {
+	for _, requiredProperty := range requiredProperties {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -236,7 +236,7 @@ func (o *ValidationError) UnmarshalJSON(data []byte) (err error) {
 	varValidationError := _ValidationError{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	
+
 	err = decoder.Decode(&varValidationError)
 
 	if err != nil {
@@ -283,5 +283,3 @@ func (v *NullableValidationError) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

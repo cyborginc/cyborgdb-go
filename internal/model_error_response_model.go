@@ -11,8 +11,8 @@ API version: 0.15.0
 package internal
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -21,8 +21,8 @@ var _ MappedNullable = &ErrorResponseModel{}
 
 // ErrorResponseModel Standard error response model.  Attributes:     status_code (int): HTTP status code of the error.     detail (str): A detailed message describing the error.
 type ErrorResponseModel struct {
-	StatusCode int32 `json:"status_code"`
-	Detail string `json:"detail"`
+	StatusCode int32  `json:"status_code"`
+	Detail     string `json:"detail"`
 }
 
 type _ErrorResponseModel ErrorResponseModel
@@ -95,7 +95,7 @@ func (o *ErrorResponseModel) SetDetail(v string) {
 }
 
 func (o ErrorResponseModel) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -123,10 +123,10 @@ func (o *ErrorResponseModel) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err;
+		return err
 	}
 
-	for _, requiredProperty := range(requiredProperties) {
+	for _, requiredProperty := range requiredProperties {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -135,7 +135,7 @@ func (o *ErrorResponseModel) UnmarshalJSON(data []byte) (err error) {
 	varErrorResponseModel := _ErrorResponseModel{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	
+
 	err = decoder.Decode(&varErrorResponseModel)
 
 	if err != nil {
@@ -182,5 +182,3 @@ func (v *NullableErrorResponseModel) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-

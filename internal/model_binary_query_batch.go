@@ -11,8 +11,8 @@ API version: 0.15.0
 package internal
 
 import (
-	"encoding/json"
 	"bytes"
+	"encoding/json"
 	"fmt"
 )
 
@@ -22,7 +22,7 @@ var _ MappedNullable = &BinaryQueryBatch{}
 // BinaryQueryBatch Represents a batch of query vectors in binary format for efficient transfer.  Attributes:     vectors_b64 (str): Base64-encoded float32 numpy array (shape: n_queries x dimension).     dimension (int): The dimension of each vector.
 type BinaryQueryBatch struct {
 	VectorsB64 string `json:"vectors_b64"`
-	Dimension int32 `json:"dimension"`
+	Dimension  int32  `json:"dimension"`
 }
 
 type _BinaryQueryBatch BinaryQueryBatch
@@ -95,7 +95,7 @@ func (o *BinaryQueryBatch) SetDimension(v int32) {
 }
 
 func (o BinaryQueryBatch) MarshalJSON() ([]byte, error) {
-	toSerialize,err := o.ToMap()
+	toSerialize, err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -123,10 +123,10 @@ func (o *BinaryQueryBatch) UnmarshalJSON(data []byte) (err error) {
 	err = json.Unmarshal(data, &allProperties)
 
 	if err != nil {
-		return err;
+		return err
 	}
 
-	for _, requiredProperty := range(requiredProperties) {
+	for _, requiredProperty := range requiredProperties {
 		if _, exists := allProperties[requiredProperty]; !exists {
 			return fmt.Errorf("no value given for required property %v", requiredProperty)
 		}
@@ -135,7 +135,7 @@ func (o *BinaryQueryBatch) UnmarshalJSON(data []byte) (err error) {
 	varBinaryQueryBatch := _BinaryQueryBatch{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
-	
+
 	err = decoder.Decode(&varBinaryQueryBatch)
 
 	if err != nil {
@@ -182,5 +182,3 @@ func (v *NullableBinaryQueryBatch) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
-
-
