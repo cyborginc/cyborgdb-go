@@ -59,6 +59,14 @@ jobs:
         with:
           python-version: '3.13'
           
+      - name: Load secrets from 1Password
+        uses: 1password/load-secrets-action@v2
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_TOKEN }}
+          PIP_EXTRA_INDEX_URL: "op://CyborgDB/CyborgDB Dev/PIP_EXTRA_INDEX_URL"
+
       - name: Checkout cyborgdb-service repository
         uses: actions/checkout@v4
         with:
@@ -75,11 +83,11 @@ jobs:
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           # Install optional test dependencies
           pip install sentence-transformers
-          
+
       - name: Install cyborgdb-service from source
         run: |
           # Install the server from the cloned repository
-          pip install ./cyborgdb-service
+          pip install ./cyborgdb-service --extra-index-url "${PIP_EXTRA_INDEX_URL}"
 
       ## TODO - Add a test for Lite version
 
