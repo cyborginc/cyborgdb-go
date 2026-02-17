@@ -185,6 +185,23 @@ func (e *EncryptedIndex) CheckTrainingStatus(ctx context.Context) (bool, error) 
 	return isTraining, nil
 }
 
+// checkAndInvalidateTrainingCache checks if this index is in the training list
+// and invalidates the cached training status if so. This is called after upserts
+// to handle auto-training triggers.
+func (e *EncryptedIndex) checkAndInvalidateTrainingCache(ctx context.Context) {
+	result, _, err := e.client.APIClient.DefaultAPI.GetTrainingStatusV1IndexesTrainingStatusGet(ctx).Execute()
+	if err != nil || result == nil {
+		return
+	}
+
+	for _, idx := range result.TrainingIndexes {
+		if idx == e.indexName {
+			e.trained = false
+			return
+		}
+	}
+}
+
 // Upsert inserts new vectors or updates existing ones in the index.
 //
 // Vector data is encrypted end-to-end before transmission. If a vector ID
@@ -238,7 +255,14 @@ func (e *EncryptedIndex) upsertItems(ctx context.Context, items []VectorItem) er
 	_, _, err := e.client.APIClient.DefaultAPI.UpsertVectorsV1VectorsUpsertPost(ctx).
 		UpsertRequest(req).
 		Execute()
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Check if auto-training was triggered by seeing if the index is now in the training list
+	e.checkAndInvalidateTrainingCache(ctx)
+
+	return nil
 }
 
 // UpsertVectors inserts vectors using separate ID and vector arrays.
@@ -713,7 +737,14 @@ func (e *EncryptedIndex) upsertBinary(ctx context.Context, params BinaryUpsertPa
 	_, _, err := e.client.APIClient.DefaultAPI.UpsertVectorsBinaryV1VectorsUpsertBinaryPost(ctx).
 		BinaryUpsertRequest(req).
 		Execute()
-	return err
+	if err != nil {
+		return err
+	}
+
+	// Check if auto-training was triggered by seeing if the index is now in the training list
+	e.checkAndInvalidateTrainingCache(ctx)
+
+	return nil
 }
 
 // queryBinary performs similarity search using binary format for query vectors.
