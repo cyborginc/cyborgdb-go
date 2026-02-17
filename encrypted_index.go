@@ -48,6 +48,12 @@ var (
 
 	// ErrContentsLengthMismatch is returned when contents length doesn't match IDs length.
 	ErrContentsLengthMismatch = errors.New("contents length must match IDs length")
+
+	// ErrUnsupportedUpsertType is returned when Upsert receives an unsupported input type.
+	ErrUnsupportedUpsertType = errors.New("unsupported upsert input type")
+
+	// ErrUnsupportedQueryType is returned when Query receives an unsupported params type.
+	ErrUnsupportedQueryType = errors.New("unsupported query params type")
 )
 
 // EncryptedIndex provides a handle for performing operations on an encrypted vector index.
@@ -218,7 +224,7 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, input any) error {
 	case BinaryUpsertParams:
 		return e.upsertBinary(ctx, v)
 	default:
-		return fmt.Errorf("unsupported upsert input type: %T, expected []VectorItem or BinaryUpsertParams", input)
+		return fmt.Errorf("%w: %T, expected []VectorItem or BinaryUpsertParams", ErrUnsupportedUpsertType, input)
 	}
 }
 
@@ -316,7 +322,7 @@ func (e *EncryptedIndex) Query(ctx context.Context, params any) (*QueryResponse,
 	case BinaryQueryParams:
 		return e.queryBinary(ctx, v)
 	default:
-		return nil, fmt.Errorf("unsupported query params type: %T, expected QueryParams or BinaryQueryParams", params)
+		return nil, fmt.Errorf("%w: %T, expected QueryParams or BinaryQueryParams", ErrUnsupportedQueryType, params)
 	}
 }
 
