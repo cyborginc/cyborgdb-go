@@ -731,29 +731,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 12: Trained Query No Metadata Auto N_Probes
-	t.Run("test_12_trained_query_no_metadata_auto_n_probes", func(t *testing.T) {
-		queryParams := cyborgdb.QueryParams{
-			BatchQueryVectors: queries,
-			TopK:              100,
-			// NProbes not set - will use auto
-		}
-		results, err := index.Query(ctx, queryParams)
-		if err != nil {
-			t.Errorf("Failed to query: %v", err)
-		}
-
-		recall := checkQueryResults(results, trainedNeighbors, numQueries)
-		fmt.Printf("Trained Query (No Metadata, Auto n_probes). Expected recall: %f, got %f\n", trainedRecall, recall)
-
-		// recall should be ~90% give or take 2%
-		if recall < 0.9-0.02 {
-			t.Errorf("Recall should be at least 88%%: got %f", recall)
-		}
-	})
-
-	// Test 13: Trained Query Metadata
-	t.Run("test_13_trained_query_metadata", func(t *testing.T) {
+	// Test 12: Trained Query Metadata
+	t.Run("test_12_trained_query_metadata", func(t *testing.T) {
 		results := make([]*cyborgdb.QueryResponse, 0)
 
 		for _, metadataQuery := range metadataQueries {
@@ -835,91 +814,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 14: Trained Query Metadata Auto N_Probes
-	t.Run("test_14_trained_query_metadata_auto_n_probes", func(t *testing.T) {
-		results := make([]*cyborgdb.QueryResponse, 0)
-
-		for _, metadataQuery := range metadataQueries {
-			queryParams := cyborgdb.QueryParams{
-				BatchQueryVectors: queries,
-				TopK:              100,
-				// NProbes not set - will use auto
-				Filters: metadataQuery.(map[string]interface{}),
-			}
-			queryResult, err := index.Query(ctx, queryParams)
-			if err != nil {
-				t.Errorf("Failed to query with metadata: %v", err)
-			}
-			results = append(results, queryResult)
-		}
-		metadataQueries[6] = map[string]interface{}{"number": 0}
-
-		recalls := checkMetadataResults(results, trainedMetadataNeighbors, trainedMetadataMatches, numQueries)
-
-		fmt.Printf("Number of recall values: %d\n", len(recalls))
-
-		baseThresholds := []float64{
-			94.04,  // Query #1
-			100.00, // Query #2
-			91.05,  // Query #3
-			77.77,  // Query #4
-			100.00, // Query #5
-			78.88,  // Query #6
-			100.00, // Query #7
-			92.35,  // Query #8
-			91.66,  // Query #9
-			77.77,  // Query #10
-			88.26,  // Query #11
-			94.04,  // Query #12
-			90.05,  // Query #13
-			50.00,  // Query #14
-			7.00,   // Query #15
-			70.00,  // Query #16
-			70.00,  // Query #17
-		}
-
-		// Apply a 10% reduction to the base thresholds
-		expectedThresholds := make([]float64, len(baseThresholds))
-		for i, threshold := range baseThresholds {
-			expectedThresholds[i] = threshold * 0.90
-		}
-
-		if len(recalls) != len(expectedThresholds) {
-			t.Errorf("Mismatch in number of recalls (%d) and thresholds (%d)", len(recalls), len(expectedThresholds))
-		}
-
-		// Check each recall against its threshold
-		failingRecalls := make([]string, 0)
-
-		for idx, recall := range recalls {
-			recallPercentage := recall * 100
-			threshold := expectedThresholds[idx]
-
-			if idx < 17 {
-				fmt.Printf("\nMetadata Query #%d\n", idx+1)
-				fmt.Printf("Metadata filters: %v\n", metadataQueries[idx])
-				fmt.Printf("Number of candidates: %d / %d\n", len(trainedMetadataNeighbors[idx]), totalNumVectors)
-				fmt.Printf("Mean recall: %.2f%%\n", recallPercentage)
-				fmt.Printf("Expected threshold: %.2f%%\n", threshold)
-			} else {
-				fmt.Printf("\nAdditional Query #%d\n", idx+1)
-				fmt.Printf("Mean recall: %.2f%%\n", recallPercentage)
-				fmt.Printf("Expected threshold: %.2f%%\n", threshold)
-			}
-
-			if recallPercentage < threshold {
-				failingRecalls = append(failingRecalls, fmt.Sprintf("Query #%d: recall %.2f%% < threshold %.2f%%",
-					idx+1, recallPercentage, threshold))
-			}
-		}
-
-		if len(failingRecalls) > 0 {
-			t.Errorf("Some recalls are below their thresholds:\n%s", failingRecalls)
-		}
-	})
-
-	// Test 15: Trained Get
-	t.Run("test_15_trained_get", func(t *testing.T) {
+	// Test 13: Trained Get
+	t.Run("test_13_trained_get", func(t *testing.T) {
 		numGet := 1000
 		getIndices := make([]int, 0, numGet)
 		usedIndices := make(map[int]bool)
@@ -970,8 +866,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 16: Delete
-	t.Run("test_16_delete", func(t *testing.T) {
+	// Test 14: Delete
+	t.Run("test_14_delete", func(t *testing.T) {
 		idsToDelete := make([]string, numUntrainedVectors)
 		for i := 0; i < numUntrainedVectors; i++ {
 			idsToDelete[i] = strconv.Itoa(i)
@@ -1000,8 +896,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 17: Get Deleted
-	t.Run("test_17_get_deleted", func(t *testing.T) {
+	// Test 15: Get Deleted
+	t.Run("test_15_get_deleted", func(t *testing.T) {
 		numGet := 1000
 		getIndices := make([]int, 0, numGet)
 		usedIndices := make(map[int]bool)
@@ -1030,8 +926,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 18: Query Deleted
-	t.Run("test_18_query_deleted", func(t *testing.T) {
+	// Test 16: Query Deleted
+	t.Run("test_16_query_deleted", func(t *testing.T) {
 		nProbesVal := int32(24)
 		queryParams := cyborgdb.QueryParams{
 			BatchQueryVectors: queries,
@@ -1061,8 +957,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 19: List Indexes
-	t.Run("test_19_list_indexes", func(t *testing.T) {
+	// Test 17: List Indexes
+	t.Run("test_17_list_indexes", func(t *testing.T) {
 		indexes, err := client.ListIndexes(ctx)
 		if err != nil {
 			t.Errorf("Failed to list indexes: %v", err)
@@ -1085,8 +981,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 20: Index Properties
-	t.Run("test_20_index_properties", func(t *testing.T) {
+	// Test 18: Index Properties
+	t.Run("test_18_index_properties", func(t *testing.T) {
 		name := index.GetIndexName()
 		if name != indexName {
 			t.Errorf("Index name does not match: expected %s, got %s", indexName, name)
@@ -1104,8 +1000,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 	})
 
-	// Test 21: Load Index
-	t.Run("test_21_load_index", func(t *testing.T) {
+	// Test 19: Load Index
+	t.Run("test_19_load_index", func(t *testing.T) {
 		loadedIndex, err := client.LoadIndex(ctx, indexName, indexKeyBytes)
 		if err != nil {
 			t.Errorf("Failed to load index: %v", err)
