@@ -586,7 +586,7 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 	defer cancel()
 
 	t.Run("UpsertWithItemsArrayFormat", func(t *testing.T) {
-		items := make([]cyborgdb.VectorItem, 2)
+		items := make(cyborgdb.VectorItems, 2)
 		expectedIDs := make(map[string]bool)
 		for i := 0; i < 2; i++ {
 			id := fmt.Sprintf("%d", i)
@@ -629,7 +629,7 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 	})
 
 	t.Run("UpsertWithItemsArrayAutoEmbed", func(t *testing.T) {
-		items := make([]cyborgdb.VectorItem, 3)
+		items := make(cyborgdb.VectorItems, 3)
 		expectedIDs := make(map[string]bool)
 		sampleTexts := []string{
 			"The quick brown fox jumps over the lazy dog",
@@ -679,7 +679,7 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 	})
 
 	t.Run("UpsertRemainingTestItems", func(t *testing.T) {
-		items := make([]cyborgdb.VectorItem, 8)
+		items := make(cyborgdb.VectorItems, 8)
 		expectedIDs := make(map[string]bool)
 		for i := 2; i < 10; i++ {
 			id := fmt.Sprintf("%d", i)
@@ -724,7 +724,7 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 	t.Run("UpsertWithParallelArraysFormat", func(t *testing.T) {
 		// Go SDK doesn't support separate ids/vectors arrays like Python/TS
 		// Use items array instead
-		items := make([]cyborgdb.VectorItem, 5)
+		items := make(cyborgdb.VectorItems, 5)
 		expectedIDs := make(map[string]bool)
 		for i := 10; i < 15; i++ {
 			id := fmt.Sprintf("%d", i)
@@ -767,7 +767,7 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 
 	t.Run("RejectVectorsWithWrongDimensions", func(t *testing.T) {
 		wrongVector := make([]float32, 64)
-		items := []cyborgdb.VectorItem{{
+		items := cyborgdb.VectorItems{{
 			Id:     "wrong-dim",
 			Vector: wrongVector,
 		}}
@@ -780,7 +780,7 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 
 	t.Run("RejectWhenNeitherItemsNorVectorsProvided", func(t *testing.T) {
 		// Test empty items array behavior
-		items := []cyborgdb.VectorItem{}
+		items := cyborgdb.VectorItems{}
 		err := testIndex.Upsert(ctx, items)
 		// Document actual SDK behavior for empty upsert
 		if err != nil {

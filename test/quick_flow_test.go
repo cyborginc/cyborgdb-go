@@ -312,7 +312,7 @@ func TestUnitFlow(t *testing.T) {
 
 	// Test 01: Untrained Upsert
 	t.Run("test_01_untrained_upsert", func(t *testing.T) {
-		items := make([]cyborgdb.VectorItem, numUntrainedVectors)
+		items := make(cyborgdb.VectorItems, numUntrainedVectors)
 		for i := 0; i < numUntrainedVectors; i++ {
 			items[i] = cyborgdb.VectorItem{
 				Id:       strconv.Itoa(i),
@@ -520,7 +520,7 @@ func TestUnitFlow(t *testing.T) {
 		// (RETRAIN_THRESHOLD=10000 means auto-train triggers when num_vectors > 10000)
 		autoTrainTrigger := 10001
 		numToUpsert := autoTrainTrigger - numUntrainedVectors
-		items := make([]cyborgdb.VectorItem, numToUpsert)
+		items := make(cyborgdb.VectorItems, numToUpsert)
 		for i := 0; i < numToUpsert; i++ {
 			idx := numUntrainedVectors + i
 			items[i] = cyborgdb.VectorItem{
@@ -590,7 +590,7 @@ func TestUnitFlow(t *testing.T) {
 		// Upsert remaining vectors (10001 to 49999) after auto-train
 		autoTrainTrigger := 10001
 		numToUpsert := totalNumVectors - autoTrainTrigger
-		items := make([]cyborgdb.VectorItem, numToUpsert)
+		items := make(cyborgdb.VectorItems, numToUpsert)
 		for i := 0; i < numToUpsert; i++ {
 			idx := autoTrainTrigger + i
 			items[i] = cyborgdb.VectorItem{

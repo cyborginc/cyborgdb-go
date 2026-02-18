@@ -48,12 +48,6 @@ var (
 
 	// ErrContentsLengthMismatch is returned when contents length doesn't match IDs length.
 	ErrContentsLengthMismatch = errors.New("contents length must match IDs length")
-
-	// ErrUnsupportedUpsertType is returned when Upsert receives an unsupported input type.
-	ErrUnsupportedUpsertType = errors.New("unsupported upsert input type")
-
-	// ErrUnsupportedQueryType is returned when Query receives an unsupported params type.
-	ErrUnsupportedQueryType = errors.New("unsupported query params type")
 )
 
 // EncryptedIndex provides a handle for performing operations on an encrypted vector index.
@@ -209,19 +203,19 @@ func (e *EncryptedIndex) checkAndInvalidateTrainingCache(ctx context.Context) {
 // This operation is idempotent.
 //
 // The input type determines the format used:
-//   - []VectorItem: Standard JSON format, suitable for small batches
+//   - VectorItems ([]VectorItem): Standard JSON format, suitable for small batches
 //   - BinaryUpsertParams: Binary format, more efficient for large batches
 //
 // Parameters:
 //   - ctx: Context for cancellation and timeouts
-//   - input: Either []VectorItem or BinaryUpsertParams
+//   - input: Either VectorItems or BinaryUpsertParams
 //
 // Returns:
 //   - error: Any error encountered during the operation
 //
-// Example with []VectorItem:
+// Example with VectorItems:
 //
-//	items := []VectorItem{
+//	items := VectorItems{
 //		{Id: "doc1", Vector: []float32{0.1, 0.2, 0.3}, Metadata: map[string]interface{}{"type": "document"}},
 //		{Id: "doc2", Vector: []float32{0.4, 0.5, 0.6}},
 //	}
@@ -234,19 +228,20 @@ func (e *EncryptedIndex) checkAndInvalidateTrainingCache(ctx context.Context) {
 //		Vectors: [][]float32{{0.1, 0.2, 0.3}, {0.4, 0.5, 0.6}},
 //	}
 //	err := index.Upsert(ctx, params)
-func (e *EncryptedIndex) Upsert(ctx context.Context, input any) error {
+func (e *EncryptedIndex) Upsert(ctx context.Context, input UpsertInput) error {
 	switch v := input.(type) {
-	case []VectorItem:
+	case VectorItems:
 		return e.upsertItems(ctx, v)
 	case BinaryUpsertParams:
-		return e.upsertBinary(ctx, v)
+		return e.UpsertBinary(ctx, v)
 	default:
-		return fmt.Errorf("%w: %T, expected []VectorItem or BinaryUpsertParams", ErrUnsupportedUpsertType, input)
+		// This should never happen due to the sealed interface
+		return errors.New("unsupported upsert input type")
 	}
 }
 
 // upsertItems handles standard JSON format upserts.
-func (e *EncryptedIndex) upsertItems(ctx context.Context, items []VectorItem) error {
+func (e *EncryptedIndex) upsertItems(ctx context.Context, items VectorItems) error {
 	req := internal.UpsertRequest{
 		IndexName: e.indexName,
 		IndexKey:  e.indexKey,
@@ -296,12 +291,12 @@ func (e *EncryptedIndex) UpsertVectors(ctx context.Context, ids []string, vector
 		Vectors:  vectors,
 		Metadata: metadata,
 	}
-	return e.upsertBinary(ctx, params)
+	return e.UpsertBinary(ctx, params)
 }
 
 // Query performs similarity search to find the nearest neighbors to query vector(s).
 //
-// The params type determines the query format:
+// The input type determines the query format:
 //   - QueryParams: Standard format supporting single vector, batch vectors, or content queries
 //   - BinaryQueryParams: Binary format, more efficient for large batch queries
 //
@@ -316,7 +311,7 @@ func (e *EncryptedIndex) UpsertVectors(ctx context.Context, ids []string, vector
 //
 // Parameters:
 //   - ctx: Context for cancellation and timeouts
-//   - params: Either QueryParams or BinaryQueryParams
+//   - input: Either QueryParams or BinaryQueryParams
 //
 // Returns:
 //   - *QueryResponse: Search results with IDs, distances, and requested fields
@@ -339,14 +334,15 @@ func (e *EncryptedIndex) UpsertVectors(ctx context.Context, ids []string, vector
 //		TopK: 10,
 //	}
 //	results, err := index.Query(ctx, params)
-func (e *EncryptedIndex) Query(ctx context.Context, params any) (*QueryResponse, error) {
-	switch v := params.(type) {
+func (e *EncryptedIndex) Query(ctx context.Context, input QueryInput) (*QueryResponse, error) {
+	switch v := input.(type) {
 	case QueryParams:
 		return e.queryParams(ctx, v)
 	case BinaryQueryParams:
-		return e.queryBinary(ctx, v)
+		return e.QueryBinary(ctx, v)
 	default:
-		return nil, fmt.Errorf("%w: %T, expected QueryParams or BinaryQueryParams", ErrUnsupportedQueryType, params)
+		// This should never happen due to the sealed interface
+		return nil, errors.New("unsupported query input type")
 	}
 }
 
@@ -675,8 +671,8 @@ func vectorsToBase64(vectors [][]float32) string {
 //			nil, // No metadata for doc3
 //		},
 //	}
-//	err := index.Upsert(ctx, params)
-func (e *EncryptedIndex) upsertBinary(ctx context.Context, params BinaryUpsertParams) error {
+//	err := index.UpsertBinary(ctx, params)
+func (e *EncryptedIndex) UpsertBinary(ctx context.Context, params BinaryUpsertParams) error {
 	if len(params.IDs) == 0 {
 		return ErrEmptyIDs
 	}
@@ -747,9 +743,27 @@ func (e *EncryptedIndex) upsertBinary(ctx context.Context, params BinaryUpsertPa
 	return nil
 }
 
-// queryBinary performs similarity search using binary format for query vectors.
-// This is called internally by Query when BinaryQueryParams is passed.
-func (e *EncryptedIndex) queryBinary(ctx context.Context, params BinaryQueryParams) (*QueryResponse, error) {
+// QueryBinary performs similarity search using binary format for query vectors.
+//
+// This method is more efficient than Query for large batch queries as vectors
+// are encoded in binary format, reducing payload size.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - params: BinaryQueryParams containing query vectors and search options
+//
+// Returns:
+//   - *QueryResponse: Search results with IDs, distances, and requested fields
+//   - error: Any error encountered during the search
+//
+// Example:
+//
+//	params := BinaryQueryParams{
+//		QueryVectors: [][]float32{{0.1, 0.2, 0.3}, {0.4, 0.5, 0.6}},
+//		TopK: 10,
+//	}
+//	results, err := index.QueryBinary(ctx, params)
+func (e *EncryptedIndex) QueryBinary(ctx context.Context, params BinaryQueryParams) (*QueryResponse, error) {
 	if len(params.QueryVectors) == 0 {
 		return nil, ErrEmptyQueryVectors
 	}

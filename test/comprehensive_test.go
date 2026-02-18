@@ -163,7 +163,7 @@ func TestIndexTypes(t *testing.T) {
 		}
 
 		testVectors := generateTestVectors(50, int(dimension))
-		items := make([]cyborgdb.VectorItem, len(testVectors))
+		items := make(cyborgdb.VectorItems, len(testVectors))
 		for i, vector := range testVectors {
 			items[i] = cyborgdb.VectorItem{
 				Id:       fmt.Sprintf("ivfpq_%d", i),
@@ -227,7 +227,7 @@ func TestIndexTypes(t *testing.T) {
 		}
 
 		testVectors := generateTestVectors(50, int(dimension))
-		items := make([]cyborgdb.VectorItem, len(testVectors))
+		items := make(cyborgdb.VectorItems, len(testVectors))
 		for i, vector := range testVectors {
 			items[i] = cyborgdb.VectorItem{
 				Id:       fmt.Sprintf("ivfsq_%d", i),
@@ -399,7 +399,7 @@ func TestComprehensiveErrorHandling(t *testing.T) {
 					vector[i] = float32(i) / 100.0
 				}
 
-				items := []cyborgdb.VectorItem{{
+				items := cyborgdb.VectorItems{{
 					Id:       fmt.Sprintf("test_%s", strings.ReplaceAll(tc.name, " ", "_")),
 					Vector:   vector,
 					Metadata: map[string]interface{}{},
@@ -485,7 +485,7 @@ func TestEdgeCasesStrict(t *testing.T) {
 			"array":    []int{1, 2, 3, 4, 5},
 		}
 
-		items := []cyborgdb.VectorItem{{
+		items := cyborgdb.VectorItems{{
 			Id:       "integrity_test",
 			Vector:   originalVector,
 			Metadata: originalMetadata,
@@ -556,7 +556,7 @@ func TestEdgeCasesStrict(t *testing.T) {
 					vector[j] += float32(id) / 1000.0
 				}
 
-				items := []cyborgdb.VectorItem{{
+				items := cyborgdb.VectorItems{{
 					Id:       fmt.Sprintf("concurrent_%d", id),
 					Vector:   vector,
 					Metadata: map[string]interface{}{"batch_id": id},
@@ -627,7 +627,7 @@ func TestEdgeCasesStrict(t *testing.T) {
 
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
-				items := []cyborgdb.VectorItem{{
+				items := cyborgdb.VectorItems{{
 					Id:       fmt.Sprintf("boundary_%s", strings.ReplaceAll(tc.name, " ", "_")),
 					Vector:   tc.vector,
 					Metadata: map[string]interface{}{"type": tc.name},
@@ -657,7 +657,7 @@ func TestEdgeCasesStrict(t *testing.T) {
 		for _, tc := range testCases {
 			t.Run(tc.name, func(t *testing.T) {
 				vector := generateTestVectors(1, 128)[0]
-				items := []cyborgdb.VectorItem{{
+				items := cyborgdb.VectorItems{{
 					Id:       fmt.Sprintf("metadata_%s", strings.ReplaceAll(tc.name, " ", "_")),
 					Vector:   vector,
 					Metadata: tc.metadata,
@@ -731,7 +731,7 @@ func TestBackendCompatibility(t *testing.T) {
 		defer func() { _ = index.DeleteIndex(ctx) }()
 
 		vector := generateTestVectors(1, 128)[0]
-		items := []cyborgdb.VectorItem{{
+		items := cyborgdb.VectorItems{{
 			Id:     "compatibility_test",
 			Vector: vector,
 		}}
@@ -776,7 +776,7 @@ func TestBackendCompatibility(t *testing.T) {
 		defer func() { _ = advancedIndex.DeleteIndex(ctx) }()
 
 		vectors := generateTestVectors(100, 128)
-		items := make([]cyborgdb.VectorItem, len(vectors))
+		items := make(cyborgdb.VectorItems, len(vectors))
 		for i, vector := range vectors {
 			items[i] = cyborgdb.VectorItem{
 				Id:     fmt.Sprintf("advanced_%d", i),

@@ -15,6 +15,33 @@ type GetResponse = internal.GetResponseModel
 // VectorItem represents a single vector with ID, vector data, and optional metadata.
 type VectorItem = internal.VectorItem
 
+// VectorItems is a slice of VectorItem used for type-safe upsert operations.
+type VectorItems []VectorItem
+
+// UpsertInput is implemented by types that can be passed to Upsert.
+// Valid types are VectorItems and BinaryUpsertParams.
+type UpsertInput interface {
+	isUpsertInput()
+}
+
+// QueryInput is implemented by types that can be passed to Query.
+// Valid types are QueryParams and BinaryQueryParams.
+type QueryInput interface {
+	isQueryInput()
+}
+
+// Implement UpsertInput for VectorItems
+func (VectorItems) isUpsertInput() {}
+
+// Implement UpsertInput for BinaryUpsertParams
+func (BinaryUpsertParams) isUpsertInput() {}
+
+// Implement QueryInput for QueryParams
+func (QueryParams) isQueryInput() {}
+
+// Implement QueryInput for BinaryQueryParams
+func (BinaryQueryParams) isQueryInput() {}
+
 // QueryResponse represents the response from similarity search operations.
 type QueryResponse = internal.QueryResponse
 
