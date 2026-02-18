@@ -320,14 +320,14 @@ func IndexIVFPQ(dimension int32, pqDim int32, pqBits int32) *indexIVFPQ {
 //
 // Parameters:
 //   - dimension: The dimensionality of vectors that will be stored
-//   - sqBits: Bits per dimension for scalar quantization (typically 8)
+//   - sqBits: Bits per dimension for scalar quantization (typically 16)
 //
 // Returns:
 //   - *indexIVFSQ: IVFSQ index configuration implementing IndexModel
 //
 // Usage:
 //
-//	config := IndexIVFSQ(768, 8) // 768-dim vectors, 8 bits per dimension
+//	config := IndexIVFSQ(768, 16) // 768-dim vectors, 16 bits per dimension
 func IndexIVFSQ(dimension int32, sqBits int32) *indexIVFSQ {
 	model := &internal.IndexIVFSQModel{}
 	model.SetDimension(dimension)

@@ -6,7 +6,7 @@ Name | Type | Description | Notes
 ------------ | ------------- | ------------- | -------------
 **Dimension** | Pointer to **NullableInt32** |  | [optional]
 **Type** | Pointer to **string** |  | [optional] [default to "ivfsq"]
-**SqBits** | Pointer to **int32** |  | [optional] [default to 8]
+**SqBits** | Pointer to **int32** |  | [optional] [default to 16]
 
 ## Methods
 
