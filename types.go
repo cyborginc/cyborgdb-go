@@ -30,16 +30,16 @@ type QueryInput interface {
 	isQueryInput()
 }
 
-// Implement UpsertInput for VectorItems
+// isUpsertInput implements UpsertInput for VectorItems.
 func (VectorItems) isUpsertInput() {}
 
-// Implement UpsertInput for BinaryUpsertParams
+// isUpsertInput implements UpsertInput for BinaryUpsertParams.
 func (BinaryUpsertParams) isUpsertInput() {}
 
-// Implement QueryInput for QueryParams
+// isQueryInput implements QueryInput for QueryParams.
 func (QueryParams) isQueryInput() {}
 
-// Implement QueryInput for BinaryQueryParams
+// isQueryInput implements QueryInput for BinaryQueryParams.
 func (BinaryQueryParams) isQueryInput() {}
 
 // QueryResponse represents the response from similarity search operations.

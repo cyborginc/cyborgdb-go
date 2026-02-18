@@ -48,6 +48,12 @@ var (
 
 	// ErrContentsLengthMismatch is returned when contents length doesn't match IDs length.
 	ErrContentsLengthMismatch = errors.New("contents length must match IDs length")
+
+	// ErrUnsupportedUpsertType is returned when Upsert receives an unsupported input type.
+	ErrUnsupportedUpsertType = errors.New("unsupported upsert input type")
+
+	// ErrUnsupportedQueryType is returned when Query receives an unsupported params type.
+	ErrUnsupportedQueryType = errors.New("unsupported query input type")
 )
 
 // EncryptedIndex provides a handle for performing operations on an encrypted vector index.
@@ -235,8 +241,8 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, input UpsertInput) error {
 	case BinaryUpsertParams:
 		return e.UpsertBinary(ctx, v)
 	default:
-		// This should never happen due to the sealed interface
-		return errors.New("unsupported upsert input type")
+		// This should never happen due to the sealed interface.
+		return ErrUnsupportedUpsertType
 	}
 }
 
@@ -341,8 +347,8 @@ func (e *EncryptedIndex) Query(ctx context.Context, input QueryInput) (*QueryRes
 	case BinaryQueryParams:
 		return e.QueryBinary(ctx, v)
 	default:
-		// This should never happen due to the sealed interface
-		return nil, errors.New("unsupported query input type")
+		// This should never happen due to the sealed interface.
+		return nil, ErrUnsupportedQueryType
 	}
 }
 
