@@ -17,11 +17,11 @@ import (
 // checks if the IndexIVFSQModel type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &IndexIVFSQModel{}
 
-// IndexIVFSQModel Model for configuring an IVFSQ (Inverted File with Scalar Quantization) index.  Attributes:     type (str): Index type identifier. Defaults to \"ivfsq\".     sq_bits (int): Number of bits per dimension for scalar quantization. Defaults to 8.
+// IndexIVFSQModel Model for configuring an IVFSQ (Inverted File with Scalar Quantization) index.  Attributes:     type (str): Index type identifier. Defaults to \"ivfsq\".     sq_bits (int): Number of bits per dimension for scalar quantization. Defaults to 16.
 type IndexIVFSQModel struct {
 	Dimension NullableInt32 `json:"dimension,omitempty"`
-	Type      *string       `json:"type,omitempty"`
-	SqBits    *int32        `json:"sq_bits,omitempty"`
+	Type *string `json:"type,omitempty"`
+	SqBits *int32 `json:"sq_bits,omitempty"`
 }
 
 // NewIndexIVFSQModel instantiates a new IndexIVFSQModel object
@@ -32,7 +32,7 @@ func NewIndexIVFSQModel() *IndexIVFSQModel {
 	this := IndexIVFSQModel{}
 	var type_ string = "ivfsq"
 	this.Type = &type_
-	var sqBits int32 = 8
+	var sqBits int32 = 16
 	this.SqBits = &sqBits
 	return &this
 }
@@ -44,7 +44,7 @@ func NewIndexIVFSQModelWithDefaults() *IndexIVFSQModel {
 	this := IndexIVFSQModel{}
 	var type_ string = "ivfsq"
 	this.Type = &type_
-	var sqBits int32 = 8
+	var sqBits int32 = 16
 	this.SqBits = &sqBits
 	return &this
 }
@@ -81,7 +81,6 @@ func (o *IndexIVFSQModel) HasDimension() bool {
 func (o *IndexIVFSQModel) SetDimension(v int32) {
 	o.Dimension.Set(&v)
 }
-
 // SetDimensionNil sets the value for Dimension to be an explicit nil
 func (o *IndexIVFSQModel) SetDimensionNil() {
 	o.Dimension.Set(nil)
@@ -157,7 +156,7 @@ func (o *IndexIVFSQModel) SetSqBits(v int32) {
 }
 
 func (o IndexIVFSQModel) MarshalJSON() ([]byte, error) {
-	toSerialize, err := o.ToMap()
+	toSerialize,err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
 	}
@@ -213,3 +212,5 @@ func (v *NullableIndexIVFSQModel) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }
+
+
