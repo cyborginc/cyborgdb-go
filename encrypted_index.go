@@ -5,22 +5,55 @@ package cyborgdb
 
 import (
 	"context"
+	"encoding/base64"
+	"encoding/binary"
+	"errors"
 	"fmt"
+	"math"
 
 	"github.com/cyborginc/cyborgdb-go/internal"
+)
+
+const (
+	// float32ByteSize is the number of bytes in a float32.
+	float32ByteSize = 4
 )
 
 var (
 	// ErrQueryVectorsInvalidType is returned when QueryParams contains invalid query vector types.
 	// This occurs when query vectors are not properly formatted as []float32 or [][]float32.
-	ErrQueryVectorsInvalidType = fmt.Errorf("queryVectors must be []float32 for single vector queries or [][]float32 for batch queries")
+	ErrQueryVectorsInvalidType = errors.New("queryVectors must be []float32 for single vector queries or [][]float32 for batch queries")
 
 	// ErrMissingQueryInput is returned when no query input is provided in QueryParams.
 	// At least one of QueryVector, BatchQueryVectors, or QueryContents must be specified.
-	ErrMissingQueryInput = fmt.Errorf("either queryVectors or queryContents must be provided")
+	ErrMissingQueryInput = errors.New("either queryVectors or queryContents must be provided")
 
 	// ErrUnexpectedTrainingStatus is returned when the training status response format is unexpected.
-	ErrUnexpectedTrainingStatus = fmt.Errorf("unexpected training status response format")
+	ErrUnexpectedTrainingStatus = errors.New("unexpected training status response format")
+
+	// ErrEmptyIDs is returned when IDs slice is empty.
+	ErrEmptyIDs = errors.New("IDs cannot be empty")
+
+	// ErrEmptyVectors is returned when vectors slice is empty.
+	ErrEmptyVectors = errors.New("vectors cannot be empty")
+
+	// ErrEmptyQueryVectors is returned when query vectors slice is empty.
+	ErrEmptyQueryVectors = errors.New("queryVectors cannot be empty")
+
+	// ErrIDsVectorsLengthMismatch is returned when IDs and vectors have different lengths.
+	ErrIDsVectorsLengthMismatch = errors.New("IDs length must match vectors length")
+
+	// ErrMetadataLengthMismatch is returned when metadata length doesn't match IDs length.
+	ErrMetadataLengthMismatch = errors.New("metadata length must match IDs length")
+
+	// ErrContentsLengthMismatch is returned when contents length doesn't match IDs length.
+	ErrContentsLengthMismatch = errors.New("contents length must match IDs length")
+
+	// ErrUnsupportedUpsertType is returned when Upsert receives an unsupported input type.
+	ErrUnsupportedUpsertType = errors.New("unsupported upsert input type")
+
+	// ErrUnsupportedQueryType is returned when Query receives an unsupported params type.
+	ErrUnsupportedQueryType = errors.New("unsupported query input type")
 )
 
 // EncryptedIndex provides a handle for performing operations on an encrypted vector index.
@@ -44,7 +77,7 @@ type EncryptedIndex struct {
 	// indexKey is the hex-encoded encryption key for end-to-end encryption
 	indexKey string
 
-	// indexType indicates the index algorithm ("ivf", "ivfflat", "ivfpq")
+	// indexType indicates the index algorithm ("ivfflat", "ivfpq", "ivfsq")
 	indexType string
 
 	// config holds the detailed index configuration, may be nil for loaded indexes
@@ -70,7 +103,7 @@ func (e *EncryptedIndex) GetIndexName() string { return e.indexName }
 // This is a cached value that doesn't require an API call.
 //
 // Returns:
-//   - string: Index type ("ivf", "ivfflat", or "ivfpq")
+//   - string: Index type ("ivfflat", "ivfpq", or "ivfsq")
 func (e *EncryptedIndex) GetIndexType() string { return e.indexType }
 
 // GetIndexConfig returns the detailed configuration of this index.
@@ -87,14 +120,31 @@ func (e *EncryptedIndex) GetIndexConfig() internal.IndexConfig {
 	return internal.IndexConfig{}
 }
 
-// IsTrained reports whether this index has been optimized through training.
+// IsTrained checks whether this index has been optimized through training.
 //
-// This is a cached value that doesn't require an API call. The value is
-// updated automatically when Train() completes successfully.
+// This method calls the describe endpoint to get the current training status,
+// matching the behavior of the Python and JavaScript SDKs.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
 //
 // Returns:
 //   - bool: true if the index has been trained, false otherwise
-func (e *EncryptedIndex) IsTrained() bool { return e.trained }
+//   - error: Any error encountered during the status check
+func (e *EncryptedIndex) IsTrained(ctx context.Context) (bool, error) {
+	describeReq := internal.IndexOperationRequest{
+		IndexName: e.indexName,
+		IndexKey:  e.indexKey,
+	}
+	resp, _, err := e.client.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
+		IndexOperationRequest(describeReq).
+		Execute()
+	if err != nil {
+		return false, fmt.Errorf("failed to get index training status: %w", err)
+	}
+	e.trained = resp.GetIsTrained()
+	return e.trained, nil
+}
 
 // CheckTrainingStatus queries the server to check if this index is currently being trained
 // and updates the cached training status if training has completed.
@@ -109,38 +159,47 @@ func (e *EncryptedIndex) CheckTrainingStatus(ctx context.Context) (bool, error) 
 		return false, fmt.Errorf("failed to get training status: %w", err)
 	}
 
-	// Parse the result to check if this index is being trained
-	if statusMap, ok := result.(map[string]interface{}); ok {
-		if trainingIndexes, ok := statusMap["training_indexes"].([]interface{}); ok {
-			isTraining := false
-			for _, idx := range trainingIndexes {
-				if idxName, ok := idx.(string); ok && idxName == e.indexName {
-					isTraining = true
-					break
-				}
-			}
-
-			// If not training anymore but was previously untrained, update the cached status
-			if !isTraining && !e.trained {
-				// Check if the index is actually trained by querying its info
-				describeReq := internal.IndexOperationRequest{
-					IndexName: e.indexName,
-					IndexKey:  e.indexKey,
-				}
-
-				resp, _, err := e.client.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
-					IndexOperationRequest(describeReq).
-					Execute()
-				if err == nil && resp != nil {
-					e.trained = resp.GetIsTrained()
-				}
-			}
-
-			return isTraining, nil
+	// Check if this index is being trained
+	isTraining := false
+	for _, idx := range result.TrainingIndexes {
+		if idx == e.indexName {
+			isTraining = true
+			break
 		}
 	}
 
-	return false, ErrUnexpectedTrainingStatus
+	// If not training anymore but was previously untrained, update the cached status
+	if !isTraining && !e.trained {
+		describeReq := internal.IndexOperationRequest{
+			IndexName: e.indexName,
+			IndexKey:  e.indexKey,
+		}
+		resp, _, err := e.client.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
+			IndexOperationRequest(describeReq).
+			Execute()
+		if err == nil && resp != nil {
+			e.trained = resp.GetIsTrained()
+		}
+	}
+
+	return isTraining, nil
+}
+
+// checkAndInvalidateTrainingCache checks if this index is in the training list
+// and invalidates the cached training status if so. This is called after upserts
+// to handle auto-training triggers.
+func (e *EncryptedIndex) checkAndInvalidateTrainingCache(ctx context.Context) {
+	result, _, err := e.client.APIClient.DefaultAPI.GetTrainingStatusV1IndexesTrainingStatusGet(ctx).Execute()
+	if err != nil || result == nil {
+		return
+	}
+
+	for _, idx := range result.TrainingIndexes {
+		if idx == e.indexName {
+			e.trained = false
+			return
+		}
+	}
 }
 
 // Upsert inserts new vectors or updates existing ones in the index.
@@ -149,45 +208,105 @@ func (e *EncryptedIndex) CheckTrainingStatus(ctx context.Context) (bool, error) 
 // already exists, it will be updated with the new vector data and metadata.
 // This operation is idempotent.
 //
+// The input type determines the format used:
+//   - VectorItems ([]VectorItem): Standard JSON format, suitable for small batches
+//   - BinaryUpsertParams: Binary format, more efficient for large batches
+//
 // Parameters:
 //   - ctx: Context for cancellation and timeouts
-//   - items: Slice of VectorItem containing ID, vector, and optional metadata
+//   - input: Either VectorItems or BinaryUpsertParams
 //
 // Returns:
 //   - error: Any error encountered during the operation
 //
-// Example:
+// Example with VectorItems:
 //
-//	items := []VectorItem{
+//	items := VectorItems{
 //		{Id: "doc1", Vector: []float32{0.1, 0.2, 0.3}, Metadata: map[string]interface{}{"type": "document"}},
 //		{Id: "doc2", Vector: []float32{0.4, 0.5, 0.6}},
 //	}
 //	err := index.Upsert(ctx, items)
-func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
+//
+// Example with BinaryUpsertParams:
+//
+//	params := BinaryUpsertParams{
+//		IDs:     []string{"doc1", "doc2"},
+//		Vectors: [][]float32{{0.1, 0.2, 0.3}, {0.4, 0.5, 0.6}},
+//	}
+//	err := index.Upsert(ctx, params)
+func (e *EncryptedIndex) Upsert(ctx context.Context, input UpsertInput) error {
+	switch v := input.(type) {
+	case VectorItems:
+		return e.upsertItems(ctx, v)
+	case BinaryUpsertParams:
+		return e.upsertBinary(ctx, v)
+	default:
+		// This should never happen due to the sealed interface.
+		return ErrUnsupportedUpsertType
+	}
+}
+
+// upsertItems handles standard JSON format upserts.
+func (e *EncryptedIndex) upsertItems(ctx context.Context, items VectorItems) error {
 	req := internal.UpsertRequest{
 		IndexName: e.indexName,
 		IndexKey:  e.indexKey,
 		Items:     items,
 	}
-	resp, _, err := e.client.APIClient.DefaultAPI.UpsertVectorsV1VectorsUpsertPost(ctx).
+	_, _, err := e.client.APIClient.DefaultAPI.UpsertVectorsV1VectorsUpsertPost(ctx).
 		UpsertRequest(req).
 		Execute()
 	if err != nil {
 		return err
 	}
 
-	// If training was triggered, we can note that the index is no longer trained
-	// (it will be retrained automatically)
-	if resp != nil && resp.HasTrainingTriggered() && resp.GetTrainingTriggered() {
-		e.trained = false
-	}
+	// Check if auto-training was triggered by seeing if the index is now in the training list
+	e.checkAndInvalidateTrainingCache(ctx)
 
 	return nil
 }
 
+// UpsertVectors inserts vectors using separate ID and vector arrays.
+//
+// This method automatically uses binary format for efficient transfer when
+// vectors are provided as a 2D slice. This is more efficient than regular
+// Upsert for large batches.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - ids: Slice of unique identifiers for each vector
+//   - vectors: 2D slice of float32 vectors, shape [n_vectors][dimension]
+//   - metadata: Optional metadata for each vector (can be nil)
+//
+// Returns:
+//   - error: Any error encountered during the operation
+//
+// Example:
+//
+//	ids := []string{"doc1", "doc2", "doc3"}
+//	vectors := [][]float32{
+//		{0.1, 0.2, 0.3},
+//		{0.4, 0.5, 0.6},
+//		{0.7, 0.8, 0.9},
+//	}
+//	err := index.UpsertVectors(ctx, ids, vectors, nil)
+func (e *EncryptedIndex) UpsertVectors(ctx context.Context, ids []string, vectors [][]float32, metadata []map[string]interface{}) error {
+	// Use binary format for efficiency
+	params := BinaryUpsertParams{
+		IDs:      ids,
+		Vectors:  vectors,
+		Metadata: metadata,
+	}
+	return e.upsertBinary(ctx, params)
+}
+
 // Query performs similarity search to find the nearest neighbors to query vector(s).
 //
-// This method supports three types of queries:
+// The input type determines the query format:
+//   - QueryParams: Standard format supporting single vector, batch vectors, or content queries
+//   - BinaryQueryParams: Binary format, more efficient for large batch queries
+//
+// QueryParams supports:
 //   - Single vector query: Set QueryParams.QueryVector
 //   - Batch vector query: Set QueryParams.BatchQueryVectors
 //   - Content-based query: Set QueryParams.QueryContents (if supported by server)
@@ -198,13 +317,13 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 //
 // Parameters:
 //   - ctx: Context for cancellation and timeouts
-//   - params: QueryParams specifying query vectors, filters, and result preferences
+//   - input: Either QueryParams or BinaryQueryParams
 //
 // Returns:
 //   - *QueryResponse: Search results with IDs, distances, and requested fields
 //   - error: Any error encountered during the search
 //
-// Example:
+// Example with QueryParams:
 //
 //	params := QueryParams{
 //		QueryVector: []float32{0.1, 0.2, 0.3},
@@ -213,8 +332,30 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, items []VectorItem) error {
 //		Filters: map[string]interface{}{"category": "document"},
 //	}
 //	results, err := index.Query(ctx, params)
-func (e *EncryptedIndex) Query(ctx context.Context, params QueryParams) (*QueryResponse, error) {
-	// Handle batch queries separately
+//
+// Example with BinaryQueryParams:
+//
+//	params := BinaryQueryParams{
+//		QueryVectors: [][]float32{{0.1, 0.2, 0.3}, {0.4, 0.5, 0.6}},
+//		TopK: 10,
+//	}
+//	results, err := index.Query(ctx, params)
+func (e *EncryptedIndex) Query(ctx context.Context, input QueryInput) (*QueryResponse, error) {
+	switch v := input.(type) {
+	case QueryParams:
+		return e.queryParams(ctx, v)
+	case BinaryQueryParams:
+		return e.queryBinary(ctx, v)
+	default:
+		// This should never happen due to the sealed interface.
+		return nil, ErrUnsupportedQueryType
+	}
+}
+
+// queryParams handles standard format queries.
+func (e *EncryptedIndex) queryParams(ctx context.Context, params QueryParams) (*QueryResponse, error) {
+	// Handle batch queries using BatchQueryRequest (non-binary format)
+	// For binary format with large batches, use QueryBinary() directly
 	if len(params.BatchQueryVectors) > 0 {
 		batchReq := internal.BatchQueryRequest{
 			IndexName:    e.indexName,
@@ -477,6 +618,197 @@ func (e *EncryptedIndex) ListIDs(ctx context.Context) (*ListIDsResponse, error) 
 	}
 	result, _, err := e.client.APIClient.DefaultAPI.ListIdsV1VectorsListIdsPost(ctx).
 		ListIDsRequest(req).
+		Execute()
+	return result, err
+}
+
+// vectorsToBase64 converts a 2D slice of float32 vectors to a base64-encoded string.
+// The vectors are flattened and encoded as little-endian float32 bytes.
+func vectorsToBase64(vectors [][]float32) string {
+	if len(vectors) == 0 {
+		return ""
+	}
+
+	// Calculate total number of floats
+	numVectors := len(vectors)
+	dimension := len(vectors[0])
+	totalFloats := numVectors * dimension
+
+	// Create byte buffer (float32ByteSize bytes per float32)
+	buf := make([]byte, totalFloats*float32ByteSize)
+
+	// Convert each float32 to little-endian bytes
+	offset := 0
+	for _, vec := range vectors {
+		for _, val := range vec {
+			binary.LittleEndian.PutUint32(buf[offset:], math.Float32bits(val))
+			offset += float32ByteSize
+		}
+	}
+
+	return base64.StdEncoding.EncodeToString(buf)
+}
+
+// UpsertBinary inserts new vectors or updates existing ones using binary format.
+//
+// This method is more efficient than regular Upsert for large batches as vectors
+// are sent as base64-encoded binary data instead of JSON arrays. This reduces
+// payload size and improves performance for large datasets.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - params: BinaryUpsertParams containing IDs, vectors, and optional metadata
+//
+// Returns:
+//   - error: Any error encountered during the operation
+//
+// Example:
+//
+//	params := BinaryUpsertParams{
+//		IDs: []string{"doc1", "doc2", "doc3"},
+//		Vectors: [][]float32{
+//			{0.1, 0.2, 0.3},
+//			{0.4, 0.5, 0.6},
+//			{0.7, 0.8, 0.9},
+//		},
+//		Metadata: []map[string]interface{}{
+//			{"type": "document"},
+//			{"type": "article"},
+//			nil, // No metadata for doc3
+//		},
+//	}
+//	err := index.upsertBinary(ctx, params)
+func (e *EncryptedIndex) upsertBinary(ctx context.Context, params BinaryUpsertParams) error {
+	if len(params.IDs) == 0 {
+		return ErrEmptyIDs
+	}
+	if len(params.Vectors) == 0 {
+		return ErrEmptyVectors
+	}
+	if len(params.IDs) != len(params.Vectors) {
+		return fmt.Errorf("%w: got %d IDs and %d vectors", ErrIDsVectorsLengthMismatch, len(params.IDs), len(params.Vectors))
+	}
+	if len(params.Metadata) > 0 && len(params.Metadata) != len(params.IDs) {
+		return fmt.Errorf("%w: got %d metadata and %d IDs", ErrMetadataLengthMismatch, len(params.Metadata), len(params.IDs))
+	}
+	if len(params.Contents) > 0 && len(params.Contents) != len(params.IDs) {
+		return fmt.Errorf("%w: got %d contents and %d IDs", ErrContentsLengthMismatch, len(params.Contents), len(params.IDs))
+	}
+
+	// Get dimension from first vector
+	dimension := int32(len(params.Vectors[0]))
+
+	// Convert vectors to base64
+	vectorsB64 := vectorsToBase64(params.Vectors)
+
+	// Build the batch
+	batch := internal.BinaryVectorBatch{
+		Ids:        params.IDs,
+		VectorsB64: vectorsB64,
+		Dimension:  dimension,
+	}
+
+	// Add metadata if provided
+	if len(params.Metadata) > 0 {
+		metadata := make([]*map[string]interface{}, len(params.Metadata))
+		for i, m := range params.Metadata {
+			if m != nil {
+				metadata[i] = &m
+			}
+		}
+		batch.Metadata = metadata
+	}
+
+	// Add contents if provided
+	if len(params.Contents) > 0 {
+		contents := make([]internal.BinaryVectorBatchContentsInner, len(params.Contents))
+		for i, c := range params.Contents {
+			if c != "" {
+				contents[i] = internal.BinaryVectorBatchContentsInner{String: &c}
+			}
+		}
+		batch.Contents = contents
+	}
+
+	req := internal.BinaryUpsertRequest{
+		IndexName: e.indexName,
+		IndexKey:  e.indexKey,
+		Batch:     batch,
+	}
+
+	_, _, err := e.client.APIClient.DefaultAPI.UpsertVectorsBinaryV1VectorsUpsertBinaryPost(ctx).
+		BinaryUpsertRequest(req).
+		Execute()
+	if err != nil {
+		return err
+	}
+
+	// Check if auto-training was triggered by seeing if the index is now in the training list
+	e.checkAndInvalidateTrainingCache(ctx)
+
+	return nil
+}
+
+// QueryBinary performs similarity search using binary format for query vectors.
+//
+// This method is more efficient than Query for large batch queries as vectors
+// are encoded in binary format, reducing payload size.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - params: BinaryQueryParams containing query vectors and search options
+//
+// Returns:
+//   - *QueryResponse: Search results with IDs, distances, and requested fields
+//   - error: Any error encountered during the search
+//
+// Example:
+//
+//	params := BinaryQueryParams{
+//		QueryVectors: [][]float32{{0.1, 0.2, 0.3}, {0.4, 0.5, 0.6}},
+//		TopK: 10,
+//	}
+//	results, err := index.queryBinary(ctx, params)
+func (e *EncryptedIndex) queryBinary(ctx context.Context, params BinaryQueryParams) (*QueryResponse, error) {
+	if len(params.QueryVectors) == 0 {
+		return nil, ErrEmptyQueryVectors
+	}
+
+	// Get dimension from first vector
+	dimension := int32(len(params.QueryVectors[0]))
+
+	// Convert vectors to base64
+	vectorsB64 := vectorsToBase64(params.QueryVectors)
+
+	// Build the batch
+	batch := internal.BinaryQueryBatch{
+		VectorsB64: vectorsB64,
+		Dimension:  dimension,
+	}
+
+	req := internal.BinaryQueryRequest{
+		IndexName: e.indexName,
+		IndexKey:  e.indexKey,
+		Batch:     batch,
+		Filters:   params.Filters,
+		Include:   params.Include,
+	}
+
+	// Handle optional fields
+	if params.TopK != 0 {
+		req.TopK = *internal.NewNullableInt32(&params.TopK)
+	}
+
+	if params.NProbes != nil {
+		req.NProbes = *internal.NewNullableInt32(params.NProbes)
+	}
+
+	if params.Greedy != nil {
+		req.Greedy = *internal.NewNullableBool(params.Greedy)
+	}
+
+	result, _, err := e.client.APIClient.DefaultAPI.QueryVectorsBinaryV1VectorsQueryBinaryPost(ctx).
+		BinaryQueryRequest(req).
 		Execute()
 	return result, err
 }

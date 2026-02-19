@@ -15,6 +15,33 @@ type GetResponse = internal.GetResponseModel
 // VectorItem represents a single vector with ID, vector data, and optional metadata.
 type VectorItem = internal.VectorItem
 
+// VectorItems is a slice of VectorItem used for type-safe upsert operations.
+type VectorItems []VectorItem
+
+// UpsertInput is implemented by types that can be passed to Upsert.
+// Valid types are VectorItems and BinaryUpsertParams.
+type UpsertInput interface {
+	isUpsertInput()
+}
+
+// QueryInput is implemented by types that can be passed to Query.
+// Valid types are QueryParams and BinaryQueryParams.
+type QueryInput interface {
+	isQueryInput()
+}
+
+// isUpsertInput implements UpsertInput for VectorItems.
+func (VectorItems) isUpsertInput() {}
+
+// isUpsertInput implements UpsertInput for BinaryUpsertParams.
+func (BinaryUpsertParams) isUpsertInput() {}
+
+// isQueryInput implements QueryInput for QueryParams.
+func (QueryParams) isQueryInput() {}
+
+// isQueryInput implements QueryInput for BinaryQueryParams.
+func (BinaryQueryParams) isQueryInput() {}
+
 // QueryResponse represents the response from similarity search operations.
 type QueryResponse = internal.QueryResponse
 
@@ -25,7 +52,7 @@ type QueryResultItem = internal.QueryResultItem
 type ListIDsResponse = internal.ListIDsResponse
 
 // IndexModel is the interface implemented by all index configuration types.
-// It allows type-safe creation of different index configurations (IVF, IVFFlat, IVFPQ)
+// It allows type-safe creation of different index configurations (IVFFlat, IVFPQ, IVFSQ)
 // while maintaining compatibility with the internal OpenAPI models.
 type IndexModel interface {
 	// ToIndexConfig converts the public type to the internal IndexConfig structure.
@@ -54,7 +81,7 @@ type CreateIndexParams struct {
 	IndexKey []byte `json:"index_key"`
 
 	// IndexConfig specifies the index type and configuration.
-	// Can be created using IndexIVF(), IndexIVFFlat(), or IndexIVFPQ() functions.
+	// Can be created using IndexIVFFlat(), IndexIVFPQ(), or IndexIVFSQ() functions.
 	// If nil, the server will use default configuration.
 	IndexConfig IndexModel `json:"index_config,omitempty"`
 
@@ -100,6 +127,72 @@ type TrainParams struct {
 	// NLists specifies the number of IVF clusters for index partitioning.
 	// Set to 0 for automatic determination based on data size. Default: 0 (auto).
 	NLists *int32 `json:"n_lists,omitempty"`
+}
+
+// BinaryUpsertParams defines the parameters for binary format vector upserts.
+//
+// This is more efficient than regular Upsert for large batches as vectors are
+// sent as base64-encoded binary data instead of JSON arrays.
+//
+// Parameters:
+//   - IDs: Slice of unique identifiers for each vector (required)
+//   - Vectors: 2D slice of float32 vectors, shape [n_vectors][dimension] (required)
+//   - Metadata: Optional metadata for each vector (must match IDs length if provided)
+//   - Contents: Optional contents for each vector (must match IDs length if provided)
+type BinaryUpsertParams struct {
+	// IDs contains unique identifiers for each vector.
+	// Length must match the number of vectors.
+	IDs []string
+
+	// Vectors contains the vector data as a 2D slice.
+	// Shape should be [n_vectors][dimension].
+	Vectors [][]float32
+
+	// Metadata contains optional metadata for each vector.
+	// If provided, length must match IDs length.
+	// Use nil for vectors without metadata.
+	Metadata []map[string]interface{}
+
+	// Contents contains optional content strings for each vector.
+	// If provided, length must match IDs length.
+	// Use nil for vectors without contents.
+	Contents []string
+}
+
+// BinaryQueryParams defines the parameters for binary format similarity search.
+//
+// This is more efficient than regular Query for batch queries as vectors are
+// sent as base64-encoded binary data instead of JSON arrays.
+//
+// Parameters:
+//   - QueryVectors: 2D slice of query vectors, shape [n_queries][dimension] (required)
+//   - TopK: Number of nearest neighbors to return (optional, defaults to 100)
+//   - NProbes: Number of IVF lists to probe (optional)
+//   - Greedy: Enable greedy search mode (optional)
+//   - Filters: Metadata filters to apply (optional)
+//   - Include: Fields to include in response (optional)
+type BinaryQueryParams struct {
+	// QueryVectors contains the query vectors as a 2D slice.
+	// Shape should be [n_queries][dimension].
+	QueryVectors [][]float32
+
+	// TopK specifies the number of nearest neighbors to return.
+	// Defaults to 100 if not specified.
+	TopK int32
+
+	// NProbes controls the search accuracy vs speed trade-off for IVF indexes.
+	// Higher values = more accurate but slower.
+	NProbes *int32
+
+	// Greedy enables greedy search mode for potentially faster results.
+	Greedy *bool
+
+	// Filters applies metadata-based filtering to search results.
+	Filters map[string]interface{}
+
+	// Include specifies which fields to return in results.
+	// Common values: ["metadata"], ["vector"], ["metadata", "vector"].
+	Include []string
 }
 
 // QueryParams defines the parameters for similarity search queries.
@@ -154,12 +247,6 @@ type QueryParams struct {
 // Index model wrapper types provide type-safe access to different index configurations.
 // These types wrap the internal OpenAPI generated models and implement the IndexModel interface.
 
-// indexIVF wraps the IVF (Inverted File) index configuration.
-// IVF indexes provide fast approximate search by partitioning vectors into clusters.
-type indexIVF struct {
-	*internal.IndexIVFModel
-}
-
 // indexIVFFlat wraps the IVFFlat index configuration.
 // IVFFlat combines IVF clustering with flat (exact) search within clusters.
 type indexIVFFlat struct {
@@ -172,25 +259,10 @@ type indexIVFPQ struct {
 	*internal.IndexIVFPQModel
 }
 
-// IndexIVF creates a new IVF (Inverted File) index configuration.
-//
-// IVF indexes partition vectors into clusters for fast approximate search.
-// They offer a good balance of speed and accuracy for most use cases.
-//
-// Parameters:
-//   - dimension: The dimensionality of vectors that will be stored (e.g., 768 for many embedding models)
-//
-// Returns:
-//   - *indexIVF: IVF index configuration implementing IndexModel
-//
-// Usage:
-//
-//	config := IndexIVF(768) // For 768-dimensional vectors
-func IndexIVF(dimension int32) *indexIVF {
-	model := &internal.IndexIVFModel{}
-	model.SetDimension(dimension)
-	model.SetType("ivf")
-	return &indexIVF{IndexIVFModel: model}
+// indexIVFSQ wraps the IVFSQ (IVF with Scalar Quantization) index configuration.
+// IVFSQ provides memory-efficient storage by using scalar quantization compression.
+type indexIVFSQ struct {
+	*internal.IndexIVFSQModel
 }
 
 // IndexIVFFlat creates a new IVFFlat index configuration.
@@ -241,12 +313,27 @@ func IndexIVFPQ(dimension int32, pqDim int32, pqBits int32) *indexIVFPQ {
 	return &indexIVFPQ{IndexIVFPQModel: model}
 }
 
-// ToIndexConfig converts the IVF index configuration to the internal IndexConfig format.
-// This method implements the IndexModel interface.
-func (m *indexIVF) ToIndexConfig() *internal.IndexConfig {
-	return &internal.IndexConfig{
-		IndexIVFModel: m.IndexIVFModel,
-	}
+// IndexIVFSQ creates a new IVFSQ (IVF with Scalar Quantization) index configuration.
+//
+// IVFSQ provides memory-efficient storage by using scalar quantization to compress
+// vectors. It offers a good balance between compression and accuracy.
+//
+// Parameters:
+//   - dimension: The dimensionality of vectors that will be stored
+//   - sqBits: Bits per dimension for scalar quantization (typically 16)
+//
+// Returns:
+//   - *indexIVFSQ: IVFSQ index configuration implementing IndexModel
+//
+// Usage:
+//
+//	config := IndexIVFSQ(768, 16) // 768-dim vectors, 16 bits per dimension
+func IndexIVFSQ(dimension int32, sqBits int32) *indexIVFSQ {
+	model := &internal.IndexIVFSQModel{}
+	model.SetDimension(dimension)
+	model.SetType("ivfsq")
+	model.SetSqBits(sqBits)
+	return &indexIVFSQ{IndexIVFSQModel: model}
 }
 
 // ToIndexConfig converts the IVFFlat index configuration to the internal IndexConfig format.
@@ -262,5 +349,13 @@ func (m *indexIVFFlat) ToIndexConfig() *internal.IndexConfig {
 func (m *indexIVFPQ) ToIndexConfig() *internal.IndexConfig {
 	return &internal.IndexConfig{
 		IndexIVFPQModel: m.IndexIVFPQModel,
+	}
+}
+
+// ToIndexConfig converts the IVFSQ index configuration to the internal IndexConfig format.
+// This method implements the IndexModel interface.
+func (m *indexIVFSQ) ToIndexConfig() *internal.IndexConfig {
+	return &internal.IndexConfig{
+		IndexIVFSQModel: m.IndexIVFSQModel,
 	}
 }
