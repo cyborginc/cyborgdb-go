@@ -1262,6 +1262,315 @@ func TestEncryptedIndexQueryPatterns(t *testing.T) {
 	})
 }
 
+// Test 15b: EncryptedIndex Binary Upsert and Query
+func TestEncryptedIndexBinaryUpsertAndQuery(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	// Use unique IDs for binary tests to avoid conflicts with regular upsert tests
+	binaryIDPrefix := "binary_"
+
+	t.Run("BinaryUpsertWithVectors", func(t *testing.T) {
+		// Prepare binary upsert params
+		ids := make([]string, 5)
+		vectors := make([][]float32, 5)
+		metadata := make([]map[string]interface{}, 5)
+
+		for i := 0; i < 5; i++ {
+			ids[i] = fmt.Sprintf("%s%d", binaryIDPrefix, i)
+			vectors[i] = testVectors[i%len(testVectors)]
+			metadata[i] = map[string]interface{}{
+				"binary_index": i,
+				"category":     fmt.Sprintf("binary_cat_%d", i%3),
+			}
+		}
+
+		params := cyborgdb.BinaryUpsertParams{
+			IDs:      ids,
+			Vectors:  vectors,
+			Metadata: metadata,
+		}
+
+		err := testIndex.Upsert(ctx, params)
+		if err != nil {
+			t.Fatalf("Binary upsert failed: %v", err)
+		}
+
+		// Poll until IDs are available
+		expectedIDs := make(map[string]bool)
+		for _, id := range ids {
+			expectedIDs[id] = true
+		}
+
+		found := pollUntil(pollTimeout, pollInterval, func() bool {
+			result, err := testIndex.ListIDs(ctx)
+			if err != nil {
+				return false
+			}
+			for id := range expectedIDs {
+				idFound := false
+				for _, existingID := range result.Ids {
+					if existingID == id {
+						idFound = true
+						break
+					}
+				}
+				if !idFound {
+					return false
+				}
+			}
+			return true
+		})
+		if !found {
+			t.Error("Binary upserted IDs not found after polling timeout")
+		}
+	})
+
+	t.Run("BinaryUpsertWithoutMetadata", func(t *testing.T) {
+		ids := make([]string, 3)
+		vectors := make([][]float32, 3)
+
+		for i := 0; i < 3; i++ {
+			ids[i] = fmt.Sprintf("%snometa_%d", binaryIDPrefix, i)
+			vectors[i] = testVectors[i%len(testVectors)]
+		}
+
+		params := cyborgdb.BinaryUpsertParams{
+			IDs:     ids,
+			Vectors: vectors,
+		}
+
+		err := testIndex.Upsert(ctx, params)
+		if err != nil {
+			t.Fatalf("Binary upsert without metadata failed: %v", err)
+		}
+
+		// Poll until IDs are available
+		found := pollUntil(pollTimeout, pollInterval, func() bool {
+			result, err := testIndex.ListIDs(ctx)
+			if err != nil {
+				return false
+			}
+			for _, id := range ids {
+				idFound := false
+				for _, existingID := range result.Ids {
+					if existingID == id {
+						idFound = true
+						break
+					}
+				}
+				if !idFound {
+					return false
+				}
+			}
+			return true
+		})
+		if !found {
+			t.Error("Binary upserted IDs (no metadata) not found after polling timeout")
+		}
+	})
+
+	t.Run("BinaryQueryWithSingleVector", func(t *testing.T) {
+		topK := int32(5)
+		params := cyborgdb.BinaryQueryParams{
+			QueryVectors: [][]float32{testVectors[0]},
+			TopK:         topK,
+		}
+
+		results, err := testIndex.Query(ctx, params)
+		if err != nil {
+			t.Fatalf("Binary query failed: %v", err)
+		}
+
+		if results == nil {
+			t.Fatal("Results must not be nil")
+		}
+
+		resultItems := getQueryResultItems(&results.Results)
+
+		if len(resultItems) == 0 {
+			t.Error("Expected at least one result")
+		}
+		if len(resultItems) > int(topK) {
+			t.Errorf("Result count %d exceeds TopK %d", len(resultItems), topK)
+		}
+
+		for i, result := range resultItems {
+			if result.Id == "" {
+				t.Errorf("Result %d: missing ID", i)
+			}
+		}
+	})
+
+	t.Run("BinaryQueryWithBatchVectors", func(t *testing.T) {
+		batchVectors := [][]float32{testVectors[0], testVectors[1], testVectors[2]}
+		topK := int32(3)
+		params := cyborgdb.BinaryQueryParams{
+			QueryVectors: batchVectors,
+			TopK:         topK,
+		}
+
+		results, err := testIndex.Query(ctx, params)
+		if err != nil {
+			t.Fatalf("Binary batch query failed: %v", err)
+		}
+
+		if results == nil {
+			t.Fatal("Results must not be nil")
+		}
+
+		batchResults := getBatchQueryResults(&results.Results)
+
+		if len(batchResults) != len(batchVectors) {
+			t.Errorf("Expected %d result sets for %d query vectors, got %d",
+				len(batchVectors), len(batchVectors), len(batchResults))
+		}
+
+		for batchIdx, resultSet := range batchResults {
+			if len(resultSet) > int(topK) {
+				t.Errorf("Batch %d: result count %d exceeds TopK %d",
+					batchIdx, len(resultSet), topK)
+			}
+
+			for i, result := range resultSet {
+				if result.Id == "" {
+					t.Errorf("Batch %d, result %d: missing ID", batchIdx, i)
+				}
+			}
+		}
+	})
+
+	t.Run("BinaryQueryWithFilters", func(t *testing.T) {
+		expectedCategory := "binary_cat_0"
+		topK := int32(10)
+		params := cyborgdb.BinaryQueryParams{
+			QueryVectors: [][]float32{testVectors[0]},
+			TopK:         topK,
+			Filters:      map[string]interface{}{"category": expectedCategory},
+			Include:      []string{"metadata"},
+		}
+
+		results, err := testIndex.Query(ctx, params)
+		if err != nil {
+			t.Fatalf("Binary query with filters failed: %v", err)
+		}
+
+		if results == nil {
+			t.Fatal("Results must not be nil")
+		}
+
+		resultItems := getQueryResultItems(&results.Results)
+
+		if len(resultItems) > int(topK) {
+			t.Errorf("Result count %d exceeds TopK %d", len(resultItems), topK)
+		}
+
+		// Verify filter criteria for results that have metadata
+		for i, result := range resultItems {
+			if result.Metadata == nil {
+				continue
+			}
+			category, ok := result.Metadata["category"]
+			if !ok {
+				continue
+			}
+			categoryStr, ok := category.(string)
+			if ok && categoryStr != expectedCategory {
+				t.Errorf("Result %d (ID=%s): filter violation - expected category=%q, got %q",
+					i, result.Id, expectedCategory, categoryStr)
+			}
+		}
+	})
+
+	t.Run("BinaryQueryWithInclude", func(t *testing.T) {
+		topK := int32(5)
+		params := cyborgdb.BinaryQueryParams{
+			QueryVectors: [][]float32{testVectors[0]},
+			TopK:         topK,
+			Include:      []string{"metadata", "vector"},
+		}
+
+		results, err := testIndex.Query(ctx, params)
+		if err != nil {
+			t.Fatalf("Binary query with include failed: %v", err)
+		}
+
+		if results == nil {
+			t.Fatal("Results must not be nil")
+		}
+
+		resultItems := getQueryResultItems(&results.Results)
+
+		if len(resultItems) == 0 {
+			t.Error("Expected at least one result")
+		}
+
+		// Verify that results contain the requested fields
+		for i, result := range resultItems {
+			if result.Id == "" {
+				t.Errorf("Result %d: missing ID", i)
+			}
+			// Vector should be included
+			if len(result.Vector) == 0 {
+				t.Logf("Result %d: vector not returned despite include=['vector'] - may be expected based on server config", i)
+			}
+		}
+	})
+
+	t.Run("BinaryUpsertRejectMismatchedLengths", func(t *testing.T) {
+		// IDs and vectors have different lengths - should be rejected
+		params := cyborgdb.BinaryUpsertParams{
+			IDs:     []string{"mismatch_1", "mismatch_2"},
+			Vectors: [][]float32{testVectors[0]}, // Only 1 vector for 2 IDs
+		}
+
+		err := testIndex.Upsert(ctx, params)
+		if err == nil {
+			t.Error("Should reject upsert with mismatched IDs and vectors lengths")
+		}
+	})
+
+	t.Run("BinaryUpsertRejectEmptyIDs", func(t *testing.T) {
+		params := cyborgdb.BinaryUpsertParams{
+			IDs:     []string{},
+			Vectors: [][]float32{testVectors[0]},
+		}
+
+		err := testIndex.Upsert(ctx, params)
+		if err == nil {
+			t.Error("Should reject upsert with empty IDs")
+		}
+	})
+
+	t.Run("BinaryQueryRejectEmptyVectors", func(t *testing.T) {
+		params := cyborgdb.BinaryQueryParams{
+			QueryVectors: [][]float32{},
+			TopK:         5,
+		}
+
+		_, err := testIndex.Query(ctx, params)
+		if err == nil {
+			t.Error("Should reject query with empty vectors")
+		}
+	})
+
+	// Cleanup: Delete the binary test vectors
+	t.Run("CleanupBinaryTestVectors", func(t *testing.T) {
+		idsToDelete := make([]string, 8)
+		for i := 0; i < 5; i++ {
+			idsToDelete[i] = fmt.Sprintf("%s%d", binaryIDPrefix, i)
+		}
+		for i := 0; i < 3; i++ {
+			idsToDelete[5+i] = fmt.Sprintf("%snometa_%d", binaryIDPrefix, i)
+		}
+
+		err := testIndex.Delete(ctx, idsToDelete)
+		if err != nil {
+			t.Logf("Cleanup warning: failed to delete binary test vectors: %v", err)
+		}
+	})
+}
+
 // Test 16: EncryptedIndex.Train()
 func TestEncryptedIndexTrain(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)

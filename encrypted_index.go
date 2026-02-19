@@ -239,7 +239,7 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, input UpsertInput) error {
 	case VectorItems:
 		return e.upsertItems(ctx, v)
 	case BinaryUpsertParams:
-		return e.UpsertBinary(ctx, v)
+		return e.upsertBinary(ctx, v)
 	default:
 		// This should never happen due to the sealed interface.
 		return ErrUnsupportedUpsertType
@@ -297,7 +297,7 @@ func (e *EncryptedIndex) UpsertVectors(ctx context.Context, ids []string, vector
 		Vectors:  vectors,
 		Metadata: metadata,
 	}
-	return e.UpsertBinary(ctx, params)
+	return e.upsertBinary(ctx, params)
 }
 
 // Query performs similarity search to find the nearest neighbors to query vector(s).
@@ -345,7 +345,7 @@ func (e *EncryptedIndex) Query(ctx context.Context, input QueryInput) (*QueryRes
 	case QueryParams:
 		return e.queryParams(ctx, v)
 	case BinaryQueryParams:
-		return e.QueryBinary(ctx, v)
+		return e.queryBinary(ctx, v)
 	default:
 		// This should never happen due to the sealed interface.
 		return nil, ErrUnsupportedQueryType
@@ -677,8 +677,8 @@ func vectorsToBase64(vectors [][]float32) string {
 //			nil, // No metadata for doc3
 //		},
 //	}
-//	err := index.UpsertBinary(ctx, params)
-func (e *EncryptedIndex) UpsertBinary(ctx context.Context, params BinaryUpsertParams) error {
+//	err := index.upsertBinary(ctx, params)
+func (e *EncryptedIndex) upsertBinary(ctx context.Context, params BinaryUpsertParams) error {
 	if len(params.IDs) == 0 {
 		return ErrEmptyIDs
 	}
@@ -768,8 +768,8 @@ func (e *EncryptedIndex) UpsertBinary(ctx context.Context, params BinaryUpsertPa
 //		QueryVectors: [][]float32{{0.1, 0.2, 0.3}, {0.4, 0.5, 0.6}},
 //		TopK: 10,
 //	}
-//	results, err := index.QueryBinary(ctx, params)
-func (e *EncryptedIndex) QueryBinary(ctx context.Context, params BinaryQueryParams) (*QueryResponse, error) {
+//	results, err := index.queryBinary(ctx, params)
+func (e *EncryptedIndex) queryBinary(ctx context.Context, params BinaryQueryParams) (*QueryResponse, error) {
 	if len(params.QueryVectors) == 0 {
 		return nil, ErrEmptyQueryVectors
 	}
