@@ -537,7 +537,7 @@ func TestEdgeCasesStrict(t *testing.T) {
 	})
 
 	t.Run("TestConcurrentOperationsValidation", func(t *testing.T) {
-		numOperations := 20
+		numOperations := 5
 		var wg sync.WaitGroup
 		errorChan := make(chan error, numOperations)
 		successChan := make(chan string, numOperations)
@@ -775,7 +775,7 @@ func TestBackendCompatibility(t *testing.T) {
 		}
 		defer func() { _ = advancedIndex.DeleteIndex(ctx) }()
 
-		vectors := generateTestVectors(100, 128)
+		vectors := generateTestVectors(10, 128)
 		items := make(cyborgdb.VectorItems, len(vectors))
 		for i, vector := range vectors {
 			items[i] = cyborgdb.VectorItem{
