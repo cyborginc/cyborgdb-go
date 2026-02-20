@@ -14,22 +14,52 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-        
+
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
-          
+
       - name: Run golangci-lint
         uses: golangci/golangci-lint-action@v3
         with:
           version: latest
           args: --config .golangci.yml
-          
+
+  compute_version:
+    runs-on: ubuntu-latest
+    outputs:
+      env: ${{ steps.compute.outputs.env }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+
+      - name: Compute environment
+        id: compute
+        run: |
+          # For PRs and main branch pushes, use dev environment
+          # For tags, determine based on tag pattern
+          if [[ "${{ github.ref }}" == refs/tags/* ]]; then
+            TAG="${{ github.ref_name }}"
+            if [[ "$TAG" == *"-dev"* ]]; then
+              echo "env=dev" >> $GITHUB_OUTPUT
+            elif [[ "$TAG" == *"-rc"* ]] || [[ "$TAG" == *"-staging"* ]]; then
+              echo "env=staging" >> $GITHUB_OUTPUT
+            else
+              echo "env=prod" >> $GITHUB_OUTPUT
+            fi
+          else
+            # Default to dev for PRs and main branch
+            echo "env=dev" >> $GITHUB_OUTPUT
+          fi
+
   test:
     runs-on: ubuntu-latest
-    needs: lint
-    
+    needs: [lint, compute_version]
+
     services:
       postgres:
         image: postgres:15-alpine
@@ -48,35 +78,33 @@ jobs:
     steps:
       - name: Checkout SDK code
         uses: actions/checkout@v4
-        
+
       - name: Set up Go
         uses: actions/setup-go@v4
         with:
           go-version: '1.21'
-          
+
       - name: Set up Python for server
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
-          
+
       - name: Load secrets from 1Password
         uses: 1password/load-secrets-action@v2
         with:
           export-env: true
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_TOKEN }}
-          PIP_EXTRA_INDEX_URL: "op://CyborgDB/CyborgDB Dev/PIP_EXTRA_INDEX_URL"
-          CYBORGDB_API_KEY: "op://CyborgDB/CyborgDB Dev/CYBORGDB_API_KEY"
+          CYBORGDB_API_KEY: "op://CyborgDB/CyborgDB ${{ needs.compute_version.outputs.env == 'dev' && 'Dev' || needs.compute_version.outputs.env == 'staging' && 'Staging' || 'Prod' }}/CYBORGDB_API_KEY_STANDARD"
 
-      - name: Checkout cyborgdb-service repository
-        uses: actions/checkout@v4
+      - name: Load Extra Index URL from 1Password
+        if: needs.compute_version.outputs.env != 'prod'
+        uses: 1password/load-secrets-action@v2
         with:
-          repository: cyborginc/cyborgdb-service
-          ref: main
-          path: cyborgdb-service
-          token: ${{ secrets.CYBORGDB_SERVICE_TOKEN }}
-          fetch-depth: 0  # Get full history for version detection
-          fetch-tags: true  # Fetch all tags
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_TOKEN }}
+          PIP_EXTRA_INDEX_URL: "op://CyborgDB/CyborgDB ${{ needs.compute_version.outputs.env == 'dev' && 'Dev' || 'Staging' }}/PIP_EXTRA_INDEX_URL"
 
       - name: Install service dependencies
         run: |
@@ -85,10 +113,10 @@ jobs:
           # Install optional test dependencies
           pip install sentence-transformers
 
-      - name: Install cyborgdb-service from source
+      - name: Install cyborgdb-service
         run: |
-          # Install the server from the cloned repository
-          pip install ./cyborgdb-service --extra-index-url "${PIP_EXTRA_INDEX_URL}"
+          # Install cyborgdb-service (from Cloudsmith for dev/staging, PyPI for prod)
+          pip install "cyborgdb-service[embeddings]" --pre ${PIP_EXTRA_INDEX_URL:+--extra-index-url "$PIP_EXTRA_INDEX_URL"}
 
       ## TODO - Add a test for Lite version
 
