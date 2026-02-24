@@ -44,9 +44,7 @@ jobs:
           # For tags, determine based on tag pattern
           if [[ "${{ github.ref }}" == refs/tags/* ]]; then
             TAG="${{ github.ref_name }}"
-            if [[ "$TAG" == *"-dev"* ]]; then
-              echo "env=dev" >> $GITHUB_OUTPUT
-            elif [[ "$TAG" == *"-rc"* ]] || [[ "$TAG" == *"-staging"* ]]; then
+            if [[ "$TAG" == *"rc"* ]]; then
               echo "env=staging" >> $GITHUB_OUTPUT
             else
               echo "env=prod" >> $GITHUB_OUTPUT
