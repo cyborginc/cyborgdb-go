@@ -1139,10 +1139,10 @@ func TestMixedIndexTypesUpsertAndQuery(t *testing.T) {
 	defer cancel()
 
 	type indexEntry struct {
-		index      *cyborgdb.EncryptedIndex
-		typeName   string
-		idPrefix   string
-		vectors    [][]float32
+		index       *cyborgdb.EncryptedIndex
+		typeName    string
+		idPrefix    string
+		vectors     [][]float32
 		expectedIDs map[string]bool
 	}
 
