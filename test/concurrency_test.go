@@ -47,11 +47,13 @@ import (
 	"math"
 	"math/rand"
 	"os"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 
 	cyborgdb "github.com/cyborginc/cyborgdb-go"
+	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
 const (
@@ -1068,5 +1070,399 @@ func TestStress20Goroutines200VectorsEach(t *testing.T) {
 	}
 	if len(missing) > 0 {
 		t.Errorf("%d/%d IDs missing after 20-goroutine stress test", len(missing), len(allIDs))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Mixed Index Types — One Client, Three Index Types
+// Targets a reported bug where one client managing multiple index types
+// (IVFFlat, IVFPQ, IVFSQ) simultaneously causes cross-type contamination
+// or dispatch errors.
+// ---------------------------------------------------------------------------
+
+// mixedIndexSet holds the three index types created from one client.
+type mixedIndexSet struct {
+	client *cyborgdb.Client
+	flat   *cyborgdb.EncryptedIndex
+	pq     *cyborgdb.EncryptedIndex
+	sq     *cyborgdb.EncryptedIndex
+}
+
+// newMixedIndexSet creates one client with three index types and registers cleanup.
+func newMixedIndexSet(t *testing.T) *mixedIndexSet {
+	t.Helper()
+	client := newIsolatedClient(t)
+	metric := "euclidean"
+	dim := int32(concDimension)
+
+	create := func(prefix string, config cyborgdb.IndexModel) *cyborgdb.EncryptedIndex {
+		t.Helper()
+		name := generateUniqueName(prefix + "_")
+		key := generateRandomKey()
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		idx, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+			IndexName:   name,
+			IndexKey:    key,
+			IndexConfig: config,
+			Metric:      &metric,
+		})
+		if err != nil {
+			t.Fatalf("Failed to create %s index: %v", prefix, err)
+		}
+		t.Cleanup(func() {
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			_ = idx.DeleteIndex(ctx)
+		})
+		return idx
+	}
+
+	return &mixedIndexSet{
+		client: client,
+		flat:   create("mixed_flat", cyborgdb.IndexIVFFlat(dim)),
+		pq:     create("mixed_pq", cyborgdb.IndexIVFPQ(dim, 32, 8)),
+		sq:     create("mixed_sq", cyborgdb.IndexIVFSQ(dim, 8)),
+	}
+}
+
+func TestMixedIndexTypesUpsertAndQuery(t *testing.T) {
+	t.Parallel()
+	// One client creates IVFFlat, IVFPQ, IVFSQ indexes. Upserts 20 vectors
+	// to each, then queries each and verifies:
+	// - Correct index_type is reported
+	// - No returned IDs belong to another index type
+	// Catches: client dispatching requests to wrong index type, index_type
+	// metadata being overwritten when multiple types share a client.
+	m := newMixedIndexSet(t)
+	ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+	defer cancel()
+
+	type indexEntry struct {
+		index      *cyborgdb.EncryptedIndex
+		typeName   string
+		idPrefix   string
+		vectors    [][]float32
+		expectedIDs map[string]bool
+	}
+
+	entries := []indexEntry{
+		{m.flat, "ivfflat", "flat", nil, make(map[string]bool)},
+		{m.pq, "ivfpq", "pq", nil, make(map[string]bool)},
+		{m.sq, "ivfsq", "sq", nil, make(map[string]bool)},
+	}
+
+	// Upsert 20 vectors to each
+	for i := range entries {
+		e := &entries[i]
+		e.vectors = generateRandomVectors(20, concDimension)
+		items := make(cyborgdb.VectorItems, 20)
+		for j := 0; j < 20; j++ {
+			id := fmt.Sprintf("%s_%d", e.idPrefix, j)
+			e.expectedIDs[id] = true
+			items[j] = cyborgdb.VectorItem{Id: id, Vector: e.vectors[j]}
+		}
+		if err := e.index.Upsert(ctx, items); err != nil {
+			t.Fatalf("Upsert to %s index failed: %v", e.typeName, err)
+		}
+	}
+
+	// Collect all IDs across all types for cross-contamination check
+	allOtherIDs := make([]map[string]bool, len(entries))
+	for i := range entries {
+		allOtherIDs[i] = make(map[string]bool)
+		for j, other := range entries {
+			if j != i {
+				for id := range other.expectedIDs {
+					allOtherIDs[i][id] = true
+				}
+			}
+		}
+	}
+
+	// Wait for propagation then query each
+	time.Sleep(2 * time.Second)
+
+	for i, e := range entries {
+		// Verify index type
+		if e.index.GetIndexType() != e.typeName {
+			t.Errorf("Expected index type '%s', got '%s'", e.typeName, e.index.GetIndexType())
+		}
+
+		// Query and check isolation
+		qv := e.vectors[0]
+		var resultItems []internal.QueryResultItem
+		ok := pollUntil(30*time.Second, 2*time.Second, func() bool {
+			results, err := e.index.Query(ctx, cyborgdb.QueryParams{
+				QueryVector: qv, TopK: 10,
+			})
+			if err != nil || results == nil {
+				return false
+			}
+			resultItems = getQueryResultItems(&results.Results)
+			return len(resultItems) > 0
+		})
+		if !ok {
+			t.Fatalf("%s index query returned no results within 30s", e.typeName)
+		}
+
+		for _, item := range resultItems {
+			if allOtherIDs[i][item.GetId()] {
+				t.Errorf("CROSS-TYPE LEAKAGE: %s index returned ID '%s' from another index type",
+					e.typeName, item.GetId())
+			}
+			if !e.expectedIDs[item.GetId()] {
+				t.Errorf("%s index returned unknown ID '%s'", e.typeName, item.GetId())
+			}
+		}
+	}
+}
+
+func TestMixedIndexTypesConcurrentWrites(t *testing.T) {
+	t.Parallel()
+	// 3 goroutines each write to a different index type (flat, pq, sq)
+	// through the same shared client concurrently. Then verify:
+	// - Each index has only its own data
+	// - IVFFlat: exact vector match (lossless)
+	// - IVFPQ/IVFSQ: correct dimensions and finite values (lossy compression)
+	// Catches: client-level race condition when concurrent goroutines target
+	// different index types, request body mix-up across types.
+	m := newMixedIndexSet(t)
+	ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+	defer cancel()
+
+	type goroutineResult struct {
+		typeName string
+		idPrefix string
+		ids      []string
+		vectors  [][]float32
+		index    *cyborgdb.EncryptedIndex
+	}
+
+	targets := []struct {
+		index    *cyborgdb.EncryptedIndex
+		typeName string
+		prefix   string
+	}{
+		{m.flat, "ivfflat", "cwflat"},
+		{m.pq, "ivfpq", "cwpq"},
+		{m.sq, "ivfsq", "cwsq"},
+	}
+
+	var mu sync.Mutex
+	var errs []error
+	results := make(map[string]*goroutineResult)
+	var wg sync.WaitGroup
+
+	for _, tgt := range targets {
+		wg.Add(1)
+		go func(idx *cyborgdb.EncryptedIndex, typeName, prefix string) {
+			defer wg.Done()
+			vectors := generateRandomVectors(20, concDimension)
+			ids := make([]string, 20)
+			for j := 0; j < 20; j++ {
+				ids[j] = fmt.Sprintf("%s_%d", prefix, j)
+			}
+
+			writeCtx, writeCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			defer writeCancel()
+			if err := idx.UpsertVectors(writeCtx, ids, vectors, nil); err != nil {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("%s upsert: %w", typeName, err))
+				mu.Unlock()
+				return
+			}
+
+			mu.Lock()
+			results[typeName] = &goroutineResult{
+				typeName: typeName, idPrefix: prefix,
+				ids: ids, vectors: vectors, index: idx,
+			}
+			mu.Unlock()
+		}(tgt.index, tgt.typeName, tgt.prefix)
+	}
+	wg.Wait()
+
+	if len(errs) > 0 {
+		t.Fatalf("Concurrent writes failed: %v", errs)
+	}
+
+	time.Sleep(2 * time.Second)
+
+	for typeName, res := range results {
+		// Verify each index has only its own IDs
+		listResp, err := res.index.ListIDs(ctx)
+		if err != nil {
+			t.Fatalf("ListIDs failed for %s: %v", typeName, err)
+		}
+
+		storedIDs := make(map[string]bool, len(listResp.Ids))
+		for _, id := range listResp.Ids {
+			storedIDs[id] = true
+		}
+		for _, id := range res.ids {
+			if !storedIDs[id] {
+				t.Errorf("%s index missing ID '%s'", typeName, id)
+			}
+		}
+
+		// Verify vector integrity: spot-check first vector
+		getResp, err := res.index.Get(ctx, []string{res.ids[0]}, []string{"vector"})
+		if err != nil {
+			t.Fatalf("Get failed for %s: %v", typeName, err)
+		}
+		if len(getResp.Results) != 1 {
+			t.Fatalf("%s: expected 1 result, got %d", typeName, len(getResp.Results))
+		}
+
+		retrieved := getResp.Results[0].GetVector()
+		if len(retrieved) != concDimension {
+			t.Errorf("%s: vector dimension mismatch: got %d, want %d", typeName, len(retrieved), concDimension)
+			continue
+		}
+
+		if typeName == "ivfflat" {
+			// Lossless — exact match expected
+			if !vectorsApproxEqual(retrieved, res.vectors[0], 1e-5) {
+				t.Errorf("ivfflat: vector mismatch on first vector — data routed to wrong index")
+			}
+		} else {
+			// IVFPQ/IVFSQ are lossy — just verify finite values (no NaN/Inf)
+			for j, v := range retrieved {
+				if math.IsNaN(float64(v)) || math.IsInf(float64(v), 0) {
+					t.Errorf("%s: vector element %d is %f — corrupted by compression", typeName, j, v)
+					break
+				}
+			}
+		}
+	}
+}
+
+func TestMixedIndexTypesInterleavedOperations(t *testing.T) {
+	t.Parallel()
+	// Single goroutine interleaves operations across all three index types:
+	// upsert to flat, query PQ, delete from SQ, query flat, verify SQ deletes.
+	// Catches: client maintaining hidden "current index type" state that
+	// causes wrong-type dispatch when rapidly switching between types.
+	m := newMixedIndexSet(t)
+	ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+	defer cancel()
+
+	// Step 1: Seed all three indexes with data
+	flatIDs := make([]string, 20)
+	flatVecs := generateRandomVectors(20, concDimension)
+	for i := 0; i < 20; i++ {
+		flatIDs[i] = fmt.Sprintf("il_flat_%d", i)
+	}
+	if err := m.flat.UpsertVectors(ctx, flatIDs, flatVecs, nil); err != nil {
+		t.Fatalf("Flat upsert failed: %v", err)
+	}
+
+	pqIDs := make([]string, 20)
+	pqVecs := generateRandomVectors(20, concDimension)
+	for i := 0; i < 20; i++ {
+		pqIDs[i] = fmt.Sprintf("il_pq_%d", i)
+	}
+	if err := m.pq.UpsertVectors(ctx, pqIDs, pqVecs, nil); err != nil {
+		t.Fatalf("PQ upsert failed: %v", err)
+	}
+
+	sqIDs := make([]string, 20)
+	sqVecs := generateRandomVectors(20, concDimension)
+	for i := 0; i < 20; i++ {
+		sqIDs[i] = fmt.Sprintf("il_sq_%d", i)
+	}
+	if err := m.sq.UpsertVectors(ctx, sqIDs, sqVecs, nil); err != nil {
+		t.Fatalf("SQ upsert failed: %v", err)
+	}
+
+	time.Sleep(2 * time.Second)
+
+	// Step 2: Interleaved operations — rapidly switch between index types
+
+	// Query PQ
+	pqResults, err := m.pq.Query(ctx, cyborgdb.QueryParams{
+		QueryVector: pqVecs[0], TopK: 5,
+	})
+	if err != nil {
+		t.Fatalf("PQ query failed after interleave: %v", err)
+	}
+	pqItems := getQueryResultItems(&pqResults.Results)
+	for _, item := range pqItems {
+		if strings.HasPrefix(item.GetId(), "il_flat_") || strings.HasPrefix(item.GetId(), "il_sq_") {
+			t.Errorf("PQ query returned non-PQ ID '%s' — cross-type dispatch bug", item.GetId())
+		}
+	}
+
+	// Upsert more to flat (while PQ was just queried)
+	extraFlatIDs := make([]string, 5)
+	extraFlatVecs := generateRandomVectors(5, concDimension)
+	for i := 0; i < 5; i++ {
+		extraFlatIDs[i] = fmt.Sprintf("il_flat_extra_%d", i)
+	}
+	if err := m.flat.UpsertVectors(ctx, extraFlatIDs, extraFlatVecs, nil); err != nil {
+		t.Fatalf("Flat extra upsert failed: %v", err)
+	}
+
+	// Delete first 10 from SQ (while flat was just upserted to)
+	if err := m.sq.Delete(ctx, sqIDs[:10]); err != nil {
+		t.Fatalf("SQ delete failed: %v", err)
+	}
+
+	// Query flat (while SQ was just deleted from)
+	flatResults, err := m.flat.Query(ctx, cyborgdb.QueryParams{
+		QueryVector: flatVecs[0], TopK: 5,
+	})
+	if err != nil {
+		t.Fatalf("Flat query failed after interleave: %v", err)
+	}
+	flatItems := getQueryResultItems(&flatResults.Results)
+	for _, item := range flatItems {
+		if strings.HasPrefix(item.GetId(), "il_pq_") || strings.HasPrefix(item.GetId(), "il_sq_") {
+			t.Errorf("Flat query returned non-flat ID '%s' — cross-type dispatch bug", item.GetId())
+		}
+	}
+
+	time.Sleep(2 * time.Second)
+
+	// Step 3: Verify SQ deletes actually took effect (not applied to flat or PQ)
+	sqListResp, err := m.sq.ListIDs(ctx)
+	if err != nil {
+		t.Fatalf("SQ ListIDs failed: %v", err)
+	}
+	sqSurviving := make(map[string]bool, len(sqListResp.Ids))
+	for _, id := range sqListResp.Ids {
+		sqSurviving[id] = true
+	}
+
+	// First 10 should be gone
+	for _, deleted := range sqIDs[:10] {
+		if sqSurviving[deleted] {
+			t.Errorf("SQ delete didn't take effect: '%s' still present", deleted)
+		}
+	}
+	// Last 10 should survive
+	for _, kept := range sqIDs[10:] {
+		if !sqSurviving[kept] {
+			t.Errorf("SQ lost ID '%s' that wasn't deleted — collateral damage from interleaved ops", kept)
+		}
+	}
+
+	// Flat should still have all original + extra IDs (delete on SQ must not affect flat)
+	flatListResp, err := m.flat.ListIDs(ctx)
+	if err != nil {
+		t.Fatalf("Flat ListIDs failed: %v", err)
+	}
+	if len(flatListResp.Ids) != 25 { // 20 original + 5 extra
+		t.Errorf("Flat index has %d IDs, expected 25 — SQ delete leaked to flat", len(flatListResp.Ids))
+	}
+
+	// PQ should still have all 20 IDs (untouched by flat upserts and SQ deletes)
+	pqListResp, err := m.pq.ListIDs(ctx)
+	if err != nil {
+		t.Fatalf("PQ ListIDs failed: %v", err)
+	}
+	if len(pqListResp.Ids) != 20 {
+		t.Errorf("PQ index has %d IDs, expected 20 — operations on other types leaked to PQ", len(pqListResp.Ids))
 	}
 }
