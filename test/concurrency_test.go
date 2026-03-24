@@ -43,6 +43,7 @@ package test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -60,6 +61,12 @@ const (
 	concDimension  = 128
 	concNumVectors = 50 // Per-goroutine/per-index vector count
 	concTimeout    = 120 * time.Second
+)
+
+// Sentinel errors for goroutine error collection (err113 compliance).
+var (
+	errMissingID        = errors.New("result missing ID")
+	errNegativeDistance = errors.New("negative distance")
 )
 
 func concBaseURL() string {
@@ -86,7 +93,7 @@ func newIsolatedClient(t *testing.T) *cyborgdb.Client {
 
 // newIsolatedIndex creates a uniquely-named IVFFlat index with its own cleanup.
 // Must be called from the test goroutine (uses t.Fatalf). Registers cleanup via t.Cleanup.
-func newIsolatedIndex(t *testing.T, client *cyborgdb.Client, prefix string) (*cyborgdb.EncryptedIndex, string, []byte) {
+func newIsolatedIndex(t *testing.T, client *cyborgdb.Client, prefix string) (*cyborgdb.EncryptedIndex, string) {
 	t.Helper()
 	name := generateUniqueName(prefix + "_")
 	key := generateRandomKey()
@@ -104,11 +111,11 @@ func newIsolatedIndex(t *testing.T, client *cyborgdb.Client, prefix string) (*cy
 		t.Fatalf("Failed to create index %s: %v", name, err)
 	}
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = index.DeleteIndex(ctx)
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanCancel()
+		_ = index.DeleteIndex(cleanCtx)
 	})
-	return index, name, key
+	return index, name
 }
 
 // generateRandomVectors generates random float32 vectors.
@@ -125,7 +132,7 @@ func generateRandomVectors(count, dimension int) [][]float32 {
 
 // concUpsertBatch upserts a batch of random vectors. Returns error instead of calling
 // t.Fatal, making it safe to call from any goroutine.
-func concUpsertBatch(index *cyborgdb.EncryptedIndex, idPrefix string, count int) ([]string, [][]float32, error) {
+func concUpsertBatch(index *cyborgdb.EncryptedIndex, idPrefix string, count int) ([]string, error) {
 	vectors := generateRandomVectors(count, concDimension)
 	ids := make([]string, count)
 	for i := 0; i < count; i++ {
@@ -135,15 +142,15 @@ func concUpsertBatch(index *cyborgdb.EncryptedIndex, idPrefix string, count int)
 	defer cancel()
 	err := index.UpsertVectors(ctx, ids, vectors, nil)
 	if err != nil {
-		return nil, nil, fmt.Errorf("upsertBatch(%s): %w", idPrefix, err)
+		return nil, fmt.Errorf("upsertBatch(%s): %w", idPrefix, err)
 	}
-	return ids, vectors, nil
+	return ids, nil
 }
 
 // seedIndex upserts seed data from the test goroutine. Calls t.Fatalf on error.
 func seedIndex(t *testing.T, index *cyborgdb.EncryptedIndex, prefix string, count int) {
 	t.Helper()
-	_, _, err := concUpsertBatch(index, prefix, count)
+	_, err := concUpsertBatch(index, prefix, count)
 	if err != nil {
 		t.Fatalf("seedIndex failed: %v", err)
 	}
@@ -174,7 +181,7 @@ func TestConcurrentUpsertsNoDataLoss(t *testing.T) {
 	// EncryptedIndex. After all finish, every single ID must be present.
 	// Catches: request body corruption in shared client, dropped writes.
 	client := newIsolatedClient(t)
-	index, _, _ := newIsolatedIndex(t, client, "conc_upsert")
+	index, _ := newIsolatedIndex(t, client, "conc_upsert")
 
 	numGoroutines := 10
 	var mu sync.Mutex
@@ -186,7 +193,7 @@ func TestConcurrentUpsertsNoDataLoss(t *testing.T) {
 		wg.Add(1)
 		go func(goroutineID int) {
 			defer wg.Done()
-			ids, _, err := concUpsertBatch(index, fmt.Sprintf("t%d", goroutineID), concNumVectors)
+			ids, err := concUpsertBatch(index, fmt.Sprintf("t%d", goroutineID), concNumVectors)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -234,7 +241,7 @@ func TestConcurrentUpsertsOverlappingIDs(t *testing.T) {
 	// exactly match one of the 5 written vectors (proving no corruption
 	// from interleaved writes).
 	client := newIsolatedClient(t)
-	index, _, _ := newIsolatedIndex(t, client, "conc_overlap")
+	index, _ := newIsolatedIndex(t, client, "conc_overlap")
 
 	numIDs := 20
 	numGoroutines := 5
@@ -317,7 +324,7 @@ func TestQueriesDuringUpserts(t *testing.T) {
 	// Readers must get well-formed results with valid distances.
 	// Catches: crashes from concurrent HTTP access, malformed responses.
 	client := newIsolatedClient(t)
-	index, _, _ := newIsolatedIndex(t, client, "conc_rw")
+	index, _ := newIsolatedIndex(t, client, "conc_rw")
 
 	// Seed with initial data so queries have something to return
 	seedIndex(t, index, "seed", 100)
@@ -376,13 +383,13 @@ func TestQueriesDuringUpserts(t *testing.T) {
 				for _, item := range items {
 					if item.GetId() == "" {
 						mu.Lock()
-						errs = append(errs, fmt.Errorf("reader %d: result missing ID", readerID))
+						errs = append(errs, fmt.Errorf("reader %d: %w", readerID, errMissingID))
 						mu.Unlock()
 					}
 					if item.GetDistance() < 0 {
 						mu.Lock()
-						errs = append(errs, fmt.Errorf("reader %d: negative distance %f for ID %s",
-							readerID, item.GetDistance(), item.GetId()))
+						errs = append(errs, fmt.Errorf("reader %d ID %s distance %f: %w",
+							readerID, item.GetId(), item.GetDistance(), errNegativeDistance))
 						mu.Unlock()
 					}
 				}
@@ -402,7 +409,7 @@ func TestDeletesDuringQueries(t *testing.T) {
 	// Queries must never crash or return malformed results.
 	// Catches: server-side race between delete and read paths.
 	client := newIsolatedClient(t)
-	index, _, _ := newIsolatedIndex(t, client, "conc_delq")
+	index, _ := newIsolatedIndex(t, client, "conc_delq")
 
 	// Seed data so queries always have something to return
 	seedIndex(t, index, "seed", 100)
@@ -471,12 +478,12 @@ func TestDeletesDuringQueries(t *testing.T) {
 				for _, item := range items {
 					if item.GetId() == "" {
 						mu.Lock()
-						errs = append(errs, fmt.Errorf("querier %d: result missing ID", queryID))
+						errs = append(errs, fmt.Errorf("querier %d: %w", queryID, errMissingID))
 						mu.Unlock()
 					}
 					if item.GetDistance() < 0 {
 						mu.Lock()
-						errs = append(errs, fmt.Errorf("querier %d: negative distance", queryID))
+						errs = append(errs, fmt.Errorf("querier %d: %w", queryID, errNegativeDistance))
 						mu.Unlock()
 					}
 				}
@@ -497,7 +504,7 @@ func TestConcurrentUpsertsAndDeletesOnSameIDs(t *testing.T) {
 	// vector — no ghost entries or truncated state.
 	// Catches: write-delete races causing ghost entries or corrupt vectors.
 	client := newIsolatedClient(t)
-	index, _, _ := newIsolatedIndex(t, client, "conc_race")
+	index, _ := newIsolatedIndex(t, client, "conc_race")
 
 	targetCount := 40
 	targetIDs := make([]string, targetCount)
@@ -505,11 +512,11 @@ func TestConcurrentUpsertsAndDeletesOnSameIDs(t *testing.T) {
 		targetIDs[i] = fmt.Sprintf("race_%d", i)
 	}
 	vectors := generateRandomVectors(targetCount, concDimension)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	err := index.UpsertVectors(ctx, targetIDs, vectors, nil)
-	cancel()
-	if err != nil {
-		t.Fatalf("Initial upsert failed: %v", err)
+	setupCtx, setupCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	setupErr := index.UpsertVectors(setupCtx, targetIDs, vectors, nil)
+	setupCancel()
+	if setupErr != nil {
+		t.Fatalf("Initial upsert failed: %v", setupErr)
 	}
 	time.Sleep(1 * time.Second)
 
@@ -602,7 +609,7 @@ func TestBadGoroutineDoesntBreakGoodGoroutines(t *testing.T) {
 	// Good goroutines must succeed — proving error handling doesn't poison
 	// shared HTTP connection pool state.
 	client := newIsolatedClient(t)
-	index, _, _ := newIsolatedIndex(t, client, "conc_errisolation")
+	index, _ := newIsolatedIndex(t, client, "conc_errisolation")
 
 	seedIndex(t, index, "base", 50)
 	time.Sleep(1 * time.Second)
@@ -694,7 +701,7 @@ func TestNoDataLeakageBetweenIndexes(t *testing.T) {
 
 	indexes := make([]indexInfo, 3)
 	for i := 0; i < 3; i++ {
-		idx, name, _ := newIsolatedIndex(t, client, fmt.Sprintf("iso_%d", i))
+		idx, name := newIsolatedIndex(t, client, fmt.Sprintf("iso_%d", i))
 		idSet := make(map[string]bool)
 
 		ids := make([]string, 30)
@@ -771,7 +778,7 @@ func TestDeleteInOneIndexDoesntAffectOthers(t *testing.T) {
 	numIndexes := 3
 	indexes := make([]indexInfo, numIndexes)
 	for i := 0; i < numIndexes; i++ {
-		idx, name, _ := newIsolatedIndex(t, client, fmt.Sprintf("deliso_%d", i))
+		idx, name := newIsolatedIndex(t, client, fmt.Sprintf("deliso_%d", i))
 
 		ids := make([]string, 30)
 		for j := 0; j < 30; j++ {
@@ -880,7 +887,7 @@ func TestConcurrentWritesToDifferentIndexes(t *testing.T) {
 	numIndexes := 5
 	indexes := make([]indexInfo, numIndexes)
 	for i := 0; i < numIndexes; i++ {
-		idx, name, _ := newIsolatedIndex(t, client, fmt.Sprintf("cw_%d", i))
+		idx, name := newIsolatedIndex(t, client, fmt.Sprintf("cw_%d", i))
 		indexes[i] = indexInfo{index: idx, name: name}
 	}
 
@@ -987,7 +994,7 @@ func TestStress20Goroutines200VectorsEach(t *testing.T) {
 	// Catches: connection pool exhaustion, deadlocks under high goroutine
 	// counts, performance cliffs at scale.
 	client := newIsolatedClient(t)
-	index, _, _ := newIsolatedIndex(t, client, "stress")
+	index, _ := newIsolatedIndex(t, client, "stress")
 
 	numGoroutines := 20
 	vectorsPerGoroutine := 200
@@ -1000,7 +1007,7 @@ func TestStress20Goroutines200VectorsEach(t *testing.T) {
 		wg.Add(1)
 		go func(goroutineID int) {
 			defer wg.Done()
-			ids, _, err := concUpsertBatch(index, fmt.Sprintf("stress_%d", goroutineID), vectorsPerGoroutine)
+			ids, err := concUpsertBatch(index, fmt.Sprintf("stress_%d", goroutineID), vectorsPerGoroutine)
 			if err != nil {
 				mu.Lock()
 				errs = append(errs, err)
@@ -1031,12 +1038,12 @@ func TestStress20Goroutines200VectorsEach(t *testing.T) {
 				for _, item := range items {
 					if item.GetId() == "" {
 						mu.Lock()
-						errs = append(errs, fmt.Errorf("goroutine %d: missing ID in result", goroutineID))
+						errs = append(errs, fmt.Errorf("goroutine %d: %w", goroutineID, errMissingID))
 						mu.Unlock()
 					}
 					if item.GetDistance() < 0 {
 						mu.Lock()
-						errs = append(errs, fmt.Errorf("goroutine %d: negative distance", goroutineID))
+						errs = append(errs, fmt.Errorf("goroutine %d: %w", goroutineID, errNegativeDistance))
 						mu.Unlock()
 					}
 				}
@@ -1400,12 +1407,14 @@ func TestMixedIndexTypesInterleavedOperations(t *testing.T) {
 	for i := 0; i < 5; i++ {
 		extraFlatIDs[i] = fmt.Sprintf("il_flat_extra_%d", i)
 	}
-	if err := m.flat.UpsertVectors(ctx, extraFlatIDs, extraFlatVecs, nil); err != nil {
+	err = m.flat.UpsertVectors(ctx, extraFlatIDs, extraFlatVecs, nil)
+	if err != nil {
 		t.Fatalf("Flat extra upsert failed: %v", err)
 	}
 
 	// Delete first 10 from SQ (while flat was just upserted to)
-	if err := m.sq.Delete(ctx, sqIDs[:10]); err != nil {
+	err = m.sq.Delete(ctx, sqIDs[:10])
+	if err != nil {
 		t.Fatalf("SQ delete failed: %v", err)
 	}
 

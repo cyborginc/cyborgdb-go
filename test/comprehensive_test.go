@@ -32,7 +32,7 @@ func createClient() (*cyborgdb.Client, error) {
 }
 
 // compTestIndex creates an isolated index for a comprehensive test with cleanup.
-func compTestIndex(t *testing.T, dimension int32) (*cyborgdb.Client, *cyborgdb.EncryptedIndex) {
+func compTestIndex(t *testing.T) (*cyborgdb.Client, *cyborgdb.EncryptedIndex) {
 	t.Helper()
 	client, err := createClient()
 	if err != nil {
@@ -44,7 +44,7 @@ func compTestIndex(t *testing.T, dimension int32) (*cyborgdb.Client, *cyborgdb.E
 		&cyborgdb.CreateIndexParams{
 			IndexName:   generateUniqueName("comp_"),
 			IndexKey:    generateRandomKey(),
-			IndexConfig: cyborgdb.IndexIVFFlat(dimension),
+			IndexConfig: cyborgdb.IndexIVFFlat(128),
 			Metric:      &metric,
 		},
 	)
@@ -154,7 +154,7 @@ func TestVectorDimensionValidation(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	_, index := compTestIndex(t, 128)
+	_, index := compTestIndex(t)
 
 	testCases := []struct {
 		name       string
@@ -215,7 +215,7 @@ func TestVectorAndMetadataRoundTrip(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	_, index := compTestIndex(t, 128)
+	_, index := compTestIndex(t)
 
 	originalVector := generateTestVectors(1, 128)[0]
 	originalMetadata := map[string]interface{}{
@@ -283,7 +283,7 @@ func TestUpsertOverwritePreservesLatestData(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	_, index := compTestIndex(t, 128)
+	_, index := compTestIndex(t)
 
 	vecV1 := generateTestVectors(1, 128)[0]
 	metaV1 := map[string]interface{}{"version": float64(1), "old_field": "should_disappear"}
@@ -347,7 +347,7 @@ func TestDeleteActuallyRemovesData(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	_, index := compTestIndex(t, 128)
+	_, index := compTestIndex(t)
 
 	// Upsert 10 vectors
 	vectors := generateTestVectors(10, 128)
@@ -516,7 +516,7 @@ func TestGetNonExistentIDs(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	_, index := compTestIndex(t, 128)
+	_, index := compTestIndex(t)
 
 	// Upsert one vector so the index isn't completely empty
 	if err := index.Upsert(ctx, cyborgdb.VectorItems{{
@@ -704,7 +704,7 @@ func TestBoundaryVectorValuesRoundTrip(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	_, index := compTestIndex(t, 128)
+	_, index := compTestIndex(t)
 
 	testCases := []struct {
 		name   string
@@ -763,7 +763,7 @@ func TestLargeMetadataRoundTrip(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	_, index := compTestIndex(t, 128)
+	_, index := compTestIndex(t)
 
 	largeString := strings.Repeat("A", 1000)
 	testCases := []struct {

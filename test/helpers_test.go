@@ -64,14 +64,14 @@ func generateTestVectors(count, dimension int) [][]float32 {
 }
 
 // waitForPropagation waits for operations to propagate
+//
+//nolint:unparam // duration kept as parameter for call-site readability
 func waitForPropagation(duration time.Duration) {
 	time.Sleep(duration)
 }
 
 // pollUntil polls a condition function until it returns true or timeout is reached.
 // Returns true if condition was met, false if timeout occurred.
-//
-//nolint:unparam // timeout parameter kept for flexibility even though currently always pollTimeout
 func pollUntil(timeout time.Duration, interval time.Duration, condition func() bool) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
