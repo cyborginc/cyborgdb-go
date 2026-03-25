@@ -67,7 +67,6 @@ var (
 	errNegativeDistance = errors.New("negative distance")
 )
 
-
 // ---------------------------------------------------------------------------
 // Concurrent Operations — Single Index
 // ---------------------------------------------------------------------------
