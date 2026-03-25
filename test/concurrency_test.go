@@ -1441,8 +1441,8 @@ func TestMixedIndexTypesInterleavedOperations(t *testing.T) {
 	if !pollUntil(pollTimeout, pollInterval, func() bool {
 		pCtx, pCancel := context.WithTimeout(context.Background(), concTimeout)
 		defer pCancel()
-		resp, err := m.sq.ListIDs(pCtx)
-		if err != nil {
+		resp, pollErr := m.sq.ListIDs(pCtx)
+		if pollErr != nil {
 			return false
 		}
 		return len(resp.Ids) <= 10
