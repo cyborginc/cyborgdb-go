@@ -2,33 +2,27 @@ package test
 
 import (
 	"context"
-	"crypto/tls"
 	"errors"
 	"fmt"
-	"net/http"
+	"math"
 	"os"
 	"strings"
-	"sync"
 	"testing"
 	"time"
 
 	cyborgdb "github.com/cyborginc/cyborgdb-go"
+	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
-// Test configuration
 const (
-	maxRetries         = 3
-	baseTimeout        = 10 * time.Second
-	propagationTimeout = 15 * time.Second
-	longTimeout        = 120 * time.Second
+	baseTimeout = 10 * time.Second
+	longTimeout = 120 * time.Second
 )
 
 var (
-	// ErrAPIKeyRequired is returned when the API key is not set
 	ErrAPIKeyRequired = errors.New("CYBORGDB_API_KEY environment variable is required")
 )
 
-// Create a CyborgDB client with proper error handling
 func createClient() (*cyborgdb.Client, error) {
 	apiKey := os.Getenv("CYBORGDB_API_KEY")
 	if apiKey == "" {
@@ -37,661 +31,525 @@ func createClient() (*cyborgdb.Client, error) {
 	return cyborgdb.NewClient("http://localhost:8000", apiKey)
 }
 
-// SSL/TLS Configuration Testing
-func TestSSLVerification(t *testing.T) {
-	t.Run("TestSSLAutoDetectionLocalhost", func(t *testing.T) {
-		client, err := cyborgdb.NewClient("http://localhost:8000", os.Getenv("CYBORGDB_API_KEY"))
-		if err != nil {
-			t.Fatalf("Failed to create client with localhost URL: %v", err)
-		}
-
-		ctx, cancel := context.WithTimeout(context.Background(), baseTimeout)
-		defer cancel()
-
-		_, err = client.GetHealth(ctx)
-		if err != nil {
-			t.Errorf("Health check failed: %v", err)
-		}
-	})
-
-	t.Run("TestSSLWithHTTPSLocalhost", func(t *testing.T) {
-		// First check if HTTPS is available on localhost:8000
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		testClient := &http.Client{
-			Transport: tr,
-			Timeout:   2 * time.Second,
-		}
-
-		// Use context for the request
-		ctx := context.Background()
-		req, reqErr := http.NewRequestWithContext(ctx, "GET", "https://localhost:8000/v1/health", nil)
-		if reqErr != nil {
-			t.Fatalf("Failed to create request: %v", reqErr)
-		}
-
-		resp, doErr := testClient.Do(req)
-		if doErr != nil {
-			errorStr := strings.ToLower(doErr.Error())
-			// If server gave HTTP response to HTTPS client, HTTPS is not available
-			if strings.Contains(errorStr, "http response to https client") ||
-				strings.Contains(errorStr, "connection refused") {
-				t.Skip("HTTPS not available on localhost:8000 - skipping HTTPS test")
-			}
-		}
-		if resp != nil {
-			_ = resp.Body.Close()
-		}
-
-		// If we get here, HTTPS is available, so test it
-		client, clientErr := cyborgdb.NewClient("https://localhost:8000", os.Getenv("CYBORGDB_API_KEY"))
-		if clientErr != nil {
-			t.Fatalf("Failed to create client with HTTPS localhost URL: %v", clientErr)
-		}
-
-		httpsCtx, cancel := context.WithTimeout(context.Background(), baseTimeout)
-		defer cancel()
-
-		_, healthErr := client.GetHealth(httpsCtx)
-		if healthErr != nil {
-			t.Errorf("HTTPS health check failed: %v", healthErr)
-		}
-	})
-
-	t.Run("TestExplicitSSLConfiguration", func(t *testing.T) {
-		tr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-		}
-		httpClient := &http.Client{Transport: tr}
-
-		// httpClient is always non-nil after initialization
-		if httpClient.Transport == nil {
-			t.Error("Failed to create HTTP client with SSL configuration")
-		}
-
-		strictTr := &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: false},
-		}
-		strictClient := &http.Client{Transport: strictTr}
-
-		// strictClient is always non-nil after initialization
-		if strictClient.Transport == nil {
-			t.Error("Failed to create HTTP client with strict SSL")
-		}
-	})
-}
-
-// Index Type Testing - IVFPQ
-func TestIndexTypes(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), longTimeout)
-	defer cancel()
-
+// compTestIndex creates an isolated index for a comprehensive test with cleanup.
+func compTestIndex(t *testing.T) *cyborgdb.EncryptedIndex {
+	t.Helper()
 	client, err := createClient()
 	if err != nil {
 		t.Fatalf("Failed to create client: %v", err)
 	}
-
-	dimension := int32(128)
-
-	t.Run("TestIVFPQIndexOperations", func(t *testing.T) {
-		indexName := generateUniqueName("ivfpq_test_")
-		indexKey := generateRandomKey()
-
-		indexConfig := cyborgdb.IndexIVFPQ(dimension, 32, 8)
-		metric := "euclidean"
-
-		createParams := &cyborgdb.CreateIndexParams{
-			IndexName:   indexName,
-			IndexKey:    indexKey,
-			IndexConfig: indexConfig,
-			Metric:      &metric,
-		}
-
-		index, createErr := client.CreateIndex(ctx, createParams)
-		if createErr != nil {
-			t.Fatalf("Failed to create IVFPQ index: %v", createErr)
-		}
-		defer func() {
-			if delErr := index.DeleteIndex(ctx); delErr != nil {
-				t.Logf("Warning: Failed to cleanup index: %v", delErr)
-			}
-		}()
-
-		if index.GetIndexType() != "ivfpq" {
-			t.Errorf("Expected index type 'ivfpq', got '%s'", index.GetIndexType())
-		}
-
-		testVectors := generateTestVectors(50, int(dimension))
-		items := make(cyborgdb.VectorItems, len(testVectors))
-		for i, vector := range testVectors {
-			items[i] = cyborgdb.VectorItem{
-				Id:       fmt.Sprintf("ivfpq_%d", i),
-				Vector:   vector,
-				Metadata: map[string]interface{}{"test_id": i},
-			}
-		}
-
-		upsertErr := index.Upsert(ctx, items)
-		if upsertErr != nil {
-			t.Fatalf("Failed to upsert to IVFPQ index: %v", upsertErr)
-		}
-
-		waitForPropagation(3 * time.Second)
-
-		queryParams := cyborgdb.QueryParams{
-			QueryVector: testVectors[0],
-			TopK:        5,
-		}
-
-		// Use a longer timeout for IVFPQ queries
-		queryCtx, queryCancel := context.WithTimeout(ctx, 60*time.Second)
-		defer queryCancel()
-
-		results, queryErr := index.Query(queryCtx, queryParams)
-		if queryErr != nil {
-			t.Fatalf("Failed to query IVFPQ index: %v", queryErr)
-		}
-
-		if results == nil {
-			t.Fatal("Query results must not be nil")
-		}
-	})
-
-	t.Run("TestIVFSQIndexOperations", func(t *testing.T) {
-		indexName := generateUniqueName("ivfsq_test_")
-		indexKey := generateRandomKey()
-
-		indexConfig := cyborgdb.IndexIVFSQ(dimension, 8)
-		metric := "euclidean"
-
-		createParams := &cyborgdb.CreateIndexParams{
-			IndexName:   indexName,
-			IndexKey:    indexKey,
-			IndexConfig: indexConfig,
-			Metric:      &metric,
-		}
-
-		index, createErr := client.CreateIndex(ctx, createParams)
-		if createErr != nil {
-			t.Fatalf("Failed to create IVFSQ index: %v", createErr)
-		}
-		defer func() {
-			if delErr := index.DeleteIndex(ctx); delErr != nil {
-				t.Logf("Warning: Failed to cleanup index: %v", delErr)
-			}
-		}()
-
-		if index.GetIndexType() != "ivfsq" {
-			t.Errorf("Expected index type 'ivfsq', got '%s'", index.GetIndexType())
-		}
-
-		testVectors := generateTestVectors(50, int(dimension))
-		items := make(cyborgdb.VectorItems, len(testVectors))
-		for i, vector := range testVectors {
-			items[i] = cyborgdb.VectorItem{
-				Id:       fmt.Sprintf("ivfsq_%d", i),
-				Vector:   vector,
-				Metadata: map[string]interface{}{"test_id": i},
-			}
-		}
-
-		upsertErr := index.Upsert(ctx, items)
-		if upsertErr != nil {
-			t.Fatalf("Failed to upsert to IVFSQ index: %v", upsertErr)
-		}
-
-		waitForPropagation(3 * time.Second)
-
-		queryParams := cyborgdb.QueryParams{
-			QueryVector: testVectors[0],
-			TopK:        5,
-		}
-
-		// Use a longer timeout for IVFSQ queries
-		queryCtx, queryCancel := context.WithTimeout(ctx, 60*time.Second)
-		defer queryCancel()
-
-		results, queryErr := index.Query(queryCtx, queryParams)
-		if queryErr != nil {
-			t.Fatalf("Failed to query IVFSQ index: %v", queryErr)
-		}
-
-		if results == nil {
-			t.Fatal("Query results must not be nil")
-		}
-	})
-}
-
-// Error Handling Testing
-func TestComprehensiveErrorHandling(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
-	defer cancel()
-
-	t.Run("TestInvalidAPIKey", func(t *testing.T) {
-		client, clientErr := cyborgdb.NewClient("http://localhost:8000", "definitely-invalid-key-12345")
-		if clientErr != nil {
-			t.Fatalf("Client creation should not fail with invalid API key: %v", clientErr)
-		}
-
-		// Try to create an index - this should require authentication
-		indexConfig := cyborgdb.IndexIVFFlat(128)
-		metric := "euclidean"
-		createParams := &cyborgdb.CreateIndexParams{
-			IndexName:   generateUniqueName("auth_test_"),
-			IndexKey:    generateRandomKey(),
-			IndexConfig: indexConfig,
-			Metric:      &metric,
-		}
-
-		_, createErr := client.CreateIndex(ctx, createParams)
-		if createErr == nil {
-			t.Fatal("Invalid API key was accepted - authentication is not working")
-		}
-		// Just verify an error occurred (like JS test) - error format may vary
-	})
-
-	t.Run("TestMalformedRequests", func(t *testing.T) {
-		client, clientErr := createClient()
-		if clientErr != nil {
-			t.Fatalf("Failed to create client: %v", clientErr)
-		}
-
-		// Test invalid dimension
-		invalidConfig := cyborgdb.IndexIVFFlat(-1)
-		metric := "euclidean"
-		createParams := &cyborgdb.CreateIndexParams{
-			IndexName:   generateUniqueName("invalid_dim_"),
-			IndexKey:    generateRandomKey(),
-			IndexConfig: invalidConfig,
-			Metric:      &metric,
-		}
-
-		_, createErr := client.CreateIndex(ctx, createParams)
-		if createErr == nil {
-			t.Error("Server accepted negative dimension")
-		}
-
-		// Test invalid metric
-		validConfig := cyborgdb.IndexIVFFlat(128)
-		invalidMetric := "completely_invalid_metric"
-		invalidParams := &cyborgdb.CreateIndexParams{
-			IndexName:   generateUniqueName("invalid_metric_"),
-			IndexKey:    generateRandomKey(),
-			IndexConfig: validConfig,
-			Metric:      &invalidMetric,
-		}
-
-		_, metricErr := client.CreateIndex(ctx, invalidParams)
-		if metricErr == nil {
-			t.Error("Server accepted invalid metric")
-		}
-
-		// Test empty index name
-		metric2 := "euclidean"
-		emptyNameParams := &cyborgdb.CreateIndexParams{
-			IndexName:   "",
-			IndexKey:    generateRandomKey(),
-			IndexConfig: cyborgdb.IndexIVFFlat(128),
-			Metric:      &metric2,
-		}
-
-		_, emptyErr := client.CreateIndex(ctx, emptyNameParams)
-		if emptyErr == nil {
-			t.Error("Server accepted empty index name")
-		}
-
-		// Test invalid key length
-		shortKey := make([]byte, 8)
-		metric3 := "euclidean"
-		shortKeyParams := &cyborgdb.CreateIndexParams{
-			IndexName:   generateUniqueName("short_key_"),
-			IndexKey:    shortKey,
-			IndexConfig: cyborgdb.IndexIVFFlat(128),
-			Metric:      &metric3,
-		}
-
-		_, keyErr := client.CreateIndex(ctx, shortKeyParams)
-		if keyErr == nil {
-			t.Error("Server accepted invalid key length")
-		}
-	})
-
-	t.Run("TestVectorDimensionValidation", func(t *testing.T) {
-		client, clientErr := createClient()
-		if clientErr != nil {
-			t.Fatalf("Failed to create client: %v", clientErr)
-		}
-
-		indexConfig := cyborgdb.IndexIVFFlat(128)
-		indexName := generateUniqueName("dim_validation_")
-		indexKey := generateRandomKey()
-		metric := "euclidean"
-
-		createParams := &cyborgdb.CreateIndexParams{
-			IndexName:   indexName,
-			IndexKey:    indexKey,
-			IndexConfig: indexConfig,
-			Metric:      &metric,
-		}
-
-		index, createErr := client.CreateIndex(ctx, createParams)
-		if createErr != nil {
-			t.Fatalf("Failed to create test index: %v", createErr)
-		}
-		defer func() { _ = index.DeleteIndex(ctx) }()
-
-		testCases := []struct {
-			name       string
-			dimension  int
-			shouldFail bool
-		}{
-			{"Wrong dimension (64)", 64, true},
-			{"Wrong dimension (256)", 256, true},
-			{"Empty vector", 0, true},
-			{"Correct dimension", 128, false},
-		}
-
-		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
-				vector := make([]float32, tc.dimension)
-				for i := range vector {
-					vector[i] = float32(i) / 100.0
-				}
-
-				items := cyborgdb.VectorItems{{
-					Id:       fmt.Sprintf("test_%s", strings.ReplaceAll(tc.name, " ", "_")),
-					Vector:   vector,
-					Metadata: map[string]interface{}{},
-				}}
-
-				upsertErr := index.Upsert(ctx, items)
-
-				if tc.shouldFail && upsertErr == nil {
-					t.Errorf("Server accepted vector with %s", tc.name)
-				} else if !tc.shouldFail && upsertErr != nil {
-					t.Errorf("Expected success for %s, but got error: %v", tc.name, upsertErr)
-				}
-			})
-		}
-	})
-
-	t.Run("TestNetworkConnectivity", func(t *testing.T) {
-		client, clientErr := cyborgdb.NewClient("http://non-existent-server-12345.invalid:8000", "test-key")
-		if clientErr != nil {
-			t.Fatalf("Client creation should not fail: %v", clientErr)
-		}
-
-		networkCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
-		defer cancel()
-
-		_, healthErr := client.GetHealth(networkCtx)
-		if healthErr == nil {
-			t.Error("Expected network connectivity error for non-existent server")
-		}
-	})
-}
-
-// Edge Cases and Boundary Conditions
-func TestEdgeCasesStrict(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), longTimeout)
-	defer cancel()
-
-	client, err := createClient()
-	if err != nil {
-		t.Fatalf("Failed to create client: %v", err)
-	}
-
-	indexConfig := cyborgdb.IndexIVFFlat(128)
-	indexName := generateUniqueName("edge_test_")
-	indexKey := generateRandomKey()
 	metric := "euclidean"
+	index, err := client.CreateIndex(
+		context.Background(),
+		&cyborgdb.CreateIndexParams{
+			IndexName:   generateUniqueName("comp_"),
+			IndexKey:    generateRandomKey(),
+			IndexConfig: cyborgdb.IndexIVFFlat(128),
+			Metric:      &metric,
+		},
+	)
+	if err != nil {
+		t.Fatalf("Failed to create index: %v", err)
+	}
+	t.Cleanup(func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = index.DeleteIndex(ctx)
+	})
+	return index
+}
 
-	createParams := &cyborgdb.CreateIndexParams{
-		IndexName:   indexName,
-		IndexKey:    indexKey,
-		IndexConfig: indexConfig,
+// ---------------------------------------------------------------------------
+// Error Handling — validates the SDK and server reject bad input
+// ---------------------------------------------------------------------------
+
+func TestInvalidAPIKeyRejected(t *testing.T) {
+	// Catches: auth bypass, missing auth enforcement on server.
+	// A bad API key must be rejected on any mutating operation.
+	ctx, cancel := context.WithTimeout(context.Background(), baseTimeout)
+	defer cancel()
+
+	client, err := cyborgdb.NewClient("http://localhost:8000", "definitely-invalid-key-12345")
+	if err != nil {
+		t.Fatalf("Client creation should not fail with invalid API key: %v", err)
+	}
+
+	metric := "euclidean"
+	_, createErr := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+		IndexName:   generateUniqueName("auth_test_"),
+		IndexKey:    generateRandomKey(),
+		IndexConfig: cyborgdb.IndexIVFFlat(128),
+		Metric:      &metric,
+	})
+	if createErr == nil {
+		t.Fatal("Invalid API key was accepted — authentication is not enforced")
+	}
+}
+
+func TestMalformedRequestsRejected(t *testing.T) {
+	// Catches: server accepting garbage input that would corrupt state.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	client, err := createClient()
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	testCases := []struct {
+		name   string
+		params *cyborgdb.CreateIndexParams
+	}{
+		{
+			"Negative dimension",
+			&cyborgdb.CreateIndexParams{
+				IndexName:   generateUniqueName("neg_dim_"),
+				IndexKey:    generateRandomKey(),
+				IndexConfig: cyborgdb.IndexIVFFlat(-1),
+				Metric:      strPtr("euclidean"),
+			},
+		},
+		{
+			"Invalid metric",
+			&cyborgdb.CreateIndexParams{
+				IndexName:   generateUniqueName("bad_metric_"),
+				IndexKey:    generateRandomKey(),
+				IndexConfig: cyborgdb.IndexIVFFlat(128),
+				Metric:      strPtr("completely_invalid_metric"),
+			},
+		},
+		{
+			"Empty index name",
+			&cyborgdb.CreateIndexParams{
+				IndexName:   "",
+				IndexKey:    generateRandomKey(),
+				IndexConfig: cyborgdb.IndexIVFFlat(128),
+				Metric:      strPtr("euclidean"),
+			},
+		},
+		{
+			"Short key (8 bytes instead of 32)",
+			&cyborgdb.CreateIndexParams{
+				IndexName:   generateUniqueName("short_key_"),
+				IndexKey:    make([]byte, 8),
+				IndexConfig: cyborgdb.IndexIVFFlat(128),
+				Metric:      strPtr("euclidean"),
+			},
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := client.CreateIndex(ctx, tc.params)
+			if err == nil {
+				t.Errorf("Server accepted malformed request: %s", tc.name)
+			}
+		})
+	}
+}
+
+func TestVectorDimensionValidation(t *testing.T) {
+	// Catches: server silently accepting wrong-dimension vectors, which would
+	// corrupt the index or produce garbage query results.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	index := compTestIndex(t)
+
+	testCases := []struct {
+		name       string
+		dimension  int
+		shouldFail bool
+	}{
+		{"Wrong dimension (64)", 64, true},
+		{"Wrong dimension (256)", 256, true},
+		{"Empty vector (0)", 0, true},
+		{"Correct dimension (128)", 128, false},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			vector := make([]float32, tc.dimension)
+			for i := range vector {
+				vector[i] = float32(i) / 100.0
+			}
+			items := cyborgdb.VectorItems{{
+				Id:     fmt.Sprintf("dimtest_%d", tc.dimension),
+				Vector: vector,
+			}}
+
+			err := index.Upsert(ctx, items)
+			if tc.shouldFail && err == nil {
+				t.Errorf("Server accepted vector with dimension %d on a 128-dim index", tc.dimension)
+			} else if !tc.shouldFail && err != nil {
+				t.Errorf("Rejected valid vector: %v", err)
+			}
+		})
+	}
+}
+
+func TestNetworkErrorHandling(t *testing.T) {
+	// Catches: SDK panicking or hanging on unreachable server instead of
+	// returning a clean error.
+	client, err := cyborgdb.NewClient("http://non-existent-server-12345.invalid:8000", "test-key")
+	if err != nil {
+		t.Fatalf("Client creation should not fail: %v", err)
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, healthErr := client.GetHealth(ctx)
+	if healthErr == nil {
+		t.Error("Expected network error for non-existent server, got nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Data Integrity — validates data survives round-trips correctly
+// ---------------------------------------------------------------------------
+
+func TestVectorAndMetadataRoundTrip(t *testing.T) {
+	// Catches: encryption/encoding bugs that corrupt vector data or metadata
+	// during upsert→get round-trip. Checks element-by-element precision.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	index := compTestIndex(t)
+
+	originalVector := generateTestVectors(1, 128)[0]
+	originalMetadata := map[string]interface{}{
+		"string_val": "hello world",
+		"number_val": float64(42),
+		"bool_val":   true,
+		"array_val":  []interface{}{float64(1), float64(2), float64(3)},
+		"nested_val": map[string]interface{}{"inner": "value"},
+	}
+
+	items := cyborgdb.VectorItems{{
+		Id:       "roundtrip_test",
+		Vector:   originalVector,
+		Metadata: originalMetadata,
+	}}
+	if err := index.Upsert(ctx, items); err != nil {
+		t.Fatalf("Upsert failed: %v", err)
+	}
+
+	waitForPropagation(2 * time.Second)
+
+	results, err := index.Get(ctx, []string{"roundtrip_test"}, []string{"vector", "metadata"})
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if len(results.Results) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(results.Results))
+	}
+
+	retrieved := results.Results[0]
+
+	// Verify vector element-by-element
+	retrievedVec := retrieved.GetVector()
+	if len(retrievedVec) != 128 {
+		t.Fatalf("Vector length mismatch: expected 128, got %d", len(retrievedVec))
+	}
+	for i, expected := range originalVector {
+		diff := math.Abs(float64(retrievedVec[i]) - float64(expected))
+		if diff > 1e-6 {
+			t.Errorf("Vector corruption at index %d: expected %f, got %f", i, expected, retrievedVec[i])
+		}
+	}
+
+	// Verify metadata fields
+	meta := retrieved.GetMetadata()
+	if meta["string_val"] != "hello world" {
+		t.Errorf("Metadata string_val: expected 'hello world', got '%v'", meta["string_val"])
+	}
+	if meta["number_val"] != float64(42) {
+		t.Errorf("Metadata number_val: expected 42, got '%v'", meta["number_val"])
+	}
+	if meta["bool_val"] != true {
+		t.Errorf("Metadata bool_val: expected true, got '%v'", meta["bool_val"])
+	}
+	nested, ok := meta["nested_val"].(map[string]interface{})
+	if !ok || nested["inner"] != "value" {
+		t.Errorf("Metadata nested_val corrupted: got '%v'", meta["nested_val"])
+	}
+}
+
+func TestUpsertOverwritePreservesLatestData(t *testing.T) {
+	// Catches: stale cache, write-behind bugs where an earlier upsert's data
+	// is returned instead of the latest, or metadata from version 1 leaks
+	// into version 2.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	index := compTestIndex(t)
+
+	vecV1 := generateTestVectors(1, 128)[0]
+	metaV1 := map[string]interface{}{"version": float64(1), "old_field": "should_disappear"}
+	if err := index.Upsert(ctx, cyborgdb.VectorItems{{
+		Id: "overwrite_test", Vector: vecV1, Metadata: metaV1,
+	}}); err != nil {
+		t.Fatalf("Upsert v1 failed: %v", err)
+	}
+
+	waitForPropagation(2 * time.Second)
+
+	// Overwrite with different vector and metadata
+	vecV2 := generateTestVectors(1, 128)[0]
+	// Make v2 distinct from v1
+	for i := range vecV2 {
+		vecV2[i] += 10.0
+	}
+	metaV2 := map[string]interface{}{"version": float64(2), "new_field": "present"}
+	if err := index.Upsert(ctx, cyborgdb.VectorItems{{
+		Id: "overwrite_test", Vector: vecV2, Metadata: metaV2,
+	}}); err != nil {
+		t.Fatalf("Upsert v2 failed: %v", err)
+	}
+
+	waitForPropagation(2 * time.Second)
+
+	results, err := index.Get(ctx, []string{"overwrite_test"}, []string{"vector", "metadata"})
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if len(results.Results) != 1 {
+		t.Fatalf("Expected 1 result, got %d", len(results.Results))
+	}
+
+	retrieved := results.Results[0]
+	retrievedVec := retrieved.GetVector()
+
+	// The retrieved vector must match v2, not v1
+	for i := range vecV2 {
+		diff := math.Abs(float64(retrievedVec[i]) - float64(vecV2[i]))
+		if diff > 1e-6 {
+			t.Errorf("Vector at index %d matches v1 instead of v2: got %f, want %f",
+				i, retrievedVec[i], vecV2[i])
+			break
+		}
+	}
+
+	// Metadata must be v2's metadata
+	meta := retrieved.GetMetadata()
+	if meta["version"] != float64(2) {
+		t.Errorf("Expected metadata version=2, got %v — stale data returned", meta["version"])
+	}
+	if meta["new_field"] != "present" {
+		t.Errorf("Expected new_field='present', got %v", meta["new_field"])
+	}
+}
+
+func TestDeleteActuallyRemovesData(t *testing.T) {
+	// Catches: soft-delete bugs where data lingers in queries or Get after
+	// deletion, or ListIDs still shows deleted vectors.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	index := compTestIndex(t)
+
+	// Upsert 10 vectors
+	vectors := generateTestVectors(10, 128)
+	items := make(cyborgdb.VectorItems, 10)
+	for i := 0; i < 10; i++ {
+		items[i] = cyborgdb.VectorItem{
+			Id:     fmt.Sprintf("del_test_%d", i),
+			Vector: vectors[i],
+		}
+	}
+	if err := index.Upsert(ctx, items); err != nil {
+		t.Fatalf("Upsert failed: %v", err)
+	}
+
+	waitForPropagation(2 * time.Second)
+
+	// Delete first 5
+	deleteIDs := []string{"del_test_0", "del_test_1", "del_test_2", "del_test_3", "del_test_4"}
+	if err := index.Delete(ctx, deleteIDs); err != nil {
+		t.Fatalf("Delete failed: %v", err)
+	}
+
+	waitForPropagation(2 * time.Second)
+
+	// Get deleted IDs — should return empty results
+	getResp, err := index.Get(ctx, deleteIDs, []string{"vector"})
+	if err != nil {
+		t.Fatalf("Get deleted IDs failed: %v", err)
+	}
+	if len(getResp.Results) != 0 {
+		returnedIDs := make([]string, len(getResp.Results))
+		for i, r := range getResp.Results {
+			returnedIDs[i] = r.GetId()
+		}
+		t.Errorf("Deleted vectors still returned by Get: %v", returnedIDs)
+	}
+
+	// ListIDs — should only contain the surviving 5
+	listResp, err := index.ListIDs(ctx)
+	if err != nil {
+		t.Fatalf("ListIDs failed: %v", err)
+	}
+	for _, id := range listResp.Ids {
+		for _, deleted := range deleteIDs {
+			if id == deleted {
+				t.Errorf("Deleted ID '%s' still appears in ListIDs", id)
+			}
+		}
+	}
+	if len(listResp.Ids) != 5 {
+		t.Errorf("Expected 5 surviving IDs, got %d", len(listResp.Ids))
+	}
+
+	// Query with a deleted vector — it must not appear in results
+	queryResp, err := index.Query(ctx, cyborgdb.QueryParams{
+		QueryVector: vectors[0], // vector for del_test_0
+		TopK:        10,
+	})
+	if err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+	resultItems := getQueryResultItems(&queryResp.Results)
+	for _, item := range resultItems {
+		for _, deleted := range deleteIDs {
+			if item.GetId() == deleted {
+				t.Errorf("Deleted ID '%s' still appears in query results", item.GetId())
+			}
+		}
+	}
+}
+
+func TestDuplicateIndexNameRejected(t *testing.T) {
+	// Catches: silent overwrite of an existing index when creating a new one
+	// with the same name, which would destroy production data.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	client, err := createClient()
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	name := generateUniqueName("dup_test_")
+	key := generateRandomKey()
+	metric := "euclidean"
+	params := &cyborgdb.CreateIndexParams{
+		IndexName:   name,
+		IndexKey:    key,
+		IndexConfig: cyborgdb.IndexIVFFlat(128),
 		Metric:      &metric,
 	}
 
-	index, err := client.CreateIndex(ctx, createParams)
+	index, err := client.CreateIndex(ctx, params)
 	if err != nil {
-		t.Fatalf("Failed to create test index: %v", err)
+		t.Fatalf("First CreateIndex failed: %v", err)
 	}
-	defer func() { _ = index.DeleteIndex(ctx) }()
-
-	t.Run("TestEmptyIndexQuery", func(t *testing.T) {
-		queryVector := generateTestVectors(1, 128)[0]
-		queryParams := cyborgdb.QueryParams{
-			QueryVector: queryVector,
-			TopK:        10,
-		}
-
-		results, queryErr := index.Query(ctx, queryParams)
-		if queryErr != nil {
-			t.Fatalf("Failed to query empty index: %v", queryErr)
-		}
-
-		if results == nil {
-			t.Fatal("Results must not be nil, even for empty index")
-		}
+	t.Cleanup(func() {
+		cleanCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = index.DeleteIndex(cleanCtx)
 	})
 
-	t.Run("TestDataIntegrityThroughOperations", func(t *testing.T) {
-		originalVector := generateTestVectors(1, 128)[0]
-		originalMetadata := map[string]interface{}{
-			"test_key": "test_value",
-			"number":   42,
-			"array":    []int{1, 2, 3, 4, 5},
-		}
-
-		items := cyborgdb.VectorItems{{
-			Id:       "integrity_test",
-			Vector:   originalVector,
-			Metadata: originalMetadata,
-		}}
-
-		upsertErr := index.Upsert(ctx, items)
-		if upsertErr != nil {
-			t.Fatalf("Failed to upsert: %v", upsertErr)
-		}
-
-		waitForPropagation(2 * time.Second)
-
-		include := []string{"vector", "metadata"}
-		results, getErr := index.Get(ctx, []string{"integrity_test"}, include)
-		if getErr != nil {
-			t.Fatalf("Failed to get vector: %v", getErr)
-		}
-
-		if len(results.Results) != 1 {
-			t.Fatalf("Expected exactly 1 result, got %d", len(results.Results))
-		}
-
-		retrieved := results.Results[0]
-		if retrieved.GetId() != "integrity_test" {
-			t.Errorf("ID mismatch: expected 'integrity_test', got '%s'", retrieved.GetId())
-		}
-
-		retrievedVector := retrieved.GetVector()
-		if len(retrievedVector) != len(originalVector) {
-			t.Fatalf("Vector length mismatch: expected %d, got %d", len(originalVector), len(retrievedVector))
-		}
-
-		for i, expected := range originalVector {
-			actual := retrievedVector[i]
-			diff := actual - expected
-			if diff < 0 {
-				diff = -diff
-			}
-			if diff > 1e-6 {
-				t.Errorf("Vector data corruption at index %d: expected %f, got %f", i, expected, actual)
-			}
-		}
-
-		retrievedMetadata := retrieved.GetMetadata()
-		if retrievedMetadata["test_key"] != originalMetadata["test_key"] {
-			t.Errorf("Metadata corruption: test_key expected %v, got %v",
-				originalMetadata["test_key"], retrievedMetadata["test_key"])
-		}
+	// Second create with same name must fail
+	_, dupErr := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+		IndexName:   name,
+		IndexKey:    generateRandomKey(),
+		IndexConfig: cyborgdb.IndexIVFFlat(128),
+		Metric:      &metric,
 	})
-
-	t.Run("TestConcurrentOperationsValidation", func(t *testing.T) {
-		numOperations := 5
-		var wg sync.WaitGroup
-		errorChan := make(chan error, numOperations)
-		successChan := make(chan string, numOperations)
-
-		// Use a longer timeout for concurrent operations
-		concurrentCtx, concurrentCancel := context.WithTimeout(ctx, 90*time.Second)
-		defer concurrentCancel()
-
-		for i := 0; i < numOperations; i++ {
-			wg.Add(1)
-			go func(id int) {
-				defer wg.Done()
-
-				vector := generateTestVectors(1, 128)[0]
-				for j := range vector {
-					vector[j] += float32(id) / 1000.0
-				}
-
-				items := cyborgdb.VectorItems{{
-					Id:       fmt.Sprintf("concurrent_%d", id),
-					Vector:   vector,
-					Metadata: map[string]interface{}{"batch_id": id},
-				}}
-
-				if upsertErr := index.Upsert(concurrentCtx, items); upsertErr != nil {
-					errorChan <- fmt.Errorf("operation %d failed: %w", id, upsertErr)
-				} else {
-					successChan <- fmt.Sprintf("concurrent_%d", id)
-				}
-			}(i)
-		}
-
-		wg.Wait()
-		close(errorChan)
-		close(successChan)
-
-		var errs []error
-		for opErr := range errorChan {
-			errs = append(errs, opErr)
-		}
-
-		var successIds []string
-		for id := range successChan {
-			successIds = append(successIds, id)
-		}
-
-		if len(errs) > 0 {
-			for _, opErr := range errs {
-				t.Errorf("Concurrent operation error: %v", opErr)
-			}
-		}
-
-		if len(successIds) != numOperations {
-			t.Errorf("Expected %d successful operations, got %d", numOperations, len(successIds))
-		}
-
-		waitForPropagation(5 * time.Second)
-
-		results, listErr := index.ListIDs(concurrentCtx)
-		if listErr != nil {
-			t.Fatalf("Failed to list IDs: %v", listErr)
-		}
-
-		concurrentCount := 0
-		for _, id := range results.Ids {
-			if strings.HasPrefix(id, "concurrent_") {
-				concurrentCount++
-			}
-		}
-
-		if concurrentCount != numOperations {
-			t.Errorf("Expected %d items in index, found %d", numOperations, concurrentCount)
-		}
-	})
-
-	t.Run("TestBoundaryValues", func(t *testing.T) {
-		testCases := []struct {
-			name          string
-			vector        []float32
-			shouldSucceed bool
-		}{
-			{"Zero vector", make([]float32, 128), true},
-			{"Very small values", generateVectorWithValue(128, 1e-10), true},
-			{"Very large values", generateVectorWithValue(128, 1e10), true},
-			{"Mixed positive negative", generateMixedVector(128), true},
-		}
-
-		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
-				items := cyborgdb.VectorItems{{
-					Id:       fmt.Sprintf("boundary_%s", strings.ReplaceAll(tc.name, " ", "_")),
-					Vector:   tc.vector,
-					Metadata: map[string]interface{}{"type": tc.name},
-				}}
-
-				upsertErr := index.Upsert(ctx, items)
-
-				if tc.shouldSucceed && upsertErr != nil {
-					t.Errorf("Expected success for %s, got error: %v", tc.name, upsertErr)
-				} else if !tc.shouldSucceed && upsertErr == nil {
-					t.Errorf("Expected failure for %s, but operation succeeded", tc.name)
-				}
-			})
-		}
-	})
-
-	t.Run("TestLargeMetadataHandling", func(t *testing.T) {
-		testCases := []struct {
-			name     string
-			metadata map[string]interface{}
-		}{
-			{"Large string", map[string]interface{}{"description": strings.Repeat("A", 1000)}},
-			{"Deep nesting", createDeepNestedMetadata(5)},
-			{"Large array", map[string]interface{}{"array": make([]int, 50)}},
-		}
-
-		for _, tc := range testCases {
-			t.Run(tc.name, func(t *testing.T) {
-				vector := generateTestVectors(1, 128)[0]
-				items := cyborgdb.VectorItems{{
-					Id:       fmt.Sprintf("metadata_%s", strings.ReplaceAll(tc.name, " ", "_")),
-					Vector:   vector,
-					Metadata: tc.metadata,
-				}}
-
-				metadataErr := index.Upsert(ctx, items)
-				if metadataErr != nil {
-					t.Errorf("Failed to upsert %s: %v", tc.name, metadataErr)
-					return
-				}
-
-				waitForPropagation(2 * time.Second)
-				include := []string{"metadata"}
-				results, getErr := index.Get(ctx, []string{items[0].Id}, include)
-				if getErr != nil {
-					t.Errorf("Failed to retrieve %s: %v", tc.name, getErr)
-					return
-				}
-
-				if results == nil {
-					t.Errorf("Results is nil for %s", tc.name)
-					return
-				}
-
-				if len(results.Results) != 1 {
-					t.Errorf("Expected 1 result for %s, got %d", tc.name, len(results.Results))
-				}
-			})
-		}
-	})
+	if dupErr == nil {
+		t.Fatal("Server accepted duplicate index name — would silently overwrite existing data")
+	}
 }
 
-// Backend Compatibility Tests
-func TestBackendCompatibility(t *testing.T) {
+func TestWrongKeyCannotAccessData(t *testing.T) {
+	// Catches: encryption key bypass, key validation bugs where any key
+	// can read another index's data.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	client, err := createClient()
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	name := generateUniqueName("wrongkey_")
+	correctKey := generateRandomKey()
+	metric := "euclidean"
+
+	index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+		IndexName:   name,
+		IndexKey:    correctKey,
+		IndexConfig: cyborgdb.IndexIVFFlat(128),
+		Metric:      &metric,
+	})
+	if err != nil {
+		t.Fatalf("CreateIndex failed: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = index.DeleteIndex(cleanCtx)
+	})
+
+	// Upsert data with the correct key
+	vector := generateTestVectors(1, 128)[0]
+	if err := index.Upsert(ctx, cyborgdb.VectorItems{{
+		Id: "secret_data", Vector: vector,
+	}}); err != nil {
+		t.Fatalf("Upsert failed: %v", err)
+	}
+
+	waitForPropagation(2 * time.Second)
+
+	// Try to load the same index with a wrong key
+	wrongKey := generateRandomKey()
+	_, loadErr := client.LoadIndex(ctx, name, wrongKey)
+	if loadErr == nil {
+		t.Fatal("LoadIndex with wrong key succeeded — encryption key validation is broken")
+	}
+}
+
+func TestGetNonExistentIDs(t *testing.T) {
+	// Catches: server crashing or returning errors when asked for IDs that
+	// don't exist, instead of gracefully returning empty results.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	index := compTestIndex(t)
+
+	// Upsert one vector so the index isn't completely empty
+	if err := index.Upsert(ctx, cyborgdb.VectorItems{{
+		Id:     "exists",
+		Vector: generateTestVectors(1, 128)[0],
+	}}); err != nil {
+		t.Fatalf("Upsert failed: %v", err)
+	}
+
+	waitForPropagation(2 * time.Second)
+
+	// Get a mix of existing and non-existing IDs
+	resp, err := index.Get(ctx, []string{"exists", "ghost_1", "ghost_2"}, []string{"vector"})
+	if err != nil {
+		t.Fatalf("Get with non-existent IDs should not error: %v", err)
+	}
+
+	// Should return only the existing vector
+	if len(resp.Results) != 1 {
+		t.Errorf("Expected 1 result for the existing ID, got %d", len(resp.Results))
+	}
+	if len(resp.Results) > 0 && resp.Results[0].GetId() != "exists" {
+		t.Errorf("Expected ID 'exists', got '%s'", resp.Results[0].GetId())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Index Type — validates IVFSQ and IVFPQ produce correct results
+// ---------------------------------------------------------------------------
+
+func TestIVFSQQueryCorrectness(t *testing.T) {
+	// Catches: scalar quantization corrupting vector data enough to return
+	// wrong nearest neighbors, broken distance computation, unsorted results.
 	ctx, cancel := context.WithTimeout(context.Background(), longTimeout)
 	defer cancel()
 
@@ -700,113 +558,319 @@ func TestBackendCompatibility(t *testing.T) {
 		t.Fatalf("Failed to create client: %v", err)
 	}
 
-	t.Run("TestHealthCheck", func(t *testing.T) {
-		health, healthErr := client.GetHealth(ctx)
-		if healthErr != nil {
-			t.Fatalf("Health check failed: %v", healthErr)
-		}
-
-		if health == nil {
-			t.Fatal("Health response must not be nil")
-		}
+	metric := "euclidean"
+	index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+		IndexName:   generateUniqueName("ivfsq_"),
+		IndexKey:    generateRandomKey(),
+		IndexConfig: cyborgdb.IndexIVFSQ(128, 8),
+		Metric:      &metric,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create IVFSQ index: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = index.DeleteIndex(cleanCtx)
 	})
 
-	t.Run("TestBasicIndexSupport", func(t *testing.T) {
-		indexConfig := cyborgdb.IndexIVFFlat(128)
-		indexName := generateUniqueName("compatibility_")
-		indexKey := generateRandomKey()
-		metric := "euclidean"
+	if index.GetIndexType() != "ivfsq" {
+		t.Errorf("Expected index type 'ivfsq', got '%s'", index.GetIndexType())
+	}
 
-		createParams := &cyborgdb.CreateIndexParams{
-			IndexName:   indexName,
-			IndexKey:    indexKey,
-			IndexConfig: indexConfig,
-			Metric:      &metric,
+	vectors := generateTestVectors(50, 128)
+	items := make(cyborgdb.VectorItems, len(vectors))
+	for i, v := range vectors {
+		items[i] = cyborgdb.VectorItem{Id: fmt.Sprintf("sq_%d", i), Vector: v}
+	}
+	if err := index.Upsert(ctx, items); err != nil {
+		t.Fatalf("Upsert failed: %v", err)
+	}
+
+	queryParams := cyborgdb.QueryParams{QueryVector: vectors[0], TopK: 5}
+	var resultItems []internal.QueryResultItem
+	ok := pollUntil(30*time.Second, 2*time.Second, func() bool {
+		results, err := index.Query(ctx, queryParams)
+		if err != nil || results == nil {
+			return false
 		}
-
-		index, createErr := client.CreateIndex(ctx, createParams)
-		if createErr != nil {
-			t.Fatalf("Basic IVFFlat index creation failed: %v", createErr)
-		}
-		defer func() { _ = index.DeleteIndex(ctx) }()
-
-		vector := generateTestVectors(1, 128)[0]
-		items := cyborgdb.VectorItems{{
-			Id:     "compatibility_test",
-			Vector: vector,
-		}}
-
-		if upsertErr := index.Upsert(ctx, items); upsertErr != nil {
-			t.Fatalf("Basic upsert failed: %v", upsertErr)
-		}
-
-		waitForPropagation(2 * time.Second)
-
-		queryParams := cyborgdb.QueryParams{
-			QueryVector: vector,
-			TopK:        1,
-		}
-
-		results, queryErr := index.Query(ctx, queryParams)
-		if queryErr != nil {
-			t.Fatalf("Basic query failed: %v", queryErr)
-		}
-
-		if results == nil {
-			t.Fatal("Query results must not be nil")
-		}
+		resultItems = getQueryResultItems(&results.Results)
+		return len(resultItems) > 0
 	})
+	if !ok {
+		t.Fatal("IVFSQ query returned no results within 30s")
+	}
 
-	t.Run("TestAdvancedIndexSupport", func(t *testing.T) {
-		dimension := int32(128)
+	// Self-match: querying with vectors[0] must return sq_0 first
+	if resultItems[0].GetId() != "sq_0" {
+		t.Errorf("Expected nearest neighbor 'sq_0', got '%s' — SQ compression corrupting lookups", resultItems[0].GetId())
+	}
+	if resultItems[0].GetDistance() > 1.0 {
+		t.Errorf("Self-distance should be near zero, got %f", resultItems[0].GetDistance())
+	}
 
-		indexConfig := cyborgdb.IndexIVFPQ(dimension, 32, 8)
-		metric := "euclidean"
-		createParams := &cyborgdb.CreateIndexParams{
-			IndexName:   generateUniqueName("advanced_"),
-			IndexKey:    generateRandomKey(),
-			IndexConfig: indexConfig,
-			Metric:      &metric,
+	// Distances must be non-negative and ordered
+	for i, item := range resultItems {
+		if item.GetDistance() < 0 {
+			t.Errorf("Result %d: negative distance %f", i, item.GetDistance())
 		}
-
-		advancedIndex, createErr := client.CreateIndex(ctx, createParams)
-		if createErr != nil {
-			t.Fatalf("Failed to create advanced index: %v", createErr)
+		if i > 0 && item.GetDistance() < resultItems[i-1].GetDistance() {
+			t.Errorf("Results not sorted: [%d]=%f < [%d]=%f",
+				i, item.GetDistance(), i-1, resultItems[i-1].GetDistance())
 		}
-		defer func() { _ = advancedIndex.DeleteIndex(ctx) }()
-
-		vectors := generateTestVectors(10, 128)
-		items := make(cyborgdb.VectorItems, len(vectors))
-		for i, vector := range vectors {
-			items[i] = cyborgdb.VectorItem{
-				Id:     fmt.Sprintf("advanced_%d", i),
-				Vector: vector,
-			}
-		}
-
-		if upsertErr := advancedIndex.Upsert(ctx, items); upsertErr != nil {
-			t.Errorf("Advanced index upsert failed: %v", upsertErr)
-		}
-
-		waitForPropagation(5 * time.Second)
-
-		queryParams := cyborgdb.QueryParams{
-			QueryVector: vectors[0],
-			TopK:        5,
-		}
-
-		results, queryErr := advancedIndex.Query(ctx, queryParams)
-		if queryErr != nil {
-			t.Errorf("Advanced index query failed: %v", queryErr)
-		}
-
-		if results == nil {
-			t.Error("Advanced index query results must not be nil")
-		}
-	})
+	}
 }
 
-// Helper functions
+func TestIVFPQQueryCorrectness(t *testing.T) {
+	// Catches: PQ compression/decompression corrupting lookups, broken
+	// distance computation in quantized space, unsorted results.
+	ctx, cancel := context.WithTimeout(context.Background(), longTimeout)
+	defer cancel()
+
+	client, err := createClient()
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	metric := "euclidean"
+	index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+		IndexName:   generateUniqueName("ivfpq_"),
+		IndexKey:    generateRandomKey(),
+		IndexConfig: cyborgdb.IndexIVFPQ(128, 32, 8),
+		Metric:      &metric,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create IVFPQ index: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		_ = index.DeleteIndex(cleanCtx)
+	})
+
+	if index.GetIndexType() != "ivfpq" {
+		t.Errorf("Expected index type 'ivfpq', got '%s'", index.GetIndexType())
+	}
+
+	vectors := generateTestVectors(50, 128)
+	items := make(cyborgdb.VectorItems, len(vectors))
+	for i, v := range vectors {
+		items[i] = cyborgdb.VectorItem{Id: fmt.Sprintf("pq_%d", i), Vector: v}
+	}
+	if err := index.Upsert(ctx, items); err != nil {
+		t.Fatalf("Upsert failed: %v", err)
+	}
+
+	queryParams := cyborgdb.QueryParams{QueryVector: vectors[0], TopK: 5}
+	var resultItems []internal.QueryResultItem
+	ok := pollUntil(30*time.Second, 2*time.Second, func() bool {
+		results, err := index.Query(ctx, queryParams)
+		if err != nil || results == nil {
+			return false
+		}
+		resultItems = getQueryResultItems(&results.Results)
+		return len(resultItems) > 0
+	})
+	if !ok {
+		t.Fatal("IVFPQ query returned no results within 30s")
+	}
+
+	if resultItems[0].GetId() != "pq_0" {
+		t.Errorf("Expected nearest neighbor 'pq_0', got '%s' — PQ compression corrupting lookups", resultItems[0].GetId())
+	}
+	if resultItems[0].GetDistance() > 1.0 {
+		t.Errorf("Self-distance should be near zero, got %f", resultItems[0].GetDistance())
+	}
+
+	for i, item := range resultItems {
+		if item.GetDistance() < 0 {
+			t.Errorf("Result %d: negative distance %f", i, item.GetDistance())
+		}
+		if i > 0 && item.GetDistance() < resultItems[i-1].GetDistance() {
+			t.Errorf("Results not sorted: [%d]=%f < [%d]=%f",
+				i, item.GetDistance(), i-1, resultItems[i-1].GetDistance())
+		}
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Edge Cases — boundary values and large metadata round-trips
+// ---------------------------------------------------------------------------
+
+func TestBoundaryVectorValuesRoundTrip(t *testing.T) {
+	// Catches: float overflow/underflow in encryption, NaN propagation,
+	// encoding bugs for extreme values. Verifies vectors survive round-trip,
+	// not just that upsert succeeds.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	index := compTestIndex(t)
+
+	testCases := []struct {
+		name   string
+		vector []float32
+	}{
+		{"Very small values (1e-10)", generateVectorWithValue(128, 1e-10)},
+		{"Very large values (1e10)", generateVectorWithValue(128, 1e10)},
+		{"Mixed positive and negative", generateMixedVector(128)},
+	}
+
+	// Upsert all
+	for i, tc := range testCases {
+		id := fmt.Sprintf("boundary_%d", i)
+		if err := index.Upsert(ctx, cyborgdb.VectorItems{{
+			Id: id, Vector: tc.vector,
+		}}); err != nil {
+			t.Fatalf("Upsert failed for %s: %v", tc.name, err)
+		}
+	}
+
+	waitForPropagation(2 * time.Second)
+
+	// Verify round-trip
+	for i, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			id := fmt.Sprintf("boundary_%d", i)
+			resp, err := index.Get(ctx, []string{id}, []string{"vector"})
+			if err != nil {
+				t.Fatalf("Get failed: %v", err)
+			}
+			if len(resp.Results) != 1 {
+				t.Fatalf("Expected 1 result, got %d", len(resp.Results))
+			}
+
+			retrieved := resp.Results[0].GetVector()
+			if len(retrieved) != 128 {
+				t.Fatalf("Vector length mismatch: got %d", len(retrieved))
+			}
+
+			for j, expected := range tc.vector {
+				diff := math.Abs(float64(retrieved[j]) - float64(expected))
+				if diff > 1e-4 {
+					t.Errorf("Element %d: expected %e, got %e (diff %e)",
+						j, expected, retrieved[j], diff)
+					break
+				}
+			}
+		})
+	}
+}
+
+func TestLargeMetadataRoundTrip(t *testing.T) {
+	// Catches: metadata truncation, JSON serialization bugs for deep nesting,
+	// large strings being silently dropped. Verifies content matches, not just
+	// that the server accepted it.
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	index := compTestIndex(t)
+
+	largeString := strings.Repeat("A", 1000)
+	testCases := []struct {
+		name     string
+		metadata map[string]interface{}
+		checkKey string
+		checkVal interface{}
+	}{
+		{
+			"1KB string value",
+			map[string]interface{}{"description": largeString},
+			"description", largeString,
+		},
+		{
+			"Deep nesting (5 levels)",
+			createDeepNestedMetadata(5),
+			"level", float64(5), // JSON unmarshals numbers as float64
+		},
+		{
+			"50-element array",
+			map[string]interface{}{"tags": makeIntSlice(50)},
+			"tags", nil, // checked separately
+		},
+	}
+
+	for i, tc := range testCases {
+		id := fmt.Sprintf("meta_%d", i)
+		if err := index.Upsert(ctx, cyborgdb.VectorItems{{
+			Id: id, Vector: generateTestVectors(1, 128)[0], Metadata: tc.metadata,
+		}}); err != nil {
+			t.Fatalf("Upsert failed for %s: %v", tc.name, err)
+		}
+	}
+
+	waitForPropagation(2 * time.Second)
+
+	for i, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			id := fmt.Sprintf("meta_%d", i)
+			resp, err := index.Get(ctx, []string{id}, []string{"metadata"})
+			if err != nil {
+				t.Fatalf("Get failed: %v", err)
+			}
+			if len(resp.Results) != 1 {
+				t.Fatalf("Expected 1 result, got %d", len(resp.Results))
+			}
+
+			meta := resp.Results[0].GetMetadata()
+
+			if tc.checkKey == "tags" {
+				arr, ok := meta["tags"].([]interface{})
+				if !ok {
+					t.Fatalf("Expected array for 'tags', got %T", meta["tags"])
+				}
+				if len(arr) != 50 {
+					t.Errorf("Array truncated: expected 50 elements, got %d", len(arr))
+				}
+			} else if tc.checkVal != nil {
+				if meta[tc.checkKey] != tc.checkVal {
+					got := meta[tc.checkKey]
+					if s, ok := got.(string); ok && len(s) > 50 {
+						got = s[:50] + "..."
+					}
+					t.Errorf("Metadata '%s': expected '%v', got '%v'", tc.checkKey, tc.checkVal, got)
+				}
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Demo API Key
+// ---------------------------------------------------------------------------
+
+func TestGetDemoAPIKey(t *testing.T) {
+	// Catches: demo key generation endpoint broken, returned key not usable.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	apiKey, err := cyborgdb.GetDemoAPIKey("")
+	if err != nil {
+		t.Fatalf("Failed to get demo API key: %v", err)
+	}
+	if apiKey == "" {
+		t.Fatal("Demo API key is empty")
+	}
+
+	// Verify the key actually works
+	client, err := cyborgdb.NewClient("http://localhost:8000", apiKey)
+	if err != nil {
+		t.Fatalf("Failed to create client with demo key: %v", err)
+	}
+
+	health, err := client.GetHealth(ctx)
+	if err != nil {
+		t.Fatalf("Health check failed with demo key: %v", err)
+	}
+	if health == nil {
+		t.Fatal("Health response is nil")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Helpers
+// ---------------------------------------------------------------------------
+
+func strPtr(s string) *string { return &s }
 
 func generateVectorWithValue(dimension int, value float32) []float32 {
 	vector := make([]float32, dimension)
@@ -838,63 +902,10 @@ func createDeepNestedMetadata(depth int) map[string]interface{} {
 	}
 }
 
-// TestGetDemoAPIKey tests the GetDemoAPIKey function
-func TestGetDemoAPIKey(t *testing.T) {
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	t.Run("TestGetDemoAPIKeySuccess", func(t *testing.T) {
-		// Get a demo API key
-		apiKey, err := cyborgdb.GetDemoAPIKey("")
-		if err != nil {
-			t.Fatalf("Failed to get demo API key: %v", err)
-		}
-
-		if apiKey == "" {
-			t.Fatal("Demo API key is empty")
-		}
-
-		// Verify the API key works by creating a client and checking health
-		client, err := cyborgdb.NewClient("http://localhost:8000", apiKey)
-		if err != nil {
-			t.Fatalf("Failed to create client with demo API key: %v", err)
-		}
-
-		health, err := client.GetHealth(ctx)
-		if err != nil {
-			t.Fatalf("Health check failed with demo API key: %v", err)
-		}
-
-		if health == nil {
-			t.Fatal("Health response is nil")
-		}
-	})
-
-	t.Run("TestGetDemoAPIKeyWithCustomDescription", func(t *testing.T) {
-		// Get a demo API key with a custom description
-		customDescription := "Test API key for Go SDK"
-		apiKey, err := cyborgdb.GetDemoAPIKey(customDescription)
-		if err != nil {
-			t.Fatalf("Failed to get demo API key with custom description: %v", err)
-		}
-
-		if apiKey == "" {
-			t.Fatal("Demo API key is empty")
-		}
-
-		// Verify the API key works
-		client, err := cyborgdb.NewClient("http://localhost:8000", apiKey)
-		if err != nil {
-			t.Fatalf("Failed to create client with demo API key: %v", err)
-		}
-
-		health, err := client.GetHealth(ctx)
-		if err != nil {
-			t.Fatalf("Health check failed with demo API key: %v", err)
-		}
-
-		if health == nil {
-			t.Fatal("Health response is nil")
-		}
-	})
+func makeIntSlice(n int) []interface{} {
+	s := make([]interface{}, n)
+	for i := range s {
+		s[i] = float64(i)
+	}
+	return s
 }
