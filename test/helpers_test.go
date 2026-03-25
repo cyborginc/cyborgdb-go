@@ -1,8 +1,11 @@
 package test
 
 import (
+	"context"
 	"crypto/rand"
 	"fmt"
+	"math"
+	mrand "math/rand"
 	"os"
 	"testing"
 	"time"
@@ -10,6 +13,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/joho/godotenv"
 
+	cyborgdb "github.com/cyborginc/cyborgdb-go"
 	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
@@ -119,4 +123,108 @@ func getBatchQueryResults(results *internal.Results) [][]internal.QueryResultIte
 		return [][]internal.QueryResultItem{*results.ArrayOfQueryResultItem}
 	}
 	return nil
+}
+
+// generateRandomVectors generates random float32 vectors.
+func generateRandomVectors(count, dimension int) [][]float32 {
+	vectors := make([][]float32, count)
+	for i := 0; i < count; i++ {
+		vectors[i] = make([]float32, dimension)
+		for j := 0; j < dimension; j++ {
+			vectors[i][j] = mrand.Float32()
+		}
+	}
+	return vectors
+}
+
+// vectorsApproxEqual checks if two float32 vectors are approximately equal.
+func vectorsApproxEqual(a, b []float32, rtol float64) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	for i := range a {
+		diff := math.Abs(float64(a[i]) - float64(b[i]))
+		limit := rtol * math.Max(math.Abs(float64(a[i])), math.Abs(float64(b[i])))
+		if diff > limit+1e-8 {
+			return false
+		}
+	}
+	return true
+}
+
+// testBaseURL returns the CyborgDB base URL from env or localhost default.
+func testBaseURL() string {
+	u := os.Getenv("CYBORGDB_BASE_URL")
+	if u == "" {
+		return "http://localhost:8000"
+	}
+	return u
+}
+
+// testAPIKey returns the CyborgDB API key from env.
+func testAPIKey() string {
+	return os.Getenv("CYBORGDB_API_KEY")
+}
+
+// newIsolatedClient creates a fresh CyborgDB client. Safe to call from any goroutine.
+func newIsolatedClient(t *testing.T) *cyborgdb.Client {
+	t.Helper()
+	client, err := cyborgdb.NewClient(testBaseURL(), testAPIKey())
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+	return client
+}
+
+// newIsolatedIndex creates a uniquely-named IVFFlat index with its own cleanup.
+// Must be called from the test goroutine (uses t.Fatalf). Registers cleanup via t.Cleanup.
+func newIsolatedIndex(t *testing.T, client *cyborgdb.Client, prefix string, dimension int32) (*cyborgdb.EncryptedIndex, string) {
+	t.Helper()
+	name := generateUniqueName(prefix + "_")
+	key := generateRandomKey()
+	metric := "euclidean"
+	config := cyborgdb.IndexIVFFlat(dimension)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+		IndexName:   name,
+		IndexKey:    key,
+		IndexConfig: config,
+		Metric:      &metric,
+	})
+	if err != nil {
+		t.Fatalf("Failed to create index %s: %v", name, err)
+	}
+	t.Cleanup(func() {
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanCancel()
+		_ = index.DeleteIndex(cleanCtx)
+	})
+	return index, name
+}
+
+// concUpsertBatch upserts a batch of random vectors. Returns error instead of calling
+// t.Fatal, making it safe to call from any goroutine.
+func concUpsertBatch(index *cyborgdb.EncryptedIndex, idPrefix string, count, dimension int) ([]string, error) {
+	vectors := generateRandomVectors(count, dimension)
+	ids := make([]string, count)
+	for i := 0; i < count; i++ {
+		ids[i] = fmt.Sprintf("%s_%d", idPrefix, i)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	err := index.UpsertVectors(ctx, ids, vectors, nil)
+	if err != nil {
+		return nil, fmt.Errorf("upsertBatch(%s): %w", idPrefix, err)
+	}
+	return ids, nil
+}
+
+// seedIndex upserts seed data from the test goroutine. Calls t.Fatalf on error.
+func seedIndex(t *testing.T, index *cyborgdb.EncryptedIndex, prefix string, count, dimension int) {
+	t.Helper()
+	_, err := concUpsertBatch(index, prefix, count, dimension)
+	if err != nil {
+		t.Fatalf("seedIndex failed: %v", err)
+	}
 }

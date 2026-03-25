@@ -46,8 +46,6 @@ import (
 	"errors"
 	"fmt"
 	"math"
-	"math/rand"
-	"os"
 	"strings"
 	"sync"
 	"testing"
@@ -69,107 +67,6 @@ var (
 	errNegativeDistance = errors.New("negative distance")
 )
 
-func concBaseURL() string {
-	u := os.Getenv("CYBORGDB_BASE_URL")
-	if u == "" {
-		return "http://localhost:8000"
-	}
-	return u
-}
-
-func concAPIKey() string {
-	return os.Getenv("CYBORGDB_API_KEY")
-}
-
-// newIsolatedClient creates a fresh CyborgDB client. Safe to call from any goroutine.
-func newIsolatedClient(t *testing.T) *cyborgdb.Client {
-	t.Helper()
-	client, err := cyborgdb.NewClient(concBaseURL(), concAPIKey())
-	if err != nil {
-		t.Fatalf("Failed to create client: %v", err)
-	}
-	return client
-}
-
-// newIsolatedIndex creates a uniquely-named IVFFlat index with its own cleanup.
-// Must be called from the test goroutine (uses t.Fatalf). Registers cleanup via t.Cleanup.
-func newIsolatedIndex(t *testing.T, client *cyborgdb.Client, prefix string) (*cyborgdb.EncryptedIndex, string) {
-	t.Helper()
-	name := generateUniqueName(prefix + "_")
-	key := generateRandomKey()
-	metric := "euclidean"
-	config := cyborgdb.IndexIVFFlat(int32(concDimension))
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
-		IndexName:   name,
-		IndexKey:    key,
-		IndexConfig: config,
-		Metric:      &metric,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create index %s: %v", name, err)
-	}
-	t.Cleanup(func() {
-		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cleanCancel()
-		_ = index.DeleteIndex(cleanCtx)
-	})
-	return index, name
-}
-
-// generateRandomVectors generates random float32 vectors.
-func generateRandomVectors(count, dimension int) [][]float32 {
-	vectors := make([][]float32, count)
-	for i := 0; i < count; i++ {
-		vectors[i] = make([]float32, dimension)
-		for j := 0; j < dimension; j++ {
-			vectors[i][j] = rand.Float32()
-		}
-	}
-	return vectors
-}
-
-// concUpsertBatch upserts a batch of random vectors. Returns error instead of calling
-// t.Fatal, making it safe to call from any goroutine.
-func concUpsertBatch(index *cyborgdb.EncryptedIndex, idPrefix string, count int) ([]string, error) {
-	vectors := generateRandomVectors(count, concDimension)
-	ids := make([]string, count)
-	for i := 0; i < count; i++ {
-		ids[i] = fmt.Sprintf("%s_%d", idPrefix, i)
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	err := index.UpsertVectors(ctx, ids, vectors, nil)
-	if err != nil {
-		return nil, fmt.Errorf("upsertBatch(%s): %w", idPrefix, err)
-	}
-	return ids, nil
-}
-
-// seedIndex upserts seed data from the test goroutine. Calls t.Fatalf on error.
-func seedIndex(t *testing.T, index *cyborgdb.EncryptedIndex, prefix string, count int) {
-	t.Helper()
-	_, err := concUpsertBatch(index, prefix, count)
-	if err != nil {
-		t.Fatalf("seedIndex failed: %v", err)
-	}
-}
-
-// vectorsApproxEqual checks if two float32 vectors are approximately equal.
-func vectorsApproxEqual(a, b []float32, rtol float64) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		diff := math.Abs(float64(a[i]) - float64(b[i]))
-		limit := rtol * math.Max(math.Abs(float64(a[i])), math.Abs(float64(b[i])))
-		if diff > limit+1e-8 {
-			return false
-		}
-	}
-	return true
-}
 
 // ---------------------------------------------------------------------------
 // Concurrent Operations — Single Index
@@ -181,7 +78,7 @@ func TestConcurrentUpsertsNoDataLoss(t *testing.T) {
 	// EncryptedIndex. After all finish, every single ID must be present.
 	// Catches: request body corruption in shared client, dropped writes.
 	client := newIsolatedClient(t)
-	index, _ := newIsolatedIndex(t, client, "conc_upsert")
+	index, _ := newIsolatedIndex(t, client, "conc_upsert", int32(concDimension))
 
 	numGoroutines := 10
 	var mu sync.Mutex
@@ -193,7 +90,7 @@ func TestConcurrentUpsertsNoDataLoss(t *testing.T) {
 		wg.Add(1)
 		go func(goroutineID int) {
 			defer wg.Done()
-			ids, err := concUpsertBatch(index, fmt.Sprintf("t%d", goroutineID), concNumVectors)
+			ids, err := concUpsertBatch(index, fmt.Sprintf("t%d", goroutineID), concNumVectors, concDimension)
 			mu.Lock()
 			defer mu.Unlock()
 			if err != nil {
@@ -209,18 +106,23 @@ func TestConcurrentUpsertsNoDataLoss(t *testing.T) {
 		t.Fatalf("Goroutines raised errors: %v", errs)
 	}
 
-	time.Sleep(2 * time.Second)
-
-	ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
-	defer cancel()
-	resp, err := index.ListIDs(ctx)
-	if err != nil {
-		t.Fatalf("ListIDs failed: %v", err)
-	}
-
-	storedIDs := make(map[string]bool, len(resp.Ids))
-	for _, id := range resp.Ids {
-		storedIDs[id] = true
+	expectedCount := len(allIDs)
+	var storedIDs map[string]bool
+	ok := pollUntil(pollTimeout, pollInterval, func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+		defer cancel()
+		resp, err := index.ListIDs(ctx)
+		if err != nil {
+			return false
+		}
+		storedIDs = make(map[string]bool, len(resp.Ids))
+		for _, id := range resp.Ids {
+			storedIDs[id] = true
+		}
+		return len(storedIDs) >= expectedCount
+	})
+	if !ok {
+		t.Fatalf("Timed out waiting for %d IDs to propagate, got %d", expectedCount, len(storedIDs))
 	}
 
 	var missing []string
@@ -241,7 +143,7 @@ func TestConcurrentUpsertsOverlappingIDs(t *testing.T) {
 	// exactly match one of the 5 written vectors (proving no corruption
 	// from interleaved writes).
 	client := newIsolatedClient(t)
-	index, _ := newIsolatedIndex(t, client, "conc_overlap")
+	index, _ := newIsolatedIndex(t, client, "conc_overlap", int32(concDimension))
 
 	numIDs := 20
 	numGoroutines := 5
@@ -285,17 +187,23 @@ func TestConcurrentUpsertsOverlappingIDs(t *testing.T) {
 	if len(errs) > 0 {
 		t.Fatalf("Goroutines raised errors: %v", errs)
 	}
-	time.Sleep(2 * time.Second)
-
-	ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
-	defer cancel()
-	resp, err := index.Get(ctx, sharedIDs, []string{"vector"})
-	if err != nil {
-		t.Fatalf("Get failed: %v", err)
-	}
-
-	if len(resp.Results) != numIDs {
-		t.Fatalf("Expected %d vectors, got %d", numIDs, len(resp.Results))
+	var resp *cyborgdb.GetResponse
+	ok := pollUntil(pollTimeout, pollInterval, func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+		defer cancel()
+		r, err := index.Get(ctx, sharedIDs, []string{"vector"})
+		if err != nil {
+			return false
+		}
+		resp = r
+		return len(r.Results) >= numIDs
+	})
+	if !ok {
+		count := 0
+		if resp != nil {
+			count = len(resp.Results)
+		}
+		t.Fatalf("Expected %d vectors, got %d", numIDs, count)
 	}
 	for _, item := range resp.Results {
 		candidates := writtenVectors[item.GetId()]
@@ -324,11 +232,18 @@ func TestQueriesDuringUpserts(t *testing.T) {
 	// Readers must get well-formed results with valid distances.
 	// Catches: crashes from concurrent HTTP access, malformed responses.
 	client := newIsolatedClient(t)
-	index, _ := newIsolatedIndex(t, client, "conc_rw")
+	index, _ := newIsolatedIndex(t, client, "conc_rw", int32(concDimension))
 
 	// Seed with initial data so queries have something to return
-	seedIndex(t, index, "seed", 100)
-	time.Sleep(1 * time.Second)
+	seedIndex(t, index, "seed", 100, concDimension)
+	if !pollUntil(pollTimeout, pollInterval, func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+		defer cancel()
+		resp, err := index.ListIDs(ctx)
+		return err == nil && len(resp.Ids) >= 100
+	}) {
+		t.Fatal("Timed out waiting for seed data to propagate")
+	}
 
 	numWriters := 3
 	numReaders := 5
@@ -409,10 +324,10 @@ func TestDeletesDuringQueries(t *testing.T) {
 	// Queries must never crash or return malformed results.
 	// Catches: server-side race between delete and read paths.
 	client := newIsolatedClient(t)
-	index, _ := newIsolatedIndex(t, client, "conc_delq")
+	index, _ := newIsolatedIndex(t, client, "conc_delq", int32(concDimension))
 
 	// Seed data so queries always have something to return
-	seedIndex(t, index, "seed", 100)
+	seedIndex(t, index, "seed", 100, concDimension)
 
 	deleteCount := 30
 	deleteIDs := make([]string, deleteCount)
@@ -426,7 +341,14 @@ func TestDeletesDuringQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to upsert delete targets: %v", err)
 	}
-	time.Sleep(1 * time.Second)
+	if !pollUntil(pollTimeout, pollInterval, func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+		defer cancel()
+		resp, err := index.ListIDs(ctx)
+		return err == nil && len(resp.Ids) >= 100+deleteCount
+	}) {
+		t.Fatal("Timed out waiting for delete targets to propagate")
+	}
 
 	var mu sync.Mutex
 	var errs []error
@@ -504,7 +426,7 @@ func TestConcurrentUpsertsAndDeletesOnSameIDs(t *testing.T) {
 	// vector — no ghost entries or truncated state.
 	// Catches: write-delete races causing ghost entries or corrupt vectors.
 	client := newIsolatedClient(t)
-	index, _ := newIsolatedIndex(t, client, "conc_race")
+	index, _ := newIsolatedIndex(t, client, "conc_race", int32(concDimension))
 
 	targetCount := 40
 	targetIDs := make([]string, targetCount)
@@ -518,7 +440,14 @@ func TestConcurrentUpsertsAndDeletesOnSameIDs(t *testing.T) {
 	if setupErr != nil {
 		t.Fatalf("Initial upsert failed: %v", setupErr)
 	}
-	time.Sleep(1 * time.Second)
+	if !pollUntil(pollTimeout, pollInterval, func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+		defer cancel()
+		resp, err := index.ListIDs(ctx)
+		return err == nil && len(resp.Ids) >= targetCount
+	}) {
+		t.Fatal("Timed out waiting for initial upsert to propagate")
+	}
 
 	var mu sync.Mutex
 	var errs []error
@@ -570,20 +499,23 @@ func TestConcurrentUpsertsAndDeletesOnSameIDs(t *testing.T) {
 		t.Fatalf("Upsert/delete race errors: %v", errs)
 	}
 
-	time.Sleep(1 * time.Second)
-
-	ctx2, cancel2 := context.WithTimeout(context.Background(), concTimeout)
-	defer cancel2()
-	resp, err := index.ListIDs(ctx2)
-	if err != nil {
-		t.Fatalf("ListIDs failed: %v", err)
-	}
-
-	if len(resp.Ids) == 0 {
+	var resp *cyborgdb.ListIDsResponse
+	if !pollUntil(pollTimeout, pollInterval, func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+		defer cancel()
+		r, err := index.ListIDs(ctx)
+		if err != nil {
+			return false
+		}
+		resp = r
+		return len(r.Ids) > 0
+	}) {
 		t.Fatal("All IDs gone after upsert/delete race — upserters never committed or deleters swept everything")
 	}
 
 	// Every surviving ID must have a valid, retrievable vector
+	ctx2, cancel2 := context.WithTimeout(context.Background(), concTimeout)
+	defer cancel2()
 	getResp, err := index.Get(ctx2, resp.Ids, []string{"vector"})
 	if err != nil {
 		t.Fatalf("Get surviving IDs failed: %v", err)
@@ -609,10 +541,17 @@ func TestBadGoroutineDoesntBreakGoodGoroutines(t *testing.T) {
 	// Good goroutines must succeed — proving error handling doesn't poison
 	// shared HTTP connection pool state.
 	client := newIsolatedClient(t)
-	index, _ := newIsolatedIndex(t, client, "conc_errisolation")
+	index, _ := newIsolatedIndex(t, client, "conc_errisolation", int32(concDimension))
 
-	seedIndex(t, index, "base", 50)
-	time.Sleep(1 * time.Second)
+	seedIndex(t, index, "base", 50, concDimension)
+	if !pollUntil(pollTimeout, pollInterval, func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+		defer cancel()
+		resp, err := index.ListIDs(ctx)
+		return err == nil && len(resp.Ids) >= 50
+	}) {
+		t.Fatal("Timed out waiting for seed data to propagate")
+	}
 
 	var mu sync.Mutex
 	var goodResults []int
@@ -701,7 +640,7 @@ func TestNoDataLeakageBetweenIndexes(t *testing.T) {
 
 	indexes := make([]indexInfo, 3)
 	for i := 0; i < 3; i++ {
-		idx, name := newIsolatedIndex(t, client, fmt.Sprintf("iso_%d", i))
+		idx, name := newIsolatedIndex(t, client, fmt.Sprintf("iso_%d", i), int32(concDimension))
 		idSet := make(map[string]bool)
 
 		ids := make([]string, 30)
@@ -721,7 +660,17 @@ func TestNoDataLeakageBetweenIndexes(t *testing.T) {
 		indexes[i] = indexInfo{index: idx, name: name, ids: idSet}
 	}
 
-	time.Sleep(2 * time.Second)
+	// Wait for all indexes to have their data propagated
+	for i, info := range indexes {
+		if !pollUntil(pollTimeout, pollInterval, func() bool {
+			ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+			defer cancel()
+			resp, err := info.index.ListIDs(ctx)
+			return err == nil && len(resp.Ids) >= 30
+		}) {
+			t.Fatalf("Timed out waiting for index %d to propagate", i)
+		}
+	}
 
 	for i, info := range indexes {
 		otherIDs := make(map[string]bool)
@@ -778,7 +727,7 @@ func TestDeleteInOneIndexDoesntAffectOthers(t *testing.T) {
 	numIndexes := 3
 	indexes := make([]indexInfo, numIndexes)
 	for i := 0; i < numIndexes; i++ {
-		idx, name := newIsolatedIndex(t, client, fmt.Sprintf("deliso_%d", i))
+		idx, name := newIsolatedIndex(t, client, fmt.Sprintf("deliso_%d", i), int32(concDimension))
 
 		ids := make([]string, 30)
 		for j := 0; j < 30; j++ {
@@ -796,7 +745,18 @@ func TestDeleteInOneIndexDoesntAffectOthers(t *testing.T) {
 		indexes[i] = indexInfo{index: idx, name: name}
 	}
 
-	time.Sleep(2 * time.Second)
+	// Wait for all indexes to have their data propagated
+	for i := 0; i < numIndexes; i++ {
+		idx := indexes[i]
+		if !pollUntil(pollTimeout, pollInterval, func() bool {
+			ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+			defer cancel()
+			resp, err := idx.index.ListIDs(ctx)
+			return err == nil && len(resp.Ids) >= 30
+		}) {
+			t.Fatalf("Timed out waiting for index %d to propagate", i)
+		}
+	}
 
 	// Snapshot other indexes' IDs before deletion
 	otherSnapshots := make(map[int]map[string]bool)
@@ -835,7 +795,18 @@ func TestDeleteInOneIndexDoesntAffectOthers(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Delete from index 0 failed: %v", err)
 	}
-	time.Sleep(1 * time.Second)
+	// Wait for delete to propagate
+	if !pollUntil(pollTimeout, pollInterval, func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+		defer cancel()
+		resp, err := indexes[0].index.ListIDs(ctx)
+		if err != nil {
+			return false
+		}
+		return len(resp.Ids) < 30
+	}) {
+		t.Fatal("Timed out waiting for delete to propagate")
+	}
 
 	// Verify other indexes are unaffected
 	for i := 1; i < numIndexes; i++ {
@@ -887,7 +858,7 @@ func TestConcurrentWritesToDifferentIndexes(t *testing.T) {
 	numIndexes := 5
 	indexes := make([]indexInfo, numIndexes)
 	for i := 0; i < numIndexes; i++ {
-		idx, name := newIsolatedIndex(t, client, fmt.Sprintf("cw_%d", i))
+		idx, name := newIsolatedIndex(t, client, fmt.Sprintf("cw_%d", i), int32(concDimension))
 		indexes[i] = indexInfo{index: idx, name: name}
 	}
 
@@ -933,11 +904,18 @@ func TestConcurrentWritesToDifferentIndexes(t *testing.T) {
 		t.Fatalf("Concurrent write errors: %v", errs)
 	}
 
-	time.Sleep(2 * time.Second)
-
 	// Verify each index has ONLY its own data and vectors are intact
 	for gID, data := range perGoroutine {
 		info := indexes[gID]
+
+		if !pollUntil(pollTimeout, pollInterval, func() bool {
+			ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+			defer cancel()
+			resp, err := info.index.ListIDs(ctx)
+			return err == nil && len(resp.Ids) >= 20
+		}) {
+			t.Fatalf("Timed out waiting for index %d to propagate", gID)
+		}
 
 		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
 		resp, err := info.index.ListIDs(ctx)
@@ -994,7 +972,7 @@ func TestStress20Goroutines200VectorsEach(t *testing.T) {
 	// Catches: connection pool exhaustion, deadlocks under high goroutine
 	// counts, performance cliffs at scale.
 	client := newIsolatedClient(t)
-	index, _ := newIsolatedIndex(t, client, "stress")
+	index, _ := newIsolatedIndex(t, client, "stress", int32(concDimension))
 
 	numGoroutines := 20
 	vectorsPerGoroutine := 200
@@ -1007,7 +985,7 @@ func TestStress20Goroutines200VectorsEach(t *testing.T) {
 		wg.Add(1)
 		go func(goroutineID int) {
 			defer wg.Done()
-			ids, err := concUpsertBatch(index, fmt.Sprintf("stress_%d", goroutineID), vectorsPerGoroutine)
+			ids, err := concUpsertBatch(index, fmt.Sprintf("stress_%d", goroutineID), vectorsPerGoroutine, concDimension)
 			if err != nil {
 				mu.Lock()
 				errs = append(errs, err)
@@ -1056,19 +1034,25 @@ func TestStress20Goroutines200VectorsEach(t *testing.T) {
 		t.Fatalf("Stress test errors: %v", errs)
 	}
 
-	time.Sleep(3 * time.Second)
-
-	ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
-	defer cancel()
-	resp, err := index.ListIDs(ctx)
-	if err != nil {
-		t.Fatalf("ListIDs failed: %v", err)
+	expectedCount := len(allIDs)
+	var storedIDs map[string]bool
+	ok := pollUntil(30*time.Second, pollInterval, func() bool {
+		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+		defer cancel()
+		resp, err := index.ListIDs(ctx)
+		if err != nil {
+			return false
+		}
+		storedIDs = make(map[string]bool, len(resp.Ids))
+		for _, id := range resp.Ids {
+			storedIDs[id] = true
+		}
+		return len(storedIDs) >= expectedCount
+	})
+	if !ok {
+		t.Fatalf("Timed out waiting for %d IDs to propagate, got %d", expectedCount, len(storedIDs))
 	}
 
-	storedIDs := make(map[string]bool, len(resp.Ids))
-	for _, id := range resp.Ids {
-		storedIDs[id] = true
-	}
 	var missing []string
 	for _, id := range allIDs {
 		if !storedIDs[id] {
@@ -1187,9 +1171,6 @@ func TestMixedIndexTypesUpsertAndQuery(t *testing.T) {
 		}
 	}
 
-	// Wait for propagation then query each
-	time.Sleep(2 * time.Second)
-
 	for i, e := range entries {
 		// Verify index type
 		if e.index.GetIndexType() != e.typeName {
@@ -1294,10 +1275,17 @@ func TestMixedIndexTypesConcurrentWrites(t *testing.T) {
 		t.Fatalf("Concurrent writes failed: %v", errs)
 	}
 
-	time.Sleep(2 * time.Second)
-
 	for typeName, res := range results {
-		// Verify each index has only its own IDs
+		// Wait for data to propagate then verify each index has only its own IDs
+		if !pollUntil(pollTimeout, pollInterval, func() bool {
+			listCtx, listCancel := context.WithTimeout(context.Background(), concTimeout)
+			defer listCancel()
+			resp, err := res.index.ListIDs(listCtx)
+			return err == nil && len(resp.Ids) >= 20
+		}) {
+			t.Fatalf("Timed out waiting for %s index to propagate", typeName)
+		}
+
 		listResp, err := res.index.ListIDs(ctx)
 		if err != nil {
 			t.Fatalf("ListIDs failed for %s: %v", typeName, err)
@@ -1383,7 +1371,25 @@ func TestMixedIndexTypesInterleavedOperations(t *testing.T) {
 		t.Fatalf("SQ upsert failed: %v", err)
 	}
 
-	time.Sleep(2 * time.Second)
+	// Wait for all index data to propagate
+	for _, pair := range []struct {
+		idx   *cyborgdb.EncryptedIndex
+		count int
+		name  string
+	}{
+		{m.flat, 20, "flat"},
+		{m.pq, 20, "pq"},
+		{m.sq, 20, "sq"},
+	} {
+		if !pollUntil(pollTimeout, pollInterval, func() bool {
+			pCtx, pCancel := context.WithTimeout(context.Background(), concTimeout)
+			defer pCancel()
+			resp, err := pair.idx.ListIDs(pCtx)
+			return err == nil && len(resp.Ids) >= pair.count
+		}) {
+			t.Fatalf("Timed out waiting for %s index data to propagate", pair.name)
+		}
+	}
 
 	// Step 2: Interleaved operations — rapidly switch between index types
 
@@ -1432,7 +1438,18 @@ func TestMixedIndexTypesInterleavedOperations(t *testing.T) {
 		}
 	}
 
-	time.Sleep(2 * time.Second)
+	// Wait for SQ deletes to propagate
+	if !pollUntil(pollTimeout, pollInterval, func() bool {
+		pCtx, pCancel := context.WithTimeout(context.Background(), concTimeout)
+		defer pCancel()
+		resp, err := m.sq.ListIDs(pCtx)
+		if err != nil {
+			return false
+		}
+		return len(resp.Ids) <= 10
+	}) {
+		t.Fatal("Timed out waiting for SQ deletes to propagate")
+	}
 
 	// Step 3: Verify SQ deletes actually took effect (not applied to flat or PQ)
 	sqListResp, err := m.sq.ListIDs(ctx)
