@@ -42,7 +42,10 @@ func NewClient(baseURL, apiKey string, verifySSL bool) (*Client, error) {
 
 	cfg.HTTPClient = &http.Client{
 		Transport: &http.Transport{
-			TLSClientConfig: &tls.Config{InsecureSkipVerify: !verifySSL},
+			TLSClientConfig:     &tls.Config{InsecureSkipVerify: !verifySSL},
+			MaxIdleConns:        100,
+			MaxIdleConnsPerHost: 100,
+			MaxConnsPerHost:     100,
 		},
 	}
 
