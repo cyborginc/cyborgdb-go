@@ -29,6 +29,10 @@ Mirrors the fix already landed in `cyborgdb-js` (commits `f161735` "distance fix
   - `test/concurrency_test.go::TestStressHighConcurrency`
   - `test/quick_flow_test.go::TestUnitFlow/test_06_upsert_to_trigger_auto_train` (drive-by flake fix)
 
+  CI changes (not test files):
+  - `.github/workflows/test.yml` — switched from loading `PIP_EXTRA_INDEX_URL` directly out of 1Password to assuming an AWS role via OIDC and fetching a CodeArtifact pip index URL. The old 1Password field has been removed from the `CyborgDB Dev` item, so the workflow was failing with `item 'CyborgDB/CyborgDB Dev' does not have a field 'PIP_EXTRA_INDEX_URL'`. Mirrors the pattern already in `cyborgdb-js` and `cyborgdb-py`.
+  - `.github/workflows/actions/codeartifact-pip-url/action.yml` — new composite action (verbatim copy from `cyborgdb-js`) that performs the CodeArtifact token fetch.
+
   Added:
   - `test/api_contract_test.go::TestEncryptedIndexQuery/QueryDefaultIncludeReturnsOnlyID` — verifies `Query()` with no `Include` arg returns only `id` (no `distance`, `metadata`, or `vector`). Go equivalent of the new `cyborgdb-js` "should not return distance by default" test.
 
@@ -39,6 +43,8 @@ Mirrors the fix already landed in `cyborgdb-js` (commits `f161735` "distance fix
   `Query()` no longer returns `distance` and `metadata` by default. Tests that asserted on those keys without passing them in `Include` were silently passing zero-value checks (e.g. `GetDistance() < 0` is trivially false when distance is unset) or failing on ordering checks. Updated each affected call site to pass the appropriate `Include` argument, then pinned the new default behavior with an explicit contract assertion.
 
   The `test_06_upsert_to_trigger_auto_train` change is unrelated to the distances bug — it's a pre-existing race where the test slept a fixed 1s after the upsert that crosses `RETRAIN_THRESHOLD=10000`, and `ListIDs` returns 0 transiently while server-side auto-train runs. Replaced the sleep with a `pollUntil` so the test waits for the IDs to converge instead.
+
+  The CI workflow change is also unrelated to the distances bug, but is bundled here because the existing workflow was failing on every PR after the `PIP_EXTRA_INDEX_URL` field was removed from the shared 1Password vault — without this fix, this PR's tests cannot run in CI.
 
   - [ ] No test changes
 
