@@ -935,6 +935,7 @@ func TestEncryptedIndexQuery(t *testing.T) {
 		params := cyborgdb.QueryParams{
 			QueryVector: testVectors[0],
 			TopK:        topK,
+			Include:     []string{"distance"},
 		}
 
 		results, err := testIndex.Query(ctx, params)
@@ -977,6 +978,7 @@ func TestEncryptedIndexQuery(t *testing.T) {
 		params := cyborgdb.QueryParams{
 			QueryVector: testVectors[1],
 			TopK:        topK,
+			Include:     []string{"distance"},
 		}
 
 		results, err := testIndex.Query(ctx, params)
@@ -1171,6 +1173,48 @@ func TestEncryptedIndexQuery(t *testing.T) {
 		for i, result := range resultItems {
 			if result.Id == "" {
 				t.Errorf("Result %d: missing ID", i)
+			}
+		}
+	})
+
+	t.Run("QueryDefaultIncludeReturnsOnlyID", func(t *testing.T) {
+		// With no Include param, Query() must return only id — no distance,
+		// metadata, or vector. Mirrors the cyborgdb-js contract test added in
+		// commit 38b917b after the server changed the default include behavior.
+		topK := int32(5)
+		params := cyborgdb.QueryParams{
+			QueryVector: testVectors[0],
+			TopK:        topK,
+		}
+
+		results, err := testIndex.Query(ctx, params)
+		if err != nil {
+			t.Fatalf("Query with default include failed: %v", err)
+		}
+		if results == nil {
+			t.Fatal("Results must not be nil")
+		}
+
+		resultItems := getQueryResultItems(&results.Results)
+		if len(resultItems) == 0 {
+			t.Fatal("Expected at least one result")
+		}
+
+		for i, result := range resultItems {
+			if result.Id == "" {
+				t.Errorf("Result %d: missing ID", i)
+			}
+			if result.HasDistance() {
+				t.Errorf("Result %d: expected no distance with default include, got %f",
+					i, result.GetDistance())
+			}
+			if result.Metadata != nil {
+				t.Errorf("Result %d: expected no metadata with default include, got %v",
+					i, result.Metadata)
+			}
+			if result.Vector != nil {
+				t.Errorf("Result %d: expected no vector with default include, got %d-dim vector",
+					i, len(result.Vector))
 			}
 		}
 	})

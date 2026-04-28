@@ -284,7 +284,7 @@ func TestQueriesDuringUpserts(t *testing.T) {
 				results, err := index.Query(ctx, cyborgdb.QueryParams{
 					QueryVector: qv,
 					TopK:        5,
-					Include:     []string{"metadata"},
+					Include:     []string{"distance", "metadata"},
 				})
 				cancel()
 				if err != nil {
@@ -386,7 +386,7 @@ func TestDeletesDuringQueries(t *testing.T) {
 				results, err := index.Query(ctx, cyborgdb.QueryParams{
 					QueryVector: qv,
 					TopK:        10,
-					Include:     []string{"metadata"},
+					Include:     []string{"distance", "metadata"},
 				})
 				cancel()
 				if err != nil {
@@ -1002,7 +1002,7 @@ func TestStress20Goroutines200VectorsEach(t *testing.T) {
 				results, err := index.Query(ctx, cyborgdb.QueryParams{
 					QueryVector: qv,
 					TopK:        10,
-					Include:     []string{"metadata"},
+					Include:     []string{"distance", "metadata"},
 				})
 				cancel()
 				if err != nil {

@@ -587,7 +587,7 @@ func TestIVFSQQueryCorrectness(t *testing.T) {
 		t.Fatalf("Upsert failed: %v", err)
 	}
 
-	queryParams := cyborgdb.QueryParams{QueryVector: vectors[0], TopK: 5}
+	queryParams := cyborgdb.QueryParams{QueryVector: vectors[0], TopK: 5, Include: []string{"distance"}}
 	var resultItems []internal.QueryResultItem
 	ok := pollUntil(30*time.Second, 2*time.Second, func() bool {
 		results, err := index.Query(ctx, queryParams)
@@ -661,7 +661,7 @@ func TestIVFPQQueryCorrectness(t *testing.T) {
 		t.Fatalf("Upsert failed: %v", err)
 	}
 
-	queryParams := cyborgdb.QueryParams{QueryVector: vectors[0], TopK: 5}
+	queryParams := cyborgdb.QueryParams{QueryVector: vectors[0], TopK: 5, Include: []string{"distance"}}
 	var resultItems []internal.QueryResultItem
 	ok := pollUntil(30*time.Second, 2*time.Second, func() bool {
 		results, err := index.Query(ctx, queryParams)
