@@ -57,6 +57,9 @@ jobs:
   test:
     runs-on: ubuntu-latest
     needs: [lint, compute_version]
+    permissions:
+      contents: read
+      id-token: write
 
     services:
       postgres:
@@ -95,14 +98,27 @@ jobs:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_TOKEN }}
           CYBORGDB_API_KEY: "op://CyborgDB/CyborgDB ${{ needs.compute_version.outputs.env == 'dev' && 'Dev' || needs.compute_version.outputs.env == 'staging' && 'Staging' || 'Prod' }}/CYBORGDB_API_KEY_STANDARD"
 
-      - name: Load Extra Index URL from 1Password
+      - name: Load CodeArtifact account ID from 1Password
         if: needs.compute_version.outputs.env != 'prod'
         uses: 1password/load-secrets-action@v2
         with:
           export-env: true
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_TOKEN }}
-          PIP_EXTRA_INDEX_URL: "op://CyborgDB/CyborgDB ${{ needs.compute_version.outputs.env == 'dev' && 'Dev' || 'Staging' }}/PIP_EXTRA_INDEX_URL"
+          CA_AWS_ACCOUNT_ID: "op://CyborgDB/CyborgDB ${{ needs.compute_version.outputs.env == 'dev' && 'Dev' || 'Staging' }}/CA_AWS_ACCOUNT_ID"
+
+      - name: Get CodeArtifact pip index URL
+        if: needs.compute_version.outputs.env != 'prod'
+        id: ca-url
+        uses: ./.github/workflows/actions/codeartifact-pip-url
+        with:
+          aws-account-id: ${{ env.CA_AWS_ACCOUNT_ID }}
+          role-to-assume: arn:aws:iam::${{ env.CA_AWS_ACCOUNT_ID }}:role/CyborgGitHubActionsS3Role
+          codeartifact-repository: ${{ needs.compute_version.outputs.env == 'dev' && 'cyborg-dev' || 'cyborg-staging' }}
+
+      - name: Export PIP_INDEX_URL
+        if: needs.compute_version.outputs.env != 'prod'
+        run: echo "PIP_INDEX_URL=${{ steps.ca-url.outputs.pip-index-url }}" >> $GITHUB_ENV
 
       - name: Install service dependencies
         run: |
@@ -113,8 +129,8 @@ jobs:
 
       - name: Install cyborgdb-service
         run: |
-          # Install cyborgdb-service (from Cloudsmith for dev/staging, PyPI for prod)
-          pip install "cyborgdb-service[embeddings]" --pre ${PIP_EXTRA_INDEX_URL:+--extra-index-url "$PIP_EXTRA_INDEX_URL"}
+          # For dev/staging, PIP_INDEX_URL points at CodeArtifact (PyPI upstream). For prod, it is unset and pip falls back to PyPI.
+          pip install "cyborgdb-service[embeddings]" --pre
 
       ## TODO - Add a test for Lite version
 

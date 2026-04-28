@@ -1,0 +1,61 @@
+name: CodeArtifact pip index URL
+description: Assume an AWS role via OIDC, fetch a CodeArtifact authorization token, and emit a pip index URL with the token embedded.
+
+inputs:
+  aws-account-id:
+    description: AWS account ID that owns the CodeArtifact domain.
+    required: true
+  role-to-assume:
+    description: IAM role ARN to assume via GitHub OIDC.
+    required: true
+  codeartifact-repository:
+    description: CodeArtifact repository name (e.g. cyborg-dev, cyborg-staging).
+    required: true
+  aws-region:
+    description: AWS region hosting the CodeArtifact domain.
+    required: false
+    default: us-east-1
+  codeartifact-domain:
+    description: CodeArtifact domain name.
+    required: false
+    default: cyborg
+  aws-cli-command:
+    description: Path to the aws CLI binary. Override when the binary isn't on PATH (e.g. on GitHub's GPU-powered runners).
+    required: false
+    default: aws
+
+outputs:
+  pip-index-url:
+    description: pip index URL with CodeArtifact auth token embedded. Masked in logs.
+    value: ${{ steps.build-url.outputs.pip-index-url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Configure AWS credentials
+      uses: aws-actions/configure-aws-credentials@v4
+      with:
+        role-to-assume: ${{ inputs.role-to-assume }}
+        aws-region: ${{ inputs.aws-region }}
+
+    - name: Fetch CodeArtifact token and build pip index URL
+      id: build-url
+      shell: bash
+      env:
+        CA_DOMAIN: ${{ inputs.codeartifact-domain }}
+        CA_OWNER: ${{ inputs.aws-account-id }}
+        CA_REGION: ${{ inputs.aws-region }}
+        CA_REPO: ${{ inputs.codeartifact-repository }}
+        AWS_CLI: ${{ inputs.aws-cli-command }}
+      run: |
+        set -euo pipefail
+        TOKEN=$("$AWS_CLI" codeartifact get-authorization-token \
+          --domain "$CA_DOMAIN" \
+          --domain-owner "$CA_OWNER" \
+          --region "$CA_REGION" \
+          --query authorizationToken \
+          --output text)
+        echo "::add-mask::$TOKEN"
+        URL="https://aws:${TOKEN}@${CA_DOMAIN}-${CA_OWNER}.d.codeartifact.${CA_REGION}.amazonaws.com/pypi/${CA_REPO}/simple/"
+        echo "::add-mask::$URL"
+        echo "pip-index-url=$URL" >> "$GITHUB_OUTPUT"
