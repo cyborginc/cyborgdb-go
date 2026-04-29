@@ -535,13 +535,21 @@ func TestUnitFlow(t *testing.T) {
 			t.Errorf("Failed to upsert: %v", err)
 		}
 
-		// Wait for upsert to be processed
-		time.Sleep(1 * time.Second)
-
-		// Verify IDs are present
-		results, err := index.ListIDs(ctx)
-		if err != nil {
-			t.Errorf("Failed to list IDs: %v", err)
+		// Crossing RETRAIN_THRESHOLD kicks off server-side auto-train, during
+		// which ListIDs can transiently return 0. Poll instead of sleeping a
+		// fixed amount.
+		var results *cyborgdb.ListIDsResponse
+		ok := pollUntil(30*time.Second, 500*time.Millisecond, func() bool {
+			r, err := index.ListIDs(ctx)
+			if err != nil {
+				return false
+			}
+			results = r
+			return len(r.Ids) >= autoTrainTrigger
+		})
+		if !ok {
+			t.Errorf("ID count mismatch: expected %d, did not converge after polling (last seen %d)",
+				autoTrainTrigger, len(results.Ids))
 		}
 
 		fmt.Printf("Total IDs in index: %d\n", len(results.Ids))
