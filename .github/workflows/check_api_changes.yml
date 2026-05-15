@@ -34,7 +34,7 @@ jobs:
 
       - name: Request Changes if Contract Changed
         if: github.event_name == 'pull_request' && steps.check_changes.outputs.contract_changed == 'true'
-        uses: actions/github-script@v6
+        uses: actions/github-script@v9
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           script: |
