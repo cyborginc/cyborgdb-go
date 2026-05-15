@@ -368,6 +368,38 @@ func TestClientCreateIndex(t *testing.T) {
 		time.Sleep(1 * time.Second)
 	})
 
+	t.Run("CreateIndexWithCachePolicyAndStoragePrecision", func(t *testing.T) {
+		tempName := generateUniqueName("temp_advanced_")
+		tempKey := generateRandomKey()
+		dim := dimension
+		cacheAll := true
+		precision := cyborgdb.StoragePrecisionFloat16
+
+		params := &cyborgdb.CreateIndexParams{
+			IndexName: tempName,
+			IndexKey:  tempKey,
+			Dimension: &dim,
+			CachePolicy: &cyborgdb.CachePolicy{
+				Vectors:  &cacheAll,
+				Metadata: &cacheAll,
+				Ids:      &cacheAll,
+			},
+			StoragePrecision: &precision,
+		}
+
+		index, err := testClient.CreateIndex(ctx, params)
+		if err != nil {
+			t.Fatalf("Failed to create index with cache policy and storage precision: %v", err)
+		}
+		defer func() { _ = index.DeleteIndex(ctx) }()
+
+		if index.GetIndexType() != "disk_ivf" {
+			t.Errorf("Expected index type disk_ivf, got %s", index.GetIndexType())
+		}
+
+		time.Sleep(1 * time.Second)
+	})
+
 	t.Run("CreateMainTestIndex", func(t *testing.T) {
 		dim := dimension
 		metric := "cosine"

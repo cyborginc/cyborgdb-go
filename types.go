@@ -51,6 +51,28 @@ type QueryResultItem = internal.QueryResultItem
 // ListIDsResponse represents the response from ListIDs operations.
 type ListIDsResponse = internal.ListIDsResponse
 
+// Storage precision constants for the on-disk rerank-vector dtype.
+const (
+	// StoragePrecisionFloat32 stores rerank vectors as 32-bit floats (default).
+	StoragePrecisionFloat32 = "float32"
+	// StoragePrecisionFloat16 stores rerank vectors as 16-bit floats, halving disk usage.
+	StoragePrecisionFloat16 = "float16"
+)
+
+// CachePolicy controls which keystores are held in the in-memory cache.
+//
+// Each field opts a specific keystore into the RAM cache. Fields left nil
+// fall back to the server default (cache nothing). Only takes effect at
+// index creation; the policy is persisted and restored on load.
+type CachePolicy struct {
+	// Vectors, when set, caches the encrypted vectors keystore in RAM.
+	Vectors *bool `json:"vectors,omitempty"`
+	// Metadata, when set, caches the metadata keystore in RAM.
+	Metadata *bool `json:"metadata,omitempty"`
+	// Ids, when set, caches the ID keystore in RAM.
+	Ids *bool `json:"ids,omitempty"`
+}
+
 // CreateIndexParams defines the parameters for creating a new encrypted vector index.
 //
 // All indexes are DiskIVF: a two-stage encrypted ANN index that uses PQ codes for
@@ -62,6 +84,8 @@ type ListIDsResponse = internal.ListIDsResponse
 //   - Dimension: Vector dimensionality. Auto-detected from the first upsert if omitted.
 //   - Metric: Distance metric for similarity calculations (optional, defaults to "euclidean")
 //   - EmbeddingModel: Name of embedding model to associate with the index (optional)
+//   - CachePolicy: Per-keystore RAM caching policy (optional)
+//   - StoragePrecision: "float32" (default) or "float16" rerank-vector dtype (optional)
 type CreateIndexParams struct {
 	// IndexName is the unique identifier for this index.
 	// Must be unique within your project and contain only alphanumeric characters,
@@ -84,6 +108,14 @@ type CreateIndexParams struct {
 	// EmbeddingModel optionally associates an embedding model name with this index.
 	// This is for metadata purposes and doesn't affect index behavior.
 	EmbeddingModel *string `json:"embedding_model,omitempty"`
+
+	// CachePolicy controls which keystores are held in the in-memory cache.
+	// Persisted at creation time; ignored on load.
+	CachePolicy *CachePolicy `json:"cache_policy,omitempty"`
+
+	// StoragePrecision selects the on-disk rerank-vector dtype.
+	// Use StoragePrecisionFloat32 (default) or StoragePrecisionFloat16.
+	StoragePrecision *string `json:"storage_precision,omitempty"`
 }
 
 // TrainParams defines the parameters for training an encrypted vector index.
