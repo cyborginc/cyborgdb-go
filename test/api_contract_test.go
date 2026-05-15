@@ -263,63 +263,27 @@ func TestClientListIndexes(t *testing.T) {
 	})
 }
 
-// Test 06: Index Config Types
-func TestIndexConfigTypes(t *testing.T) {
-	t.Run("CreateIndexIVFFlatConfigWithDimension", func(t *testing.T) {
-		config := cyborgdb.IndexIVFFlat(dimension)
-		if config == nil {
-			t.Error("IndexIVFFlat should return non-nil config")
-		}
-		indexConfig := config.ToIndexConfig()
-		if indexConfig == nil {
-			t.Error("ToIndexConfig should return non-nil IndexConfig")
-		}
-	})
-
-	t.Run("CreateIndexIVFPQConfigWithRequiredParams", func(t *testing.T) {
-		config := cyborgdb.IndexIVFPQ(dimension, 64, 8)
-		if config == nil {
-			t.Error("IndexIVFPQ should return non-nil config")
-		}
-		indexConfig := config.ToIndexConfig()
-		if indexConfig == nil {
-			t.Error("ToIndexConfig should return non-nil IndexConfig")
-		}
-	})
-
-	t.Run("CreateIndexIVFSQConfigWithRequiredParams", func(t *testing.T) {
-		config := cyborgdb.IndexIVFSQ(dimension, 8)
-		if config == nil {
-			t.Error("IndexIVFSQ should return non-nil config")
-		}
-		indexConfig := config.ToIndexConfig()
-		if indexConfig == nil {
-			t.Error("ToIndexConfig should return non-nil IndexConfig")
-		}
-	})
-}
-
 // Test 07: Client.CreateIndex()
 func TestClientCreateIndex(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
 
-	t.Run("CreateIndexWithIVFFlatConfigAndCustomMetric", func(t *testing.T) {
-		tempName := generateUniqueName("temp_ivfflat_")
+	t.Run("CreateIndexWithDimensionAndCustomMetric", func(t *testing.T) {
+		tempName := generateUniqueName("temp_diskivf_")
 		tempKey := generateRandomKey()
-		config := cyborgdb.IndexIVFFlat(dimension)
+		dim := dimension
 		metric := "cosine"
 
 		params := &cyborgdb.CreateIndexParams{
-			IndexName:   tempName,
-			IndexKey:    tempKey,
-			IndexConfig: config,
-			Metric:      &metric,
+			IndexName: tempName,
+			IndexKey:  tempKey,
+			Dimension: &dim,
+			Metric:    &metric,
 		}
 
 		index, err := testClient.CreateIndex(ctx, params)
 		if err != nil {
-			t.Fatalf("Failed to create IVFFlat index: %v", err)
+			t.Fatalf("Failed to create DiskIVF index: %v", err)
 		}
 		defer func() { _ = index.DeleteIndex(ctx) }()
 
@@ -327,77 +291,21 @@ func TestClientCreateIndex(t *testing.T) {
 			t.Errorf("Expected index name %s, got %s", tempName, index.GetIndexName())
 		}
 
-		if index.GetIndexType() != "ivfflat" {
-			t.Errorf("Expected index type ivfflat, got %s", index.GetIndexType())
-		}
-
-		time.Sleep(1 * time.Second)
-	})
-
-	t.Run("CreateIndexWithIVFPQConfig", func(t *testing.T) {
-		tempName := generateUniqueName("temp_ivfpq_")
-		tempKey := generateRandomKey()
-		config := cyborgdb.IndexIVFPQ(0, 32, 8)
-
-		params := &cyborgdb.CreateIndexParams{
-			IndexName:   tempName,
-			IndexKey:    tempKey,
-			IndexConfig: config,
-		}
-
-		index, err := testClient.CreateIndex(ctx, params)
-		if err != nil {
-			t.Fatalf("Failed to create IVFPQ index: %v", err)
-		}
-		defer func() { _ = index.DeleteIndex(ctx) }()
-
-		if index.GetIndexType() != "ivfpq" {
-			t.Errorf("Expected index type ivfpq, got %s", index.GetIndexType())
-		}
-
-		time.Sleep(1 * time.Second)
-	})
-
-	t.Run("CreateIndexWithIVFSQConfig", func(t *testing.T) {
-		tempName := generateUniqueName("temp_ivfsq_")
-		tempKey := generateRandomKey()
-		config := cyborgdb.IndexIVFSQ(dimension, 8)
-
-		params := &cyborgdb.CreateIndexParams{
-			IndexName:   tempName,
-			IndexKey:    tempKey,
-			IndexConfig: config,
-		}
-
-		index, err := testClient.CreateIndex(ctx, params)
-		if err != nil {
-			t.Fatalf("Failed to create IVFSQ index: %v", err)
-		}
-		defer func() { _ = index.DeleteIndex(ctx) }()
-
-		if index.GetIndexType() != "ivfsq" {
-			t.Errorf("Expected index type ivfsq, got %s", index.GetIndexType())
+		if index.GetIndexType() != "disk_ivf" {
+			t.Errorf("Expected index type disk_ivf, got %s", index.GetIndexType())
 		}
 
 		time.Sleep(1 * time.Second)
 	})
 
 	t.Run("CreateIndexWithEmbeddingModel", func(t *testing.T) {
-		// KNOWN SDK BUG: Go SDK requires IndexConfig even when embedding_model is provided
-		// Python/TypeScript SDKs allow creating index with just embedding_model
-		// Skip this test but report it in CI output
-		t.Skip("KNOWN SDK BUG: Go SDK requires IndexConfig even with embedding_model parameter. Python/TypeScript SDKs auto-detect dimension from embedding model.")
-	})
-
-	t.Run("CreateEmbeddingIndexWithWorkaround", func(t *testing.T) {
-		// Workaround: Create embedding index with explicit config for remaining tests
 		embeddingModel := "all-MiniLM-L6-v2"
-		config := cyborgdb.IndexIVFFlat(384) // 384 = dimension of all-MiniLM-L6-v2
+		dim := int32(384) // 384 = dimension of all-MiniLM-L6-v2
 		params := &cyborgdb.CreateIndexParams{
 			IndexName:      embeddingName,
 			IndexKey:       embeddingKey,
 			EmbeddingModel: &embeddingModel,
-			IndexConfig:    config,
+			Dimension:      &dim,
 		}
 
 		index, err := testClient.CreateIndex(ctx, params)
@@ -406,8 +314,8 @@ func TestClientCreateIndex(t *testing.T) {
 		}
 		embeddingIndex = index
 
-		if index.GetIndexType() != "ivfflat" {
-			t.Errorf("Expected index type ivfflat, got %s", index.GetIndexType())
+		if index.GetIndexType() != "disk_ivf" {
+			t.Errorf("Expected index type disk_ivf, got %s", index.GetIndexType())
 		}
 
 		time.Sleep(2 * time.Second)
@@ -416,12 +324,12 @@ func TestClientCreateIndex(t *testing.T) {
 	t.Run("RejectDuplicateIndexCreation", func(t *testing.T) {
 		dupName := generateUniqueName("dup_test_")
 		dupKey := generateRandomKey()
-		config := cyborgdb.IndexIVFFlat(dimension)
+		dim := dimension
 
 		params := &cyborgdb.CreateIndexParams{
-			IndexName:   dupName,
-			IndexKey:    dupKey,
-			IndexConfig: config,
+			IndexName: dupName,
+			IndexKey:  dupKey,
+			Dimension: &dim,
 		}
 
 		index, err := testClient.CreateIndex(ctx, params)
@@ -443,12 +351,12 @@ func TestClientCreateIndex(t *testing.T) {
 		// Just verify that CreateIndexParams only accepts documented fields
 		tempName := generateUniqueName("temp_unexpected_")
 		tempKey := generateRandomKey()
-		config := cyborgdb.IndexIVFFlat(dimension)
+		dim := dimension
 
 		params := &cyborgdb.CreateIndexParams{
-			IndexName:   tempName,
-			IndexKey:    tempKey,
-			IndexConfig: config,
+			IndexName: tempName,
+			IndexKey:  tempKey,
+			Dimension: &dim,
 		}
 
 		index, err := testClient.CreateIndex(ctx, params)
@@ -461,14 +369,14 @@ func TestClientCreateIndex(t *testing.T) {
 	})
 
 	t.Run("CreateMainTestIndex", func(t *testing.T) {
-		config := cyborgdb.IndexIVFFlat(dimension)
+		dim := dimension
 		metric := "cosine"
 
 		params := &cyborgdb.CreateIndexParams{
-			IndexName:   testIndexName,
-			IndexKey:    testIndexKey,
-			IndexConfig: config,
-			Metric:      &metric,
+			IndexName: testIndexName,
+			IndexKey:  testIndexKey,
+			Dimension: &dim,
+			Metric:    &metric,
 		}
 
 		index, err := testClient.CreateIndex(ctx, params)
@@ -513,19 +421,12 @@ func TestEncryptedIndexProperties(t *testing.T) {
 
 	t.Run("ExposeIndexTypeViaGetter", func(t *testing.T) {
 		indexType := testIndex.GetIndexType()
-		if indexType != "ivfflat" {
-			t.Errorf("Expected index type ivfflat, got %s", indexType)
+		if indexType != "disk_ivf" {
+			t.Errorf("Expected index type disk_ivf, got %s", indexType)
 		}
 		if reflect.TypeOf(indexType).Kind() != reflect.String {
 			t.Error("Index type should be string")
 		}
-	})
-
-	t.Run("ExposeIndexConfigViaGetter", func(t *testing.T) {
-		// GetIndexConfig returns IndexConfig (value type)
-		// The getter should work without panic - calling it verifies the method exists
-		config := testIndex.GetIndexConfig()
-		t.Logf("GetIndexConfig returned config: %+v", config)
 	})
 }
 
@@ -1824,12 +1725,12 @@ func TestEncryptedIndexDeleteIndex(t *testing.T) {
 		// Create a temp index to delete
 		tempName := generateUniqueName("temp_delete_")
 		tempKey := generateRandomKey()
-		config := cyborgdb.IndexIVFFlat(dimension)
+		dim := dimension
 
 		params := &cyborgdb.CreateIndexParams{
-			IndexName:   tempName,
-			IndexKey:    tempKey,
-			IndexConfig: config,
+			IndexName: tempName,
+			IndexKey:  tempKey,
+			Dimension: &dim,
 		}
 
 		tempIndex, err := testClient.CreateIndex(ctx, params)

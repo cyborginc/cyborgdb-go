@@ -11,7 +11,6 @@ import (
 	"time"
 
 	cyborgdb "github.com/cyborginc/cyborgdb-go"
-	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
 const (
@@ -44,7 +43,7 @@ func compTestIndex(t *testing.T) *cyborgdb.EncryptedIndex {
 		&cyborgdb.CreateIndexParams{
 			IndexName:   generateUniqueName("comp_"),
 			IndexKey:    generateRandomKey(),
-			IndexConfig: cyborgdb.IndexIVFFlat(128),
+			Dimension:   int32Ptr(128),
 			Metric:      &metric,
 		},
 	)
@@ -78,7 +77,7 @@ func TestInvalidAPIKeyRejected(t *testing.T) {
 	_, createErr := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
 		IndexName:   generateUniqueName("auth_test_"),
 		IndexKey:    generateRandomKey(),
-		IndexConfig: cyborgdb.IndexIVFFlat(128),
+		Dimension:   int32Ptr(128),
 		Metric:      &metric,
 	})
 	if createErr == nil {
@@ -105,7 +104,7 @@ func TestMalformedRequestsRejected(t *testing.T) {
 			&cyborgdb.CreateIndexParams{
 				IndexName:   generateUniqueName("neg_dim_"),
 				IndexKey:    generateRandomKey(),
-				IndexConfig: cyborgdb.IndexIVFFlat(-1),
+				Dimension:   int32Ptr(-1),
 				Metric:      strPtr("euclidean"),
 			},
 		},
@@ -114,7 +113,7 @@ func TestMalformedRequestsRejected(t *testing.T) {
 			&cyborgdb.CreateIndexParams{
 				IndexName:   generateUniqueName("bad_metric_"),
 				IndexKey:    generateRandomKey(),
-				IndexConfig: cyborgdb.IndexIVFFlat(128),
+				Dimension:   int32Ptr(128),
 				Metric:      strPtr("completely_invalid_metric"),
 			},
 		},
@@ -123,7 +122,7 @@ func TestMalformedRequestsRejected(t *testing.T) {
 			&cyborgdb.CreateIndexParams{
 				IndexName:   "",
 				IndexKey:    generateRandomKey(),
-				IndexConfig: cyborgdb.IndexIVFFlat(128),
+				Dimension:   int32Ptr(128),
 				Metric:      strPtr("euclidean"),
 			},
 		},
@@ -132,7 +131,7 @@ func TestMalformedRequestsRejected(t *testing.T) {
 			&cyborgdb.CreateIndexParams{
 				IndexName:   generateUniqueName("short_key_"),
 				IndexKey:    make([]byte, 8),
-				IndexConfig: cyborgdb.IndexIVFFlat(128),
+				Dimension:   int32Ptr(128),
 				Metric:      strPtr("euclidean"),
 			},
 		},
@@ -436,7 +435,7 @@ func TestDuplicateIndexNameRejected(t *testing.T) {
 	params := &cyborgdb.CreateIndexParams{
 		IndexName:   name,
 		IndexKey:    key,
-		IndexConfig: cyborgdb.IndexIVFFlat(128),
+		Dimension:   int32Ptr(128),
 		Metric:      &metric,
 	}
 
@@ -454,7 +453,7 @@ func TestDuplicateIndexNameRejected(t *testing.T) {
 	_, dupErr := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
 		IndexName:   name,
 		IndexKey:    generateRandomKey(),
-		IndexConfig: cyborgdb.IndexIVFFlat(128),
+		Dimension:   int32Ptr(128),
 		Metric:      &metric,
 	})
 	if dupErr == nil {
@@ -480,7 +479,7 @@ func TestWrongKeyCannotAccessData(t *testing.T) {
 	index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
 		IndexName:   name,
 		IndexKey:    correctKey,
-		IndexConfig: cyborgdb.IndexIVFFlat(128),
+		Dimension:   int32Ptr(128),
 		Metric:      &metric,
 	})
 	if err != nil {
@@ -540,156 +539,6 @@ func TestGetNonExistentIDs(t *testing.T) {
 	}
 	if len(resp.Results) > 0 && resp.Results[0].GetId() != "exists" {
 		t.Errorf("Expected ID 'exists', got '%s'", resp.Results[0].GetId())
-	}
-}
-
-// ---------------------------------------------------------------------------
-// Index Type — validates IVFSQ and IVFPQ produce correct results
-// ---------------------------------------------------------------------------
-
-func TestIVFSQQueryCorrectness(t *testing.T) {
-	// Catches: scalar quantization corrupting vector data enough to return
-	// wrong nearest neighbors, broken distance computation, unsorted results.
-	ctx, cancel := context.WithTimeout(context.Background(), longTimeout)
-	defer cancel()
-
-	client, err := createClient()
-	if err != nil {
-		t.Fatalf("Failed to create client: %v", err)
-	}
-
-	metric := "euclidean"
-	index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
-		IndexName:   generateUniqueName("ivfsq_"),
-		IndexKey:    generateRandomKey(),
-		IndexConfig: cyborgdb.IndexIVFSQ(128, 8),
-		Metric:      &metric,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create IVFSQ index: %v", err)
-	}
-	t.Cleanup(func() {
-		cleanCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = index.DeleteIndex(cleanCtx)
-	})
-
-	if index.GetIndexType() != "ivfsq" {
-		t.Errorf("Expected index type 'ivfsq', got '%s'", index.GetIndexType())
-	}
-
-	vectors := generateTestVectors(50, 128)
-	items := make(cyborgdb.VectorItems, len(vectors))
-	for i, v := range vectors {
-		items[i] = cyborgdb.VectorItem{Id: fmt.Sprintf("sq_%d", i), Vector: v}
-	}
-	if err := index.Upsert(ctx, items); err != nil {
-		t.Fatalf("Upsert failed: %v", err)
-	}
-
-	queryParams := cyborgdb.QueryParams{QueryVector: vectors[0], TopK: 5, Include: []string{"distance"}}
-	var resultItems []internal.QueryResultItem
-	ok := pollUntil(30*time.Second, 2*time.Second, func() bool {
-		results, err := index.Query(ctx, queryParams)
-		if err != nil || results == nil {
-			return false
-		}
-		resultItems = getQueryResultItems(&results.Results)
-		return len(resultItems) > 0
-	})
-	if !ok {
-		t.Fatal("IVFSQ query returned no results within 30s")
-	}
-
-	// Self-match: querying with vectors[0] must return sq_0 first
-	if resultItems[0].GetId() != "sq_0" {
-		t.Errorf("Expected nearest neighbor 'sq_0', got '%s' — SQ compression corrupting lookups", resultItems[0].GetId())
-	}
-	if resultItems[0].GetDistance() > 1.0 {
-		t.Errorf("Self-distance should be near zero, got %f", resultItems[0].GetDistance())
-	}
-
-	// Distances must be non-negative and ordered
-	for i, item := range resultItems {
-		if item.GetDistance() < 0 {
-			t.Errorf("Result %d: negative distance %f", i, item.GetDistance())
-		}
-		if i > 0 && item.GetDistance() < resultItems[i-1].GetDistance() {
-			t.Errorf("Results not sorted: [%d]=%f < [%d]=%f",
-				i, item.GetDistance(), i-1, resultItems[i-1].GetDistance())
-		}
-	}
-}
-
-func TestIVFPQQueryCorrectness(t *testing.T) {
-	// Catches: PQ compression/decompression corrupting lookups, broken
-	// distance computation in quantized space, unsorted results.
-	ctx, cancel := context.WithTimeout(context.Background(), longTimeout)
-	defer cancel()
-
-	client, err := createClient()
-	if err != nil {
-		t.Fatalf("Failed to create client: %v", err)
-	}
-
-	metric := "euclidean"
-	index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
-		IndexName:   generateUniqueName("ivfpq_"),
-		IndexKey:    generateRandomKey(),
-		IndexConfig: cyborgdb.IndexIVFPQ(128, 32, 8),
-		Metric:      &metric,
-	})
-	if err != nil {
-		t.Fatalf("Failed to create IVFPQ index: %v", err)
-	}
-	t.Cleanup(func() {
-		cleanCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		_ = index.DeleteIndex(cleanCtx)
-	})
-
-	if index.GetIndexType() != "ivfpq" {
-		t.Errorf("Expected index type 'ivfpq', got '%s'", index.GetIndexType())
-	}
-
-	vectors := generateTestVectors(50, 128)
-	items := make(cyborgdb.VectorItems, len(vectors))
-	for i, v := range vectors {
-		items[i] = cyborgdb.VectorItem{Id: fmt.Sprintf("pq_%d", i), Vector: v}
-	}
-	if err := index.Upsert(ctx, items); err != nil {
-		t.Fatalf("Upsert failed: %v", err)
-	}
-
-	queryParams := cyborgdb.QueryParams{QueryVector: vectors[0], TopK: 5, Include: []string{"distance"}}
-	var resultItems []internal.QueryResultItem
-	ok := pollUntil(30*time.Second, 2*time.Second, func() bool {
-		results, err := index.Query(ctx, queryParams)
-		if err != nil || results == nil {
-			return false
-		}
-		resultItems = getQueryResultItems(&results.Results)
-		return len(resultItems) > 0
-	})
-	if !ok {
-		t.Fatal("IVFPQ query returned no results within 30s")
-	}
-
-	if resultItems[0].GetId() != "pq_0" {
-		t.Errorf("Expected nearest neighbor 'pq_0', got '%s' — PQ compression corrupting lookups", resultItems[0].GetId())
-	}
-	if resultItems[0].GetDistance() > 1.0 {
-		t.Errorf("Self-distance should be near zero, got %f", resultItems[0].GetDistance())
-	}
-
-	for i, item := range resultItems {
-		if item.GetDistance() < 0 {
-			t.Errorf("Result %d: negative distance %f", i, item.GetDistance())
-		}
-		if i > 0 && item.GetDistance() < resultItems[i-1].GetDistance() {
-			t.Errorf("Results not sorted: [%d]=%f < [%d]=%f",
-				i, item.GetDistance(), i-1, resultItems[i-1].GetDistance())
-		}
 	}
 }
 
@@ -871,6 +720,8 @@ func TestGetDemoAPIKey(t *testing.T) {
 // ---------------------------------------------------------------------------
 
 func strPtr(s string) *string { return &s }
+
+func int32Ptr(n int32) *int32 { return &n }
 
 func generateVectorWithValue(dimension int, value float32) []float32 {
 	vector := make([]float32, dimension)

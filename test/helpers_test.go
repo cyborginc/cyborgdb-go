@@ -185,14 +185,13 @@ func newIsolatedIndex(t *testing.T, client *cyborgdb.Client, prefix string, dime
 	name := generateUniqueName(prefix + "_")
 	key := generateRandomKey()
 	metric := "euclidean"
-	config := cyborgdb.IndexIVFFlat(dimension)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
-		IndexName:   name,
-		IndexKey:    key,
-		IndexConfig: config,
-		Metric:      &metric,
+		IndexName: name,
+		IndexKey:  key,
+		Dimension: &dimension,
+		Metric:    &metric,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create index %s: %v", name, err)
