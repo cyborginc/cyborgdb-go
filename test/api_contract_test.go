@@ -271,7 +271,7 @@ func TestClientCreateIndex(t *testing.T) {
 	t.Run("CreateIndexWithDimensionAndCustomMetric", func(t *testing.T) {
 		tempName := generateUniqueName("temp_diskivf_")
 		tempKey := generateRandomKey()
-		dim := dimension
+		dim := int32(dimension)
 		metric := "cosine"
 
 		params := &cyborgdb.CreateIndexParams{
@@ -324,7 +324,7 @@ func TestClientCreateIndex(t *testing.T) {
 	t.Run("RejectDuplicateIndexCreation", func(t *testing.T) {
 		dupName := generateUniqueName("dup_test_")
 		dupKey := generateRandomKey()
-		dim := dimension
+		dim := int32(dimension)
 
 		params := &cyborgdb.CreateIndexParams{
 			IndexName: dupName,
@@ -351,7 +351,7 @@ func TestClientCreateIndex(t *testing.T) {
 		// Just verify that CreateIndexParams only accepts documented fields
 		tempName := generateUniqueName("temp_unexpected_")
 		tempKey := generateRandomKey()
-		dim := dimension
+		dim := int32(dimension)
 
 		params := &cyborgdb.CreateIndexParams{
 			IndexName: tempName,
@@ -371,7 +371,7 @@ func TestClientCreateIndex(t *testing.T) {
 	t.Run("CreateIndexWithCachePolicyAndStoragePrecision", func(t *testing.T) {
 		tempName := generateUniqueName("temp_advanced_")
 		tempKey := generateRandomKey()
-		dim := dimension
+		dim := int32(dimension)
 		cacheAll := true
 		precision := cyborgdb.StoragePrecisionFloat16
 
@@ -401,7 +401,7 @@ func TestClientCreateIndex(t *testing.T) {
 	})
 
 	t.Run("CreateMainTestIndex", func(t *testing.T) {
-		dim := dimension
+		dim := int32(dimension)
 		metric := "cosine"
 
 		params := &cyborgdb.CreateIndexParams{
@@ -1757,7 +1757,7 @@ func TestEncryptedIndexDeleteIndex(t *testing.T) {
 		// Create a temp index to delete
 		tempName := generateUniqueName("temp_delete_")
 		tempKey := generateRandomKey()
-		dim := dimension
+		dim := int32(dimension)
 
 		params := &cyborgdb.CreateIndexParams{
 			IndexName: tempName,
