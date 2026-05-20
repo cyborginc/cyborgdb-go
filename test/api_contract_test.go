@@ -368,28 +368,22 @@ func TestClientCreateIndex(t *testing.T) {
 		time.Sleep(1 * time.Second)
 	})
 
-	t.Run("CreateIndexWithCachePolicyAndStoragePrecision", func(t *testing.T) {
+	t.Run("CreateIndexWithStoragePrecision", func(t *testing.T) {
 		tempName := generateUniqueName("temp_advanced_")
 		tempKey := generateRandomKey()
 		dim := int32(dimension)
-		cacheAll := true
 		precision := cyborgdb.StoragePrecisionFloat16
 
 		params := &cyborgdb.CreateIndexParams{
-			IndexName: tempName,
-			IndexKey:  tempKey,
-			Dimension: &dim,
-			CachePolicy: &cyborgdb.CachePolicy{
-				Vectors:  &cacheAll,
-				Metadata: &cacheAll,
-				Ids:      &cacheAll,
-			},
+			IndexName:        tempName,
+			IndexKey:         tempKey,
+			Dimension:        &dim,
 			StoragePrecision: &precision,
 		}
 
 		index, err := testClient.CreateIndex(ctx, params)
 		if err != nil {
-			t.Fatalf("Failed to create index with cache policy and storage precision: %v", err)
+			t.Fatalf("Failed to create index with storage precision: %v", err)
 		}
 		defer func() { _ = index.DeleteIndex(ctx) }()
 

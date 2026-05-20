@@ -19,7 +19,7 @@ import (
 // checks if the CreateIndexRequest type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &CreateIndexRequest{}
 
-// CreateIndexRequest Request model for creating a new encrypted DiskIVF index.  Attributes:     index_key (str): A 32-byte encryption key as a hex string.     index_name (str): The name/identifier of the index.     dimension (Optional[int]): Dimensionality of the vectors. Auto-detected         from the first upsert if omitted.     embedding_model (Optional[str]): Optional embedding model name.     metric (Optional[str]): Optional distance metric.     cache_policy (Optional[CachePolicyModel]): Per-keystore RAM cache policy.     storage_precision (Optional[Literal[\"float32\", \"float16\"]]): On-disk         rerank-vector dtype. Defaults to float32 in core.
+// CreateIndexRequest Request model for creating a new encrypted DiskIVF index.  Attributes:     index_key (str): A 32-byte encryption key as a hex string.     index_name (str): The name/identifier of the index.     dimension (Optional[int]): Dimensionality of the vectors. Auto-detected         from the first upsert if omitted.     embedding_model (Optional[str]): Optional embedding model name.     metric (Optional[str]): Optional distance metric.     storage_precision (Optional[Literal[\"float32\", \"float16\"]]): On-disk         rerank-vector dtype. Defaults to float32 in core.
 type CreateIndexRequest struct {
 	// 32-byte encryption key as hex string
 	IndexKey string `json:"index_key"`
@@ -28,7 +28,6 @@ type CreateIndexRequest struct {
 	Dimension NullableInt32 `json:"dimension,omitempty"`
 	EmbeddingModel NullableString `json:"embedding_model,omitempty"`
 	Metric NullableString `json:"metric,omitempty"`
-	CachePolicy NullableCachePolicyModel `json:"cache_policy,omitempty"`
 	StoragePrecision NullableString `json:"storage_precision,omitempty"`
 }
 
@@ -227,48 +226,6 @@ func (o *CreateIndexRequest) UnsetMetric() {
 	o.Metric.Unset()
 }
 
-// GetCachePolicy returns the CachePolicy field value if set, zero value otherwise (both if not set or set to explicit null).
-func (o *CreateIndexRequest) GetCachePolicy() CachePolicyModel {
-	if o == nil || IsNil(o.CachePolicy.Get()) {
-		var ret CachePolicyModel
-		return ret
-	}
-	return *o.CachePolicy.Get()
-}
-
-// GetCachePolicyOk returns a tuple with the CachePolicy field value if set, nil otherwise
-// and a boolean to check if the value has been set.
-// NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *CreateIndexRequest) GetCachePolicyOk() (*CachePolicyModel, bool) {
-	if o == nil {
-		return nil, false
-	}
-	return o.CachePolicy.Get(), o.CachePolicy.IsSet()
-}
-
-// HasCachePolicy returns a boolean if a field has been set.
-func (o *CreateIndexRequest) HasCachePolicy() bool {
-	if o != nil && o.CachePolicy.IsSet() {
-		return true
-	}
-
-	return false
-}
-
-// SetCachePolicy gets a reference to the given NullableCachePolicyModel and assigns it to the CachePolicy field.
-func (o *CreateIndexRequest) SetCachePolicy(v CachePolicyModel) {
-	o.CachePolicy.Set(&v)
-}
-// SetCachePolicyNil sets the value for CachePolicy to be an explicit nil
-func (o *CreateIndexRequest) SetCachePolicyNil() {
-	o.CachePolicy.Set(nil)
-}
-
-// UnsetCachePolicy ensures that no value is present for CachePolicy, not even an explicit nil
-func (o *CreateIndexRequest) UnsetCachePolicy() {
-	o.CachePolicy.Unset()
-}
-
 // GetStoragePrecision returns the StoragePrecision field value if set, zero value otherwise (both if not set or set to explicit null).
 func (o *CreateIndexRequest) GetStoragePrecision() string {
 	if o == nil || IsNil(o.StoragePrecision.Get()) {
@@ -331,9 +288,6 @@ func (o CreateIndexRequest) ToMap() (map[string]interface{}, error) {
 	}
 	if o.Metric.IsSet() {
 		toSerialize["metric"] = o.Metric.Get()
-	}
-	if o.CachePolicy.IsSet() {
-		toSerialize["cache_policy"] = o.CachePolicy.Get()
 	}
 	if o.StoragePrecision.IsSet() {
 		toSerialize["storage_precision"] = o.StoragePrecision.Get()

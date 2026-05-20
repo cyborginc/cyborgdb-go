@@ -125,7 +125,6 @@ func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 //   - Dimension (optional): vector dimensionality; auto-detected on first upsert if omitted
 //   - Metric (optional): distance metric (e.g., "euclidean", "cosine")
 //   - EmbeddingModel (optional): embedding model name to associate
-//   - CachePolicy (optional): per-keystore RAM caching policy
 //   - StoragePrecision (optional): "float32" (default) or "float16" rerank dtype
 //
 // Returns:
@@ -161,20 +160,6 @@ func (c *Client) CreateIndex(
 
 	if params.EmbeddingModel != nil {
 		req.EmbeddingModel = *internal.NewNullableString(params.EmbeddingModel)
-	}
-
-	if params.CachePolicy != nil {
-		cp := &internal.CachePolicyModel{}
-		if params.CachePolicy.Vectors != nil {
-			cp.Vectors = *internal.NewNullableBool(params.CachePolicy.Vectors)
-		}
-		if params.CachePolicy.Metadata != nil {
-			cp.Metadata = *internal.NewNullableBool(params.CachePolicy.Metadata)
-		}
-		if params.CachePolicy.Ids != nil {
-			cp.Ids = *internal.NewNullableBool(params.CachePolicy.Ids)
-		}
-		req.CachePolicy = *internal.NewNullableCachePolicyModel(cp)
 	}
 
 	if params.StoragePrecision != nil {
