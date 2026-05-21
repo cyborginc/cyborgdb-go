@@ -74,15 +74,15 @@ func waitForPropagation(duration time.Duration) {
 	time.Sleep(duration)
 }
 
-// pollUntil polls a condition function until it returns true or timeout is reached.
+// pollUntil polls a condition function at pollInterval until it returns true or timeout is reached.
 // Returns true if condition was met, false if timeout occurred.
-func pollUntil(timeout time.Duration, interval time.Duration, condition func() bool) bool {
+func pollUntil(timeout time.Duration, condition func() bool) bool {
 	deadline := time.Now().Add(timeout)
 	for time.Now().Before(deadline) {
 		if condition() {
 			return true
 		}
-		time.Sleep(interval)
+		time.Sleep(pollInterval)
 	}
 	return false
 }
@@ -185,14 +185,13 @@ func newIsolatedIndex(t *testing.T, client *cyborgdb.Client, prefix string, dime
 	name := generateUniqueName(prefix + "_")
 	key := generateRandomKey()
 	metric := "euclidean"
-	config := cyborgdb.IndexIVFFlat(dimension)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
-		IndexName:   name,
-		IndexKey:    key,
-		IndexConfig: config,
-		Metric:      &metric,
+		IndexName: name,
+		IndexKey:  key,
+		Dimension: &dimension,
+		Metric:    &metric,
 	})
 	if err != nil {
 		t.Fatalf("Failed to create index %s: %v", name, err)

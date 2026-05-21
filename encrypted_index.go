@@ -63,7 +63,7 @@ var (
 //
 //   - Vector operations: Upsert, Query, Get, Delete
 //   - Index management: Train, DeleteIndex, ListIDs
-//   - Metadata access: GetIndexName, GetIndexType, IsTrained, GetIndexConfig
+//   - Metadata access: GetIndexName, GetIndexType, IsTrained
 //
 // All vector data is encrypted end-to-end using the provided encryption key.
 // The index maintains a persistent connection to the CyborgDB service and
@@ -77,11 +77,8 @@ type EncryptedIndex struct {
 	// indexKey is the hex-encoded encryption key for end-to-end encryption
 	indexKey string
 
-	// indexType indicates the index algorithm ("ivfflat", "ivfpq", "ivfsq")
+	// indexType is always "disk_ivf" — kept for forward-compatibility with the API surface
 	indexType string
-
-	// config holds the detailed index configuration, may be nil for loaded indexes
-	config *internal.IndexConfig
 
 	// trained indicates whether the index has been optimized via training
 	trained bool
@@ -103,22 +100,8 @@ func (e *EncryptedIndex) GetIndexName() string { return e.indexName }
 // This is a cached value that doesn't require an API call.
 //
 // Returns:
-//   - string: Index type ("ivfflat", "ivfpq", or "ivfsq")
+//   - string: Index type ("disk_ivf")
 func (e *EncryptedIndex) GetIndexType() string { return e.indexType }
-
-// GetIndexConfig returns the detailed configuration of this index.
-//
-// This is a cached value that doesn't require an API call. For indexes
-// loaded via LoadIndex(), the configuration may be incomplete.
-//
-// Returns:
-//   - internal.IndexConfig: The index configuration, or empty if not available
-func (e *EncryptedIndex) GetIndexConfig() internal.IndexConfig {
-	if e.config != nil {
-		return *e.config
-	}
-	return internal.IndexConfig{}
-}
 
 // IsTrained checks whether this index has been optimized through training.
 //

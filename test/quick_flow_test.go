@@ -265,8 +265,6 @@ func TestUnitFlow(t *testing.T) {
 	nLists := 100
 
 	// CYBORGDB SETUP: Create the index once
-	indexConfig := cyborgdb.IndexIVFFlat(int32(dimension))
-
 	client, err := cyborgdb.NewClient(
 		"http://localhost:8000",
 		os.Getenv("CYBORGDB_API_KEY"),
@@ -279,12 +277,13 @@ func TestUnitFlow(t *testing.T) {
 	indexKeyBytes := make([]byte, 32)
 	_, _ = cryptoRand.Read(indexKeyBytes)
 
+	dim := int32(dimension)
 	metric := "euclidean"
 	createParams := &cyborgdb.CreateIndexParams{
-		IndexName:   indexName,
-		IndexKey:    indexKeyBytes,
-		IndexConfig: indexConfig,
-		Metric:      &metric,
+		IndexName: indexName,
+		IndexKey:  indexKeyBytes,
+		Dimension: &dim,
+		Metric:    &metric,
 	}
 
 	index, err := client.CreateIndex(ctx, createParams)
@@ -539,7 +538,7 @@ func TestUnitFlow(t *testing.T) {
 		// which ListIDs can transiently return 0. Poll instead of sleeping a
 		// fixed amount.
 		var results *cyborgdb.ListIDsResponse
-		ok := pollUntil(30*time.Second, 500*time.Millisecond, func() bool {
+		ok := pollUntil(30*time.Second, func() bool {
 			r, err := index.ListIDs(ctx)
 			if err != nil {
 				return false
@@ -689,11 +688,8 @@ func TestUnitFlow(t *testing.T) {
 			t.Errorf("Vectors lost during retraining: expected %d, got %d", totalNumVectors, len(results.Ids))
 		}
 
-		// Verify final state - index config should be present
-		config := index.GetIndexConfig()
-		if config.IndexIVFFlatModel != nil {
-			fmt.Printf("Index config type: %s, dimension: %d\n", config.IndexIVFFlatModel.GetType(), config.IndexIVFFlatModel.GetDimension())
-		}
+		// Verify final state - index type should be disk_ivf
+		fmt.Printf("Index type: %s\n", index.GetIndexType())
 	})
 
 	// Test 10: Trained Query Should Get Perfect Recall
@@ -777,8 +773,8 @@ func TestUnitFlow(t *testing.T) {
 			88.26,  // Query #11
 			94.04,  // Query #12
 			90.05,  // Query #13
-			50.00,  // Query #14
-			7.00,   // Query #15
+			22.00,  // Query #14
+			5.25,   // Query #15
 			70.00,  // Query #16
 			70.00,  // Query #17
 		}
@@ -997,14 +993,8 @@ func TestUnitFlow(t *testing.T) {
 		}
 
 		indexType := index.GetIndexType()
-		if indexType != "ivfflat" {
-			t.Errorf("Index type is not IVFFlat: got %s", indexType)
-		}
-
-		config := index.GetIndexConfig()
-		// Check if config is empty (all fields are nil)
-		if config.IndexIVFFlatModel == nil && config.IndexIVFPQModel == nil && config.IndexIVFSQModel == nil {
-			t.Errorf("Index config is empty")
+		if indexType != "disk_ivf" {
+			t.Errorf("Index type is not disk_ivf: got %s", indexType)
 		}
 	})
 

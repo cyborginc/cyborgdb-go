@@ -111,19 +111,21 @@ func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 	return c.internal.ListIndexes(ctx)
 }
 
-// CreateIndex creates a new encrypted vector index using a single request object.
+// CreateIndex creates a new encrypted DiskIVF vector index.
 //
-// The new index is empty and ready for vector operations. Index types (IVFFlat,
-// IVFPQ, IVFSQ) offer different trade-offs across speed, accuracy, and memory.
+// The new index is empty and ready for vector operations. DiskIVF performs
+// two-stage encrypted ANN search: fast ranking over PQ codes followed by
+// reranking with stored full-precision vectors.
 //
 // Parameters:
 //   - ctx: Context for cancellation/timeouts
 //   - params: Complete payload containing:
 //   - IndexName (required): unique index name
 //   - IndexKey  (required): 32-byte encryption key
-//   - IndexConfig (optional): index configuration (IndexIVFFlat, IndexIVFPQ, or IndexIVFSQ)
+//   - Dimension (optional): vector dimensionality; auto-detected on first upsert if omitted
 //   - Metric (optional): distance metric (e.g., "euclidean", "cosine")
 //   - EmbeddingModel (optional): embedding model name to associate
+//   - StoragePrecision (optional): "float32" (default) or "float16" rerank dtype
 //
 // Returns:
 //   - *EncryptedIndex: Handle for vector operations
@@ -143,19 +145,13 @@ func (c *Client) CreateIndex(
 	// Convert bytes to hex string
 	keyHex := fmt.Sprintf("%x", params.IndexKey)
 
-	// Convert CreateIndexParams to internal.CreateIndexRequest
-	var indexConfig internal.IndexConfig
-	if params.IndexConfig != nil {
-		indexConfig = *params.IndexConfig.ToIndexConfig()
-	}
-
 	req := internal.CreateIndexRequest{
 		IndexName: params.IndexName,
 		IndexKey:  keyHex,
 	}
 
-	if params.IndexConfig != nil {
-		req.IndexConfig = *internal.NewNullableIndexConfig(&indexConfig)
+	if params.Dimension != nil {
+		req.Dimension = *internal.NewNullableInt32(params.Dimension)
 	}
 
 	if params.Metric != nil {
@@ -166,6 +162,10 @@ func (c *Client) CreateIndex(
 		req.EmbeddingModel = *internal.NewNullableString(params.EmbeddingModel)
 	}
 
+	if params.StoragePrecision != nil {
+		req.StoragePrecision = *internal.NewNullableString(params.StoragePrecision)
+	}
+
 	// Call internal CreateIndex
 	_, _, err := c.internal.APIClient.DefaultAPI.CreateIndexV1IndexesCreatePost(ctx).
 		CreateIndexRequest(req).
@@ -174,25 +174,13 @@ func (c *Client) CreateIndex(
 		return nil, err
 	}
 
-	// Build the EncryptedIndex handle
-	idx := &EncryptedIndex{
+	return &EncryptedIndex{
 		indexName: params.IndexName,
 		indexKey:  keyHex,
+		indexType: "disk_ivf",
 		client:    c.internal,
-		config:    &indexConfig,
 		trained:   false,
-	}
-
-	// Set index type if available
-	if indexConfig.IndexIVFFlatModel != nil && indexConfig.IndexIVFFlatModel.Type != nil {
-		idx.indexType = *indexConfig.IndexIVFFlatModel.Type
-	} else if indexConfig.IndexIVFPQModel != nil && indexConfig.IndexIVFPQModel.Type != nil {
-		idx.indexType = *indexConfig.IndexIVFPQModel.Type
-	} else if indexConfig.IndexIVFSQModel != nil && indexConfig.IndexIVFSQModel.Type != nil {
-		idx.indexType = *indexConfig.IndexIVFSQModel.Type
-	}
-
-	return idx, nil
+	}, nil
 }
 
 // LoadIndex loads an existing encrypted index by name and key.
@@ -228,19 +216,10 @@ func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byt
 		return nil, fmt.Errorf("failed to get index info: %w", err)
 	}
 
-	// Convert the map[string]interface{} config to internal.IndexConfig if needed
-	var indexConfig *internal.IndexConfig
-	if len(indexInfo.IndexConfig) > 0 {
-		// For now, leave config as nil since converting from map to IndexConfig is complex
-		// The EncryptedIndex will work without the detailed config
-		indexConfig = nil
-	}
-
 	return &EncryptedIndex{
 		indexName: indexInfo.IndexName,
 		indexKey:  keyHex,
 		indexType: indexInfo.IndexType,
-		config:    indexConfig,
 		client:    c.internal,
 		trained:   indexInfo.IsTrained,
 	}, nil
