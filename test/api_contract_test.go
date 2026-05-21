@@ -531,7 +531,7 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 		}
 
 		// Poll until IDs are available instead of fixed sleep
-		found := pollUntil(pollTimeout, pollInterval, func() bool {
+		found := pollUntil(pollTimeout, func() bool {
 			result, err := testIndex.ListIDs(ctx)
 			if err != nil {
 				return false
@@ -581,7 +581,7 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 		}
 
 		// Poll until IDs are available
-		found := pollUntil(pollTimeout, pollInterval, func() bool {
+		found := pollUntil(pollTimeout, func() bool {
 			result, err := embeddingIndex.ListIDs(ctx)
 			if err != nil {
 				return false
@@ -624,7 +624,7 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 		}
 
 		// Poll until all IDs are available
-		found := pollUntil(pollTimeout, pollInterval, func() bool {
+		found := pollUntil(pollTimeout, func() bool {
 			result, err := testIndex.ListIDs(ctx)
 			if err != nil {
 				return false
@@ -668,7 +668,7 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 		}
 
 		// Poll until all IDs are available
-		found := pollUntil(pollTimeout, pollInterval, func() bool {
+		found := pollUntil(pollTimeout, func() bool {
 			result, err := testIndex.ListIDs(ctx)
 			if err != nil {
 				return false
@@ -1273,7 +1273,7 @@ func TestEncryptedIndexBinaryUpsertAndQuery(t *testing.T) {
 			expectedIDs[id] = true
 		}
 
-		found := pollUntil(pollTimeout, pollInterval, func() bool {
+		found := pollUntil(pollTimeout, func() bool {
 			result, err := testIndex.ListIDs(ctx)
 			if err != nil {
 				return false
@@ -1317,7 +1317,7 @@ func TestEncryptedIndexBinaryUpsertAndQuery(t *testing.T) {
 		}
 
 		// Poll until IDs are available
-		found := pollUntil(pollTimeout, pollInterval, func() bool {
+		found := pollUntil(pollTimeout, func() bool {
 			result, err := testIndex.ListIDs(ctx)
 			if err != nil {
 				return false
@@ -1603,7 +1603,7 @@ func TestEncryptedIndexDelete(t *testing.T) {
 		}
 
 		// Poll until IDs are confirmed deleted
-		deleted := pollUntil(pollTimeout, pollInterval, func() bool {
+		deleted := pollUntil(pollTimeout, func() bool {
 			result, listErr := testIndex.ListIDs(ctx)
 			if listErr != nil {
 				return false
@@ -1643,7 +1643,7 @@ func TestEncryptedIndexDelete(t *testing.T) {
 		}
 
 		// Poll until ID is confirmed deleted
-		deleted := pollUntil(pollTimeout, pollInterval, func() bool {
+		deleted := pollUntil(pollTimeout, func() bool {
 			result, err := testIndex.ListIDs(ctx)
 			if err != nil {
 				return false
@@ -1717,7 +1717,7 @@ func TestEncryptedIndexDeleteIndex(t *testing.T) {
 		}
 
 		// Poll until index is confirmed deleted
-		deleted := pollUntil(pollTimeout, pollInterval, func() bool {
+		deleted := pollUntil(pollTimeout, func() bool {
 			indexes, listErr := testClient.ListIndexes(ctx)
 			if listErr != nil {
 				return false
@@ -1771,7 +1771,7 @@ func TestEncryptedIndexDeleteIndex(t *testing.T) {
 		}
 
 		// Poll to verify deletion
-		deleted := pollUntil(pollTimeout, pollInterval, func() bool {
+		deleted := pollUntil(pollTimeout, func() bool {
 			indexes, err := testClient.ListIndexes(ctx)
 			if err != nil {
 				return false

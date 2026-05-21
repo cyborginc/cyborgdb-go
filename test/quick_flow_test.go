@@ -538,7 +538,7 @@ func TestUnitFlow(t *testing.T) {
 		// which ListIDs can transiently return 0. Poll instead of sleeping a
 		// fixed amount.
 		var results *cyborgdb.ListIDsResponse
-		ok := pollUntil(30*time.Second, 500*time.Millisecond, func() bool {
+		ok := pollUntil(30*time.Second, func() bool {
 			r, err := index.ListIDs(ctx)
 			if err != nil {
 				return false

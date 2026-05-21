@@ -104,7 +104,7 @@ func TestConcurrentUpsertsNoDataLoss(t *testing.T) {
 
 	expectedCount := len(allIDs)
 	var storedIDs map[string]bool
-	ok := pollUntil(pollTimeout, pollInterval, func() bool {
+	ok := pollUntil(pollTimeout, func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
 		defer cancel()
 		resp, err := index.ListIDs(ctx)
@@ -184,7 +184,7 @@ func TestConcurrentUpsertsOverlappingIDs(t *testing.T) {
 		t.Fatalf("Goroutines raised errors: %v", errs)
 	}
 	var resp *cyborgdb.GetResponse
-	ok := pollUntil(pollTimeout, pollInterval, func() bool {
+	ok := pollUntil(pollTimeout, func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
 		defer cancel()
 		r, err := index.Get(ctx, sharedIDs, []string{"vector"})
@@ -232,7 +232,7 @@ func TestQueriesDuringUpserts(t *testing.T) {
 
 	// Seed with initial data so queries have something to return
 	seedIndex(t, index, "seed", 100, concDimension)
-	if !pollUntil(pollTimeout, pollInterval, func() bool {
+	if !pollUntil(pollTimeout, func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
 		defer cancel()
 		resp, err := index.ListIDs(ctx)
@@ -337,7 +337,7 @@ func TestDeletesDuringQueries(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Failed to upsert delete targets: %v", err)
 	}
-	if !pollUntil(pollTimeout, pollInterval, func() bool {
+	if !pollUntil(pollTimeout, func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
 		defer cancel()
 		resp, err := index.ListIDs(ctx)
@@ -436,7 +436,7 @@ func TestConcurrentUpsertsAndDeletesOnSameIDs(t *testing.T) {
 	if setupErr != nil {
 		t.Fatalf("Initial upsert failed: %v", setupErr)
 	}
-	if !pollUntil(pollTimeout, pollInterval, func() bool {
+	if !pollUntil(pollTimeout, func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
 		defer cancel()
 		resp, err := index.ListIDs(ctx)
@@ -496,7 +496,7 @@ func TestConcurrentUpsertsAndDeletesOnSameIDs(t *testing.T) {
 	}
 
 	var resp *cyborgdb.ListIDsResponse
-	if !pollUntil(pollTimeout, pollInterval, func() bool {
+	if !pollUntil(pollTimeout, func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
 		defer cancel()
 		r, err := index.ListIDs(ctx)
@@ -540,7 +540,7 @@ func TestBadGoroutineDoesntBreakGoodGoroutines(t *testing.T) {
 	index, _ := newIsolatedIndex(t, client, "conc_errisolation", int32(concDimension))
 
 	seedIndex(t, index, "base", 50, concDimension)
-	if !pollUntil(pollTimeout, pollInterval, func() bool {
+	if !pollUntil(pollTimeout, func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
 		defer cancel()
 		resp, err := index.ListIDs(ctx)
@@ -658,7 +658,7 @@ func TestNoDataLeakageBetweenIndexes(t *testing.T) {
 
 	// Wait for all indexes to have their data propagated
 	for i, info := range indexes {
-		if !pollUntil(pollTimeout, pollInterval, func() bool {
+		if !pollUntil(pollTimeout, func() bool {
 			ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
 			defer cancel()
 			resp, err := info.index.ListIDs(ctx)
@@ -744,7 +744,7 @@ func TestDeleteInOneIndexDoesntAffectOthers(t *testing.T) {
 	// Wait for all indexes to have their data propagated
 	for i := 0; i < numIndexes; i++ {
 		idx := indexes[i]
-		if !pollUntil(pollTimeout, pollInterval, func() bool {
+		if !pollUntil(pollTimeout, func() bool {
 			ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
 			defer cancel()
 			resp, err := idx.index.ListIDs(ctx)
@@ -792,7 +792,7 @@ func TestDeleteInOneIndexDoesntAffectOthers(t *testing.T) {
 		t.Fatalf("Delete from index 0 failed: %v", err)
 	}
 	// Wait for delete to propagate
-	if !pollUntil(pollTimeout, pollInterval, func() bool {
+	if !pollUntil(pollTimeout, func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
 		defer cancel()
 		resp, err := indexes[0].index.ListIDs(ctx)
@@ -904,7 +904,7 @@ func TestConcurrentWritesToDifferentIndexes(t *testing.T) {
 	for gID, data := range perGoroutine {
 		info := indexes[gID]
 
-		if !pollUntil(pollTimeout, pollInterval, func() bool {
+		if !pollUntil(pollTimeout, func() bool {
 			ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
 			defer cancel()
 			resp, err := info.index.ListIDs(ctx)
@@ -1032,7 +1032,7 @@ func TestStress20Goroutines200VectorsEach(t *testing.T) {
 
 	expectedCount := len(allIDs)
 	var storedIDs map[string]bool
-	ok := pollUntil(30*time.Second, pollInterval, func() bool {
+	ok := pollUntil(30*time.Second, func() bool {
 		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
 		defer cancel()
 		resp, err := index.ListIDs(ctx)
