@@ -247,4 +247,3 @@ type QueryParams struct {
 	// An empty slice may return only IDs and distances.
 	Include []string `json:"include"`
 }
-

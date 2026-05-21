@@ -1059,4 +1059,3 @@ func TestStress20Goroutines200VectorsEach(t *testing.T) {
 		t.Errorf("%d/%d IDs missing after 20-goroutine stress test", len(missing), len(allIDs))
 	}
 }
-

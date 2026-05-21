@@ -41,10 +41,10 @@ func compTestIndex(t *testing.T) *cyborgdb.EncryptedIndex {
 	index, err := client.CreateIndex(
 		context.Background(),
 		&cyborgdb.CreateIndexParams{
-			IndexName:   generateUniqueName("comp_"),
-			IndexKey:    generateRandomKey(),
-			Dimension:   int32Ptr(128),
-			Metric:      &metric,
+			IndexName: generateUniqueName("comp_"),
+			IndexKey:  generateRandomKey(),
+			Dimension: int32Ptr(128),
+			Metric:    &metric,
 		},
 	)
 	if err != nil {
@@ -75,10 +75,10 @@ func TestInvalidAPIKeyRejected(t *testing.T) {
 
 	metric := "euclidean"
 	_, createErr := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
-		IndexName:   generateUniqueName("auth_test_"),
-		IndexKey:    generateRandomKey(),
-		Dimension:   int32Ptr(128),
-		Metric:      &metric,
+		IndexName: generateUniqueName("auth_test_"),
+		IndexKey:  generateRandomKey(),
+		Dimension: int32Ptr(128),
+		Metric:    &metric,
 	})
 	if createErr == nil {
 		t.Fatal("Invalid API key was accepted — authentication is not enforced")
@@ -102,37 +102,37 @@ func TestMalformedRequestsRejected(t *testing.T) {
 		{
 			"Negative dimension",
 			&cyborgdb.CreateIndexParams{
-				IndexName:   generateUniqueName("neg_dim_"),
-				IndexKey:    generateRandomKey(),
-				Dimension:   int32Ptr(-1),
-				Metric:      strPtr("euclidean"),
+				IndexName: generateUniqueName("neg_dim_"),
+				IndexKey:  generateRandomKey(),
+				Dimension: int32Ptr(-1),
+				Metric:    strPtr("euclidean"),
 			},
 		},
 		{
 			"Invalid metric",
 			&cyborgdb.CreateIndexParams{
-				IndexName:   generateUniqueName("bad_metric_"),
-				IndexKey:    generateRandomKey(),
-				Dimension:   int32Ptr(128),
-				Metric:      strPtr("completely_invalid_metric"),
+				IndexName: generateUniqueName("bad_metric_"),
+				IndexKey:  generateRandomKey(),
+				Dimension: int32Ptr(128),
+				Metric:    strPtr("completely_invalid_metric"),
 			},
 		},
 		{
 			"Empty index name",
 			&cyborgdb.CreateIndexParams{
-				IndexName:   "",
-				IndexKey:    generateRandomKey(),
-				Dimension:   int32Ptr(128),
-				Metric:      strPtr("euclidean"),
+				IndexName: "",
+				IndexKey:  generateRandomKey(),
+				Dimension: int32Ptr(128),
+				Metric:    strPtr("euclidean"),
 			},
 		},
 		{
 			"Short key (8 bytes instead of 32)",
 			&cyborgdb.CreateIndexParams{
-				IndexName:   generateUniqueName("short_key_"),
-				IndexKey:    make([]byte, 8),
-				Dimension:   int32Ptr(128),
-				Metric:      strPtr("euclidean"),
+				IndexName: generateUniqueName("short_key_"),
+				IndexKey:  make([]byte, 8),
+				Dimension: int32Ptr(128),
+				Metric:    strPtr("euclidean"),
 			},
 		},
 	}
@@ -433,10 +433,10 @@ func TestDuplicateIndexNameRejected(t *testing.T) {
 	key := generateRandomKey()
 	metric := "euclidean"
 	params := &cyborgdb.CreateIndexParams{
-		IndexName:   name,
-		IndexKey:    key,
-		Dimension:   int32Ptr(128),
-		Metric:      &metric,
+		IndexName: name,
+		IndexKey:  key,
+		Dimension: int32Ptr(128),
+		Metric:    &metric,
 	}
 
 	index, err := client.CreateIndex(ctx, params)
@@ -451,10 +451,10 @@ func TestDuplicateIndexNameRejected(t *testing.T) {
 
 	// Second create with same name must fail
 	_, dupErr := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
-		IndexName:   name,
-		IndexKey:    generateRandomKey(),
-		Dimension:   int32Ptr(128),
-		Metric:      &metric,
+		IndexName: name,
+		IndexKey:  generateRandomKey(),
+		Dimension: int32Ptr(128),
+		Metric:    &metric,
 	})
 	if dupErr == nil {
 		t.Fatal("Server accepted duplicate index name — would silently overwrite existing data")
@@ -477,10 +477,10 @@ func TestWrongKeyCannotAccessData(t *testing.T) {
 	metric := "euclidean"
 
 	index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
-		IndexName:   name,
-		IndexKey:    correctKey,
-		Dimension:   int32Ptr(128),
-		Metric:      &metric,
+		IndexName: name,
+		IndexKey:  correctKey,
+		Dimension: int32Ptr(128),
+		Metric:    &metric,
 	})
 	if err != nil {
 		t.Fatalf("CreateIndex failed: %v", err)
