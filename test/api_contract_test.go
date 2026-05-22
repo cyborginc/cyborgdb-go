@@ -1813,6 +1813,27 @@ func TestSDKConstructionOffline(t *testing.T) {
 		}
 	})
 
+	t.Run("CreateIndexRejectsWrongLengthKey", func(t *testing.T) {
+		// IndexKey set but not 32 bytes — must fail upstream of the
+		// network call with ErrInvalidKeyLength.
+		_, err := client.CreateIndex(context.Background(), &cyborgdb.CreateIndexParams{
+			IndexName: "x",
+			IndexKey:  make([]byte, 16),
+		})
+		if !errors.Is(err, cyborgdb.ErrInvalidKeyLength) {
+			t.Fatalf("expected ErrInvalidKeyLength, got %v", err)
+		}
+	})
+
+	t.Run("LoadIndexRejectsWrongLengthKey", func(t *testing.T) {
+		// indexKey set but not 32 bytes — must fail upstream of the
+		// describe network call with ErrInvalidKeyLength.
+		_, err := client.LoadIndex(context.Background(), "x", make([]byte, 16))
+		if !errors.Is(err, cyborgdb.ErrInvalidKeyLength) {
+			t.Fatalf("expected ErrInvalidKeyLength, got %v", err)
+		}
+	})
+
 	t.Run("CreateIndexRequestSerializesKmsName", func(t *testing.T) {
 		// KMS-only path: marshalled JSON must omit index_key entirely and
 		// include kms_name. Service treats absence as "KMS-resolved."

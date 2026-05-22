@@ -58,6 +58,21 @@ func GenerateKey() ([]byte, error) {
 	return key, nil
 }
 
+// keyBytesToHex validates an optional 32-byte index key and returns its hex
+// encoding. Returns (nil, nil) for an empty key — callers decide whether
+// that's acceptable for the specific operation (it is for KMS-backed
+// indexes; it isn't for legacy keyed indexes).
+func keyBytesToHex(key []byte) (*string, error) {
+	if len(key) == 0 {
+		return nil, nil
+	}
+	if len(key) != KeySize {
+		return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(key))
+	}
+	h := fmt.Sprintf("%x", key)
+	return &h, nil
+}
+
 // NewClient constructs a new CyborgDB client.
 //
 // If verifySSL is omitted, behavior matches the TS SDK:
@@ -141,13 +156,9 @@ func (c *Client) CreateIndex(
 		return nil, ErrMissingKeyOrKMS
 	}
 
-	var keyHex *string
-	if len(params.IndexKey) > 0 {
-		if len(params.IndexKey) != KeySize {
-			return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(params.IndexKey))
-		}
-		h := fmt.Sprintf("%x", params.IndexKey)
-		keyHex = &h
+	keyHex, err := keyBytesToHex(params.IndexKey)
+	if err != nil {
+		return nil, err
 	}
 
 	req := internal.CreateIndexRequest{
@@ -178,7 +189,7 @@ func (c *Client) CreateIndex(
 		req.StoragePrecision = *internal.NewNullableString(params.StoragePrecision)
 	}
 
-	_, _, err := c.internal.APIClient.DefaultAPI.CreateIndexV1IndexesCreatePost(ctx).
+	_, _, err = c.internal.APIClient.DefaultAPI.CreateIndexV1IndexesCreatePost(ctx).
 		CreateIndexRequest(req).
 		Execute()
 	if err != nil {
@@ -209,13 +220,9 @@ func (c *Client) CreateIndex(
 //   - *EncryptedIndex: Handle for vector operations
 //   - error: Any error encountered
 func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byte) (*EncryptedIndex, error) {
-	var keyHex *string
-	if len(indexKey) > 0 {
-		if len(indexKey) != KeySize {
-			return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(indexKey))
-		}
-		h := fmt.Sprintf("%x", indexKey)
-		keyHex = &h
+	keyHex, err := keyBytesToHex(indexKey)
+	if err != nil {
+		return nil, err
 	}
 
 	describeReq := internal.IndexOperationRequest{

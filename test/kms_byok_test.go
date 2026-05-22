@@ -31,6 +31,7 @@ const (
 	kmsDimension       = 128
 	kmsNumVectors      = 10
 	kmsTimeout         = 60 * time.Second
+	kmsCleanupTimeout  = 30 * time.Second
 	kmsExpectedType    = "disk_ivf"
 	kmsEuclideanMetric = "euclidean"
 )
@@ -97,10 +98,9 @@ func runKMSRoundTrip(t *testing.T, cfg kmsBYOKConfig, kmsName string) {
 	// --- create ---
 	dim := int32(kmsDimension)
 	metric := kmsEuclideanMetric
-	kmsNameCopy := kmsName
 	params := &cyborgdb.CreateIndexParams{
 		IndexName: indexName,
-		KmsName:   &kmsNameCopy,
+		KmsName:   &kmsName,
 		Dimension: &dim,
 		Metric:    &metric,
 	}
@@ -113,7 +113,12 @@ func runKMSRoundTrip(t *testing.T, cfg kmsBYOKConfig, kmsName string) {
 		t.Fatalf("CreateIndex (kms=%s): %v", kmsName, err)
 	}
 	t.Cleanup(func() {
-		_ = index.DeleteIndex(ctx)
+		// Use a fresh context: the test-scoped ctx may already be cancelled
+		// (e.g., if the test consumed its full timeout), which would
+		// short-circuit cleanup before the request hits the server.
+		cleanupCtx, cancel := context.WithTimeout(context.Background(), kmsCleanupTimeout)
+		defer cancel()
+		_ = index.DeleteIndex(cleanupCtx)
 	})
 	if index.GetIndexName() != indexName {
 		t.Errorf("GetIndexName: got %q, want %q", index.GetIndexName(), indexName)
@@ -133,13 +138,18 @@ func runKMSRoundTrip(t *testing.T, cfg kmsBYOKConfig, kmsName string) {
 		t.Errorf("GetIndexType: got %q, want %q", loaded.GetIndexType(), kmsExpectedType)
 	}
 
-	// --- data plane round-trip ---
+	// --- data plane round-trip via the LoadIndex-returned handle ---
+	// We deliberately exercise `loaded` (not the `index` returned by
+	// CreateIndex) so a regression where LoadIndex's keyless path returns
+	// a handle with a broken DEK lookup surfaces here. For real-KMS
+	// variants, `loaded` has no SDK-held key, which is the unique
+	// regression risk of the new keyless path.
 	items, vectors := makeKMSVectors(kmsNumVectors, kmsDimension)
-	if err := index.Upsert(ctx, items); err != nil {
+	if err := loaded.Upsert(ctx, items); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
 
-	queryResp, err := index.Query(ctx, cyborgdb.QueryParams{
+	queryResp, err := loaded.Query(ctx, cyborgdb.QueryParams{
 		QueryVector: vectors[0],
 		TopK:        3,
 		Include:     []string{"distance", "metadata"},
@@ -159,9 +169,7 @@ func runKMSRoundTrip(t *testing.T, cfg kmsBYOKConfig, kmsName string) {
 		t.Errorf("Query: closest match should be self (id=0), got %q", hits[0].Id)
 	}
 
-	// Every remaining data-plane method reaches the service for this slot
-	// type; for real-KMS variants none of them have an SDK-held key.
-	getResp, err := index.Get(ctx, []string{"0"}, []string{"metadata"})
+	getResp, err := loaded.Get(ctx, []string{"0"}, []string{"metadata"})
 	if err != nil {
 		t.Fatalf("Get: %v", err)
 	}
@@ -169,7 +177,7 @@ func runKMSRoundTrip(t *testing.T, cfg kmsBYOKConfig, kmsName string) {
 		t.Errorf("Get: unexpected result %+v", getResp.Results)
 	}
 
-	listResp, err := index.ListIDs(ctx)
+	listResp, err := loaded.ListIDs(ctx)
 	if err != nil {
 		t.Fatalf("ListIDs: %v", err)
 	}
@@ -177,14 +185,14 @@ func runKMSRoundTrip(t *testing.T, cfg kmsBYOKConfig, kmsName string) {
 		t.Errorf("ListIDs: got %d ids, want at least %d", len(listResp.Ids), kmsNumVectors)
 	}
 
-	if _, err := index.IsTrained(ctx); err != nil {
+	if _, err := loaded.IsTrained(ctx); err != nil {
 		t.Errorf("IsTrained: %v", err)
 	}
-	if _, err := index.CheckTrainingStatus(ctx); err != nil {
+	if _, err := loaded.CheckTrainingStatus(ctx); err != nil {
 		t.Errorf("CheckTrainingStatus: %v", err)
 	}
 
-	if err := index.Delete(ctx, []string{"0"}); err != nil {
+	if err := loaded.Delete(ctx, []string{"0"}); err != nil {
 		t.Errorf("Delete: %v", err)
 	}
 }
