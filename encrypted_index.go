@@ -65,7 +65,8 @@ var (
 //   - Index management: Train, DeleteIndex, ListIDs
 //   - Metadata access: GetIndexName, GetIndexType, IsTrained
 //
-// All vector data is encrypted end-to-end using the provided encryption key.
+// All vector data is encrypted end-to-end using the provided encryption key
+// (or, for KMS-backed indexes, resolved server-side from the index's KMSBlob).
 // The index maintains a persistent connection to the CyborgDB service and
 // caches metadata to avoid unnecessary API calls.
 //
@@ -74,8 +75,10 @@ type EncryptedIndex struct {
 	// indexName is the unique identifier for this index
 	indexName string
 
-	// indexKey is the hex-encoded encryption key for end-to-end encryption
-	indexKey string
+	// indexKey is the hex-encoded encryption key for end-to-end encryption.
+	// nil for KMS-backed indexes where the service resolves the DEK from
+	// the stored KMSBlob.
+	indexKey *string
 
 	// indexType is always "disk_ivf" — kept for forward-compatibility with the API surface
 	indexType string
@@ -85,6 +88,17 @@ type EncryptedIndex struct {
 
 	// client provides access to the underlying API client
 	client *internal.Client
+}
+
+// indexKeyField builds the NullableString IndexKey field expected by the
+// generated request models. Returns the unset zero value when this index has
+// no SDK-held key (KMS-backed indexes), which serializes as "field omitted"
+// and lets the service resolve the DEK from the stored KMSBlob.
+func (e *EncryptedIndex) indexKeyField() internal.NullableString {
+	if e.indexKey == nil {
+		return internal.NullableString{}
+	}
+	return *internal.NewNullableString(e.indexKey)
 }
 
 // GetIndexName returns the unique name of this index.
@@ -117,7 +131,7 @@ func (e *EncryptedIndex) GetIndexType() string { return e.indexType }
 func (e *EncryptedIndex) IsTrained(ctx context.Context) (bool, error) {
 	describeReq := internal.IndexOperationRequest{
 		IndexName: e.indexName,
-		IndexKey:  e.indexKey,
+		IndexKey:  e.indexKeyField(),
 	}
 	resp, _, err := e.client.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
 		IndexOperationRequest(describeReq).
@@ -155,7 +169,7 @@ func (e *EncryptedIndex) CheckTrainingStatus(ctx context.Context) (bool, error) 
 	if !isTraining && !e.trained {
 		describeReq := internal.IndexOperationRequest{
 			IndexName: e.indexName,
-			IndexKey:  e.indexKey,
+			IndexKey:  e.indexKeyField(),
 		}
 		resp, _, err := e.client.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
 			IndexOperationRequest(describeReq).
@@ -233,7 +247,7 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, input UpsertInput) error {
 func (e *EncryptedIndex) upsertItems(ctx context.Context, items VectorItems) error {
 	req := internal.UpsertRequest{
 		IndexName: e.indexName,
-		IndexKey:  e.indexKey,
+		IndexKey:  e.indexKeyField(),
 		Items:     items,
 	}
 	_, _, err := e.client.APIClient.DefaultAPI.UpsertVectorsV1VectorsUpsertPost(ctx).
@@ -342,7 +356,7 @@ func (e *EncryptedIndex) queryParams(ctx context.Context, params QueryParams) (*
 	if len(params.BatchQueryVectors) > 0 {
 		batchReq := internal.BatchQueryRequest{
 			IndexName:    e.indexName,
-			IndexKey:     e.indexKey,
+			IndexKey:     e.indexKeyField(),
 			QueryVectors: params.BatchQueryVectors,
 			Filters:      params.Filters,
 			Include:      params.Include,
@@ -373,7 +387,7 @@ func (e *EncryptedIndex) queryParams(ctx context.Context, params QueryParams) (*
 	// Handle single query
 	req := internal.QueryRequest{
 		IndexName: e.indexName,
-		IndexKey:  e.indexKey,
+		IndexKey:  e.indexKeyField(),
 		Filters:   params.Filters,
 		Include:   params.Include,
 	}
@@ -430,7 +444,7 @@ func (e *EncryptedIndex) queryParams(ctx context.Context, params QueryParams) (*
 func (e *EncryptedIndex) Get(ctx context.Context, ids []string, include []string) (*GetResponse, error) {
 	req := internal.GetRequest{
 		IndexName: e.indexName,
-		IndexKey:  e.indexKey,
+		IndexKey:  e.indexKeyField(),
 		Ids:       ids,
 		Include:   include,
 	}
@@ -464,7 +478,7 @@ func (e *EncryptedIndex) Get(ctx context.Context, ids []string, include []string
 func (e *EncryptedIndex) Delete(ctx context.Context, ids []string) error {
 	req := internal.DeleteRequest{
 		IndexName: e.indexName,
-		IndexKey:  e.indexKey,
+		IndexKey:  e.indexKeyField(),
 		Ids:       ids,
 	}
 	_, _, err := e.client.APIClient.DefaultAPI.DeleteVectorsV1VectorsDeletePost(ctx).
@@ -503,7 +517,7 @@ func (e *EncryptedIndex) Delete(ctx context.Context, ids []string) error {
 func (e *EncryptedIndex) Train(ctx context.Context, params TrainParams) error {
 	// Create request with required fields
 	req := internal.TrainRequest{
-		IndexKey:  e.indexKey,
+		IndexKey:  e.indexKeyField(),
 		IndexName: e.indexName,
 	}
 
@@ -561,7 +575,7 @@ func (e *EncryptedIndex) Train(ctx context.Context, params TrainParams) error {
 func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 	req := internal.IndexOperationRequest{
 		IndexName: e.indexName,
-		IndexKey:  e.indexKey,
+		IndexKey:  e.indexKeyField(),
 	}
 	_, _, err := e.client.APIClient.DefaultAPI.DeleteIndexV1IndexesDeletePost(ctx).
 		IndexOperationRequest(req).
@@ -597,7 +611,7 @@ func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 func (e *EncryptedIndex) ListIDs(ctx context.Context) (*ListIDsResponse, error) {
 	req := internal.ListIDsRequest{
 		IndexName: e.indexName,
-		IndexKey:  e.indexKey,
+		IndexKey:  e.indexKeyField(),
 	}
 	result, _, err := e.client.APIClient.DefaultAPI.ListIdsV1VectorsListIdsPost(ctx).
 		ListIDsRequest(req).
@@ -715,7 +729,7 @@ func (e *EncryptedIndex) upsertBinary(ctx context.Context, params BinaryUpsertPa
 
 	req := internal.BinaryUpsertRequest{
 		IndexName: e.indexName,
-		IndexKey:  e.indexKey,
+		IndexKey:  e.indexKeyField(),
 		Batch:     batch,
 	}
 
@@ -771,7 +785,7 @@ func (e *EncryptedIndex) queryBinary(ctx context.Context, params BinaryQueryPara
 
 	req := internal.BinaryQueryRequest{
 		IndexName: e.indexName,
-		IndexKey:  e.indexKey,
+		IndexKey:  e.indexKeyField(),
 		Batch:     batch,
 		Filters:   params.Filters,
 		Include:   params.Include,

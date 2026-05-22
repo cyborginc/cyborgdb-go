@@ -22,6 +22,9 @@ var (
 	ErrKeyGeneration = fmt.Errorf("failed to generate key")
 	// ErrInvalidURL is returned when the base URL is invalid.
 	ErrInvalidURL = fmt.Errorf("invalid base URL")
+	// ErrMissingKeyOrKMS is returned when CreateIndex is called with neither
+	// IndexKey nor KmsName set.
+	ErrMissingKeyOrKMS = fmt.Errorf("create_index requires IndexKey, KmsName, or both")
 )
 
 // Client provides a high-level interface to the CyborgDB API (parallels the TypeScript SDK).
@@ -113,23 +116,20 @@ func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 
 // CreateIndex creates a new encrypted DiskIVF vector index.
 //
-// The new index is empty and ready for vector operations. DiskIVF performs
-// two-stage encrypted ANN search: fast ranking over PQ codes followed by
-// reranking with stored full-precision vectors.
+// At least one of params.IndexKey or params.KmsName must be supplied:
 //
-// Parameters:
-//   - ctx: Context for cancellation/timeouts
-//   - params: Complete payload containing:
-//   - IndexName (required): unique index name
-//   - IndexKey  (required): 32-byte encryption key
-//   - Dimension (optional): vector dimensionality; auto-detected on first upsert if omitted
-//   - Metric (optional): distance metric (e.g., "euclidean", "cosine")
-//   - EmbeddingModel (optional): embedding model name to associate
-//   - StoragePrecision (optional): "float32" (default) or "float16" rerank dtype
+//   - IndexKey only — legacy path; the SDK provides the 32-byte DEK directly.
+//   - KmsName only — the service generates a fresh DEK and wraps it under the
+//     named kms.registry entry; the SDK never sees the plaintext DEK.
+//   - IndexKey + KmsName — only valid when KmsName references a "provider: none"
+//     registry entry, in which case IndexKey is the wrapping KEK. Passing both
+//     against a real-KMS slot ("provider: aws-kms" or "aws") is rejected by
+//     the service with a 400.
 //
 // Returns:
 //   - *EncryptedIndex: Handle for vector operations
-//   - error: Any error encountered
+//   - error: Any error encountered (ErrMissingKeyOrKMS if neither is set;
+//     ErrInvalidKeyLength if IndexKey is set but not 32 bytes)
 //
 // Note: Store the encryption key securely; it cannot be recovered if lost.
 // Creating with an existing name will fail.
@@ -137,17 +137,29 @@ func (c *Client) CreateIndex(
 	ctx context.Context,
 	params *CreateIndexParams,
 ) (*EncryptedIndex, error) {
-	// Validate the key length
-	if len(params.IndexKey) != KeySize {
-		return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(params.IndexKey))
+	if len(params.IndexKey) == 0 && params.KmsName == nil {
+		return nil, ErrMissingKeyOrKMS
 	}
 
-	// Convert bytes to hex string
-	keyHex := fmt.Sprintf("%x", params.IndexKey)
+	var keyHex *string
+	if len(params.IndexKey) > 0 {
+		if len(params.IndexKey) != KeySize {
+			return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(params.IndexKey))
+		}
+		h := fmt.Sprintf("%x", params.IndexKey)
+		keyHex = &h
+	}
 
 	req := internal.CreateIndexRequest{
 		IndexName: params.IndexName,
-		IndexKey:  keyHex,
+	}
+
+	if keyHex != nil {
+		req.IndexKey = *internal.NewNullableString(keyHex)
+	}
+
+	if params.KmsName != nil {
+		req.KmsName = *internal.NewNullableString(params.KmsName)
 	}
 
 	if params.Dimension != nil {
@@ -166,7 +178,6 @@ func (c *Client) CreateIndex(
 		req.StoragePrecision = *internal.NewNullableString(params.StoragePrecision)
 	}
 
-	// Call internal CreateIndex
 	_, _, err := c.internal.APIClient.DefaultAPI.CreateIndexV1IndexesCreatePost(ctx).
 		CreateIndexRequest(req).
 		Execute()
@@ -183,30 +194,35 @@ func (c *Client) CreateIndex(
 	}, nil
 }
 
-// LoadIndex loads an existing encrypted index by name and key.
+// LoadIndex loads an existing encrypted index by name.
 //
-// The provided key must match the one used at creation time. Configuration and
-// metadata are fetched from the server.
+// indexKey is required for legacy / "provider: none" indexes where the SDK
+// owns the KEK. For KMS-backed indexes the service resolves the DEK via the
+// stored KMSBlob, so indexKey may be nil (or zero-length).
 //
 // Parameters:
 //   - ctx: Context for cancellation/timeouts
 //   - indexName: Existing index name
-//   - indexKey: 32-byte encryption key
+//   - indexKey: 32-byte encryption key, or nil for KMS-backed indexes
 //
 // Returns:
 //   - *EncryptedIndex: Handle for vector operations
 //   - error: Any error encountered
 func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byte) (*EncryptedIndex, error) {
-	// Validate the key length
-	if len(indexKey) != KeySize {
-		return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(indexKey))
+	var keyHex *string
+	if len(indexKey) > 0 {
+		if len(indexKey) != KeySize {
+			return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(indexKey))
+		}
+		h := fmt.Sprintf("%x", indexKey)
+		keyHex = &h
 	}
-
-	keyHex := fmt.Sprintf("%x", indexKey)
 
 	describeReq := internal.IndexOperationRequest{
 		IndexName: indexName,
-		IndexKey:  keyHex,
+	}
+	if keyHex != nil {
+		describeReq.IndexKey = *internal.NewNullableString(keyHex)
 	}
 
 	indexInfo, _, err := c.internal.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).

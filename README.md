@@ -175,6 +175,54 @@ queryParams := cyborgdb.QueryParams{
 results, err := index.Query(context.Background(), queryParams)
 ```
 
+#### Bring Your Own Key (BYOK) via KMS
+
+When the service is configured with a `kms.registry` entry, the SDK can
+delegate key management entirely to the server-side KMS. The service
+generates the data encryption key, wraps it under the named KMS slot, and
+persists the envelope — the SDK never sees or holds the key.
+
+```go
+// Create a KMS-backed index — no IndexKey from the SDK side.
+// "vendor-kms-slot" must match an entry in the service's cyborgdb.yaml.
+kmsName := "vendor-kms-slot"
+dimension := int32(128)
+metric := "euclidean"
+index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+    IndexName: "kms-backed-index",
+    KmsName:   &kmsName,
+    Dimension: &dimension,
+    Metric:    &metric,
+})
+
+// Reopening the index later doesn't require a key either; the service
+// resolves the data key from the index's stored KMS envelope.
+loaded, err := client.LoadIndex(ctx, "kms-backed-index", nil)
+```
+
+For `provider: none` registry entries, the SDK still supplies the KEK on
+every call — pass both `IndexKey` and `KmsName`:
+
+```go
+kmsName := "plain"   // registry slot with provider: none
+index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+    IndexName: "sdk-keyed-index",
+    IndexKey:  indexKey,
+    KmsName:   &kmsName,
+    Dimension: &dimension,
+})
+```
+
+> **How slots are configured.** A `kms.registry` slot is added to the
+> service's `cyborgdb.yaml` by your **cyborgdb-service operator** — not
+> from the SDK. Each slot declares one provider (`aws-kms`, `aws`,
+> or `none`) plus the AWS identifiers needed to wrap/unwrap data keys.
+> For real-KMS slots (`aws-kms` / `aws`), set-up also requires IAM
+> work on the customer's AWS account; see `BYOK.md` in the
+> cyborgdb-service repo for the full operator + customer walkthrough.
+> From the SDK side, you only need the slot name your operator
+> provisioned.
+
 ## Documentation
 
 For more information on CyborgDB, see the [Cyborg Docs](https://docs.cyborg.co).
