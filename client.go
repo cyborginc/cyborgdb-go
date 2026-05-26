@@ -193,15 +193,14 @@ func (c *Client) CreateIndex(
 		CreateIndexRequest(req).
 		Execute()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create index: %w", err)
 	}
 
 	return &EncryptedIndex{
 		indexName: params.IndexName,
 		indexKey:  keyHex,
-		indexType: "disk_ivf",
+		indexType: defaultIndexType,
 		client:    c.internal,
-		trained:   false,
 	}, nil
 }
 
@@ -225,16 +224,12 @@ func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byt
 		return nil, err
 	}
 
-	describeReq := internal.IndexOperationRequest{
-		IndexName: indexName,
-	}
+	var key internal.NullableString
 	if keyHex != nil {
-		describeReq.IndexKey = *internal.NewNullableString(keyHex)
+		key = *internal.NewNullableString(keyHex)
 	}
 
-	indexInfo, _, err := c.internal.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
-		IndexOperationRequest(describeReq).
-		Execute()
+	indexInfo, err := describeIndex(ctx, c.internal, indexName, key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get index info: %w", err)
 	}
@@ -244,7 +239,6 @@ func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byt
 		indexKey:  keyHex,
 		indexType: indexInfo.IndexType,
 		client:    c.internal,
-		trained:   indexInfo.IsTrained,
 	}, nil
 }
 
