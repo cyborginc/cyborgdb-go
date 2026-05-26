@@ -8,7 +8,7 @@ This SDK provides an interface to [`cyborgdb-service`](https://pypi.org/project/
 * **End-to-End Encryption**: All vector operations maintain encryption with client-side keys
 * **Full Go Type Safety**: Complete type definitions and compile-time safety
 * **Batch Operations**: Efficient batch queries and upserts for high-throughput applications
-* **Flexible Indexing**: Support for multiple index types (IVF, IVFPQ, IVFFlat) with customizable parameters
+* **Encrypted DiskIVF Indexing**: Disk-backed inverted-file index with customizable training parameters
 * **Context Support**: Built-in support for Go's context package for cancellation and timeouts
 * **Performance Optimized**: Designed for high-performance Go applications
 
@@ -63,9 +63,11 @@ func main() {
     }
     
     // Create an encrypted index
+    dimension := int32(128)
     createParams := &cyborgdb.CreateIndexParams{
         IndexName: "my-index",
-        IndexKey:  fmt.Sprintf("%x", indexKey),
+        IndexKey:  indexKey,
+        Dimension: &dimension,
     }
     
     index, err := client.CreateIndex(context.Background(), createParams)
@@ -74,11 +76,10 @@ func main() {
     }
     
     // Add encrypted vector items
-    items := []cyborgdb.VectorItem{
+    items := cyborgdb.VectorItems{
         {
             Id:     "doc1",
             Vector: []float32{0.1, 0.2, 0.3}, // ... 128 dimensions
-            Contents: stringPtr("Hello world!"),
             Metadata: map[string]interface{}{
                 "category": "greeting",
                 "language": "en",
@@ -87,7 +88,6 @@ func main() {
         {
             Id:     "doc2",
             Vector: []float32{0.4, 0.5, 0.6}, // ... 128 dimensions
-            Contents: stringPtr("Bonjour le monde!"),
             Metadata: map[string]interface{}{
                 "category": "greeting",
                 "language": "fr",
@@ -112,17 +112,14 @@ func main() {
         log.Fatal(err)
     }
     
-    // Print the results
-    for _, resultSet := range response.Results {
-        for _, result := range resultSet {
-            fmt.Printf("ID: %s, Distance: %f\n", result.Id, *result.Distance)
+    // Print the results. For a single-vector query the matches are in
+    // Results.ArrayOfQueryResultItem (batch queries populate
+    // ArrayOfArrayOfQueryResultItem instead).
+    if response.Results.ArrayOfQueryResultItem != nil {
+        for _, result := range *response.Results.ArrayOfQueryResultItem {
+            fmt.Printf("ID: %s, Distance: %f\n", result.Id, result.GetDistance())
         }
     }
-}
-
-// Helper function for string pointers
-func stringPtr(s string) *string {
-    return &s
 }
 ```
 
