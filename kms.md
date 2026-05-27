@@ -335,7 +335,7 @@ type kmsBYOKConfig struct {
 
 For each configured slot, exercise:
 
-- `CreateIndex` (keyless for real-KMS, `IndexKey + KmsName` for `none`)
+- `CreateIndex` (`KmsName` only for real-KMS, `IndexKey` only for `none`)
 - `LoadIndex` (nil-key for real-KMS, key for `none`)
 - Upsert, Query, Get, ListIDs, Delete
 - `IsTrained`, `CheckTrainingStatus`
@@ -402,7 +402,7 @@ Two edits:
 
    - KMS-backed create (`KmsName` only, no `IndexKey`).
    - KMS-backed load (`client.LoadIndex(ctx, name, nil)`).
-   - `provider: none` create (both `IndexKey` and `KmsName`).
+   - No-KMS create (`IndexKey` only, `KmsName` omitted).
 
    Then a paragraph clarifying that `kms.registry` slots are configured by
    the cyborgdb-service operator (not the SDK), and pointing to `BYOK.md` in
@@ -471,7 +471,8 @@ Expected wire-shape behavior for the offline test:
 
 - `kms_name` only → `kms_name` present, `index_key` absent (omitempty).
 - `index_key` only → `index_key` present as 64-char hex, `kms_name` absent.
-- Both set → both present (the `provider: none` shape).
+- Both set → both present on the wire (the SDK forwards them unchanged); the
+  service then rejects the pair with a 400 — no provider accepts both.
 - Neither set → `CreateIndex` errors with `ErrMissingKeyOrKMS` before the
   wire is touched.
 

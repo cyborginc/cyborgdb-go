@@ -96,16 +96,21 @@ func runKMSRoundTrip(t *testing.T, cfg kmsBYOKConfig, kmsName string) {
 	}
 
 	// --- create ---
+	// Send exactly one of IndexKey / KmsName. Supplying both is rejected by
+	// the service with a 400 for every provider, so the provider:none posture
+	// is the SDK-supplied path: IndexKey alone, KmsName omitted. (kmsName is
+	// still read from the env var purely to gate this variant in/out.)
 	dim := int32(kmsDimension)
 	metric := kmsEuclideanMetric
 	params := &cyborgdb.CreateIndexParams{
 		IndexName: indexName,
-		KmsName:   &kmsName,
 		Dimension: &dim,
 		Metric:    &metric,
 	}
 	if cfg.needsSDKKey {
 		params.IndexKey = indexKey
+	} else {
+		params.KmsName = &kmsName
 	}
 
 	index, err := client.CreateIndex(ctx, params)
@@ -216,12 +221,13 @@ func TestKMSBYOK(t *testing.T) {
 	}
 }
 
-// TestKMSRealRejectsSDKKey checks the server-side contract for a real-provider
-// slot: the service generates the KEK itself, so supplying IndexKey alongside
-// KmsName is contradictory and rejected with a 400. The SDK forwards both
-// fields untouched — the rejection is the server's call, not the client's.
-// (provider:none, where both fields ARE valid, is covered by the "none"
-// round-trip in TestKMSBYOK.)
+// TestKMSRealRejectsSDKKey checks the server-side contract: a named slot
+// already determines the key source, so supplying IndexKey alongside KmsName is
+// contradictory and the service rejects it with a 400. This holds for every
+// provider — there is no posture where supplying both is valid. The SDK
+// forwards both fields untouched, so the rejection is the server's call, not
+// the client's. (The no-KMS path is reached by omitting KmsName and supplying
+// IndexKey alone — covered by the "none" round-trip in TestKMSBYOK.)
 func TestKMSRealRejectsSDKKey(t *testing.T) {
 	if testAPIKey() == "" {
 		t.Skip("CYBORGDB_API_KEY not set — skipping live BYOK negative test.")

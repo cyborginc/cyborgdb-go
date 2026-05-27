@@ -131,15 +131,21 @@ func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 
 // CreateIndex creates a new encrypted DiskIVF vector index.
 //
-// At least one of params.IndexKey or params.KmsName must be supplied:
+// At least one of params.IndexKey or params.KmsName must be supplied
+// (ErrMissingKeyOrKMS otherwise). The service accepts exactly one of them:
 //
-//   - IndexKey only — legacy path; the SDK provides the 32-byte DEK directly.
-//   - KmsName only — the service generates a fresh DEK and wraps it under the
-//     named kms.registry entry; the SDK never sees the plaintext DEK.
-//   - IndexKey + KmsName — only valid when KmsName references a "provider: none"
-//     registry entry, in which case IndexKey is the wrapping KEK. Passing both
-//     against a real-KMS slot ("provider: aws-kms" or "aws") is rejected by
-//     the service with a 400.
+//   - IndexKey only — the SDK supplies the 32-byte wrapping key; the service
+//     records the index as provider="none" and performs no KMS round-trip. The
+//     same key must be re-supplied to LoadIndex.
+//   - KmsName only — the service generates the key and wraps it under the named
+//     kms.registry entry ("aws-kms" or "aws"); the SDK never sees the plaintext
+//     key, and LoadIndex needs no key.
+//
+// Supplying both is forwarded as-is and rejected by the service with a 400, for
+// every provider: the named slot already determines the key source, so an
+// SDK-supplied key is contradictory. Note that "none" is not a registry slot
+// type — the no-KMS path is reached by omitting KmsName, not by naming a
+// "none" slot.
 //
 // Returns:
 //   - *EncryptedIndex: Handle for vector operations
