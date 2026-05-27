@@ -215,3 +215,51 @@ func TestKMSBYOK(t *testing.T) {
 		})
 	}
 }
+
+// TestKMSRealRejectsSDKKey checks the server-side contract for a real-provider
+// slot: the service generates the KEK itself, so supplying IndexKey alongside
+// KmsName is contradictory and rejected with a 400. The SDK forwards both
+// fields untouched — the rejection is the server's call, not the client's.
+// (provider:none, where both fields ARE valid, is covered by the "none"
+// round-trip in TestKMSBYOK.)
+func TestKMSRealRejectsSDKKey(t *testing.T) {
+	if testAPIKey() == "" {
+		t.Skip("CYBORGDB_API_KEY not set — skipping live BYOK negative test.")
+	}
+	kmsName := os.Getenv("CYBORGDB_KMS_NAME_REAL")
+	if kmsName == "" {
+		t.Skip("CYBORGDB_KMS_NAME_REAL not set — skipping real-provider negative test.")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), kmsTimeout)
+	defer cancel()
+
+	client, err := cyborgdb.NewClient(testBaseURL(), testAPIKey())
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+
+	indexKey, err := cyborgdb.GenerateKey()
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	indexName := fmt.Sprintf("test_kms_neg_%d", time.Now().UnixNano())
+	dim := int32(kmsDimension)
+	metric := kmsEuclideanMetric
+
+	index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+		IndexName: indexName,
+		IndexKey:  indexKey,
+		KmsName:   &kmsName,
+		Dimension: &dim,
+		Metric:    &metric,
+	})
+	if err == nil {
+		// Unexpected success — clean up so we don't leak the index.
+		cleanupCtx, ccancel := context.WithTimeout(context.Background(), kmsCleanupTimeout)
+		defer ccancel()
+		_ = index.DeleteIndex(cleanupCtx)
+		t.Fatalf("CreateIndex with real-provider kms=%s and IndexKey: expected a rejection, got none", kmsName)
+	}
+}
