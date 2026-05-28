@@ -1,26 +1,43 @@
 // KMS BYOK integration tests for the CyborgDB Go SDK.
 //
-// These tests are gated on environment variables that name entries in the
-// running cyborgdb-service's kms.registry. Set the variable to opt the
-// corresponding registry slot in; leave it unset to skip.
+// The service supports two wire encodings for index encryption keys, and
+// kms_name + index_key are strictly mutually exclusive on the create
+// request (the server returns 400 regardless of which slot kms_name
+// resolves to):
 //
-//   - CYBORGDB_KMS_NAME_REAL — real-provider entry with provider: aws-kms
-//     (HSM-resident KEK; service generates the DEK and asks the HSM to wrap it).
-//   - CYBORGDB_KMS_NAME_SM   — real-provider entry with provider: aws
-//     (Secrets Manager-resident KEK; service generates the DEK and AES-GCM-
-//     wraps it locally under the SM-fetched key).
-//   - CYBORGDB_KMS_NAME_NONE — entry with provider: none. The SDK supplies
-//     the KEK on every request; service does no KMS round-trips.
+//  1. SDK-supplied KEK — IndexKey alone, no KmsName. Service records
+//     the envelope as provider="none" and the SDK re-supplies the same
+//     key on every subsequent request. No KMS registry slot is
+//     referenced on the wire.
+//  2. KMS-managed KEK — KmsName alone, no IndexKey. Service generates a
+//     random KEK and wraps it via the named registry slot's provider.
 //
-// All three exercise the SDK round-trip introduced when CreateIndex and
-// LoadIndex moved to optional IndexKey + KmsName routing.
+// KMS-managed variants are gated on the registry-slot envs because they
+// require a configured kms.registry entry in the running service:
+//
+//   - CYBORGDB_KMS_NAME_REAL — entry with provider: aws-kms (HSM-resident
+//     wrap key; service asks the HSM to wrap the per-index KEK).
+//   - CYBORGDB_KMS_NAME_SM   — entry with provider: aws (Secrets Manager-
+//     resident wrap key; service AES-GCM-wraps locally under the SM
+//     value).
+//
+// The SDK-supplied variant needs no registry slot and is exercised live
+// whenever CYBORGDB_API_KEY is set; it used to be gated on a
+// provider: none slot that has since been removed from the registry —
+// strict mutex made that slot unreachable from the SDK anyway.
 
 package test
 
 import (
+	"bytes"
 	"context"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -38,9 +55,12 @@ const (
 
 // kmsBYOKConfig captures the env-driven configuration for one BYOK round-trip.
 type kmsBYOKConfig struct {
-	envVar      string // env var that gates the test
+	// envVar names the env var that gates the variant in/out. Empty for
+	// the SDK-supplied variant, which references no registry slot and is
+	// gated on CYBORGDB_API_KEY at the suite level.
+	envVar      string
 	label       string // sub-test label
-	needsSDKKey bool   // provider: none variant — SDK supplies the KEK
+	needsSDKKey bool   // SDK-supplied variant — IndexKey alone, no KmsName
 }
 
 // kmsBYOKConfigs enumerates every supported KMS posture. Add new providers
@@ -48,7 +68,9 @@ type kmsBYOKConfig struct {
 var kmsBYOKConfigs = []kmsBYOKConfig{
 	{envVar: "CYBORGDB_KMS_NAME_REAL", label: "aws-kms", needsSDKKey: false},
 	{envVar: "CYBORGDB_KMS_NAME_SM", label: "aws", needsSDKKey: false},
-	{envVar: "CYBORGDB_KMS_NAME_NONE", label: "none", needsSDKKey: true},
+	// SDK-supplied KEK: IndexKey alone, no KmsName, no registry slot.
+	// Gated on CYBORGDB_API_KEY only (the suite-level gate).
+	{envVar: "", label: "sdk-supplied", needsSDKKey: true},
 }
 
 // makeKMSVectors deterministically generates dimension-sized vectors. Stable
@@ -96,10 +118,9 @@ func runKMSRoundTrip(t *testing.T, cfg kmsBYOKConfig, kmsName string) {
 	}
 
 	// --- create ---
-	// Send exactly one of IndexKey / KmsName. Supplying both is rejected by
-	// the service with a 400 for every provider, so the provider:none posture
-	// is the SDK-supplied path: IndexKey alone, KmsName omitted. (kmsName is
-	// still read from the env var purely to gate this variant in/out.)
+	// Send exactly one of IndexKey / KmsName. Supplying both is rejected
+	// by the service with a 400 for every provider — see
+	// TestKMSRejectsBothFields below for the contract enforcement.
 	dim := int32(kmsDimension)
 	metric := kmsEuclideanMetric
 	params := &cyborgdb.CreateIndexParams{
@@ -129,7 +150,7 @@ func runKMSRoundTrip(t *testing.T, cfg kmsBYOKConfig, kmsName string) {
 		t.Errorf("GetIndexName: got %q, want %q", index.GetIndexName(), indexName)
 	}
 
-	// --- load (keyless for real-KMS, keyed for provider:none) ---
+	// --- load (keyless for KMS-managed, keyed for SDK-supplied) ---
 	var loaded *cyborgdb.EncryptedIndex
 	if cfg.needsSDKKey {
 		loaded, err = client.LoadIndex(ctx, indexName, indexKey)
@@ -202,9 +223,11 @@ func runKMSRoundTrip(t *testing.T, cfg kmsBYOKConfig, kmsName string) {
 	}
 }
 
-// TestKMSBYOK iterates every configured KMS posture variant. Each variant
-// skips cleanly when its gating env var isn't set, so the suite is safe to
-// run with zero, one, or all slots configured.
+// TestKMSBYOK iterates every configured KMS posture variant. KMS-managed
+// variants skip cleanly when their gating env var isn't set; the
+// SDK-supplied variant has no env-var gate and runs whenever
+// CYBORGDB_API_KEY is set. Safe to run with zero, one, or all KMS slots
+// configured.
 func TestKMSBYOK(t *testing.T) {
 	if testAPIKey() == "" {
 		t.Skip("CYBORGDB_API_KEY not set — skipping live BYOK round-trips.")
@@ -212,23 +235,28 @@ func TestKMSBYOK(t *testing.T) {
 	for _, cfg := range kmsBYOKConfigs {
 		cfg := cfg
 		t.Run(cfg.label, func(t *testing.T) {
-			kmsName := os.Getenv(cfg.envVar)
-			if kmsName == "" {
-				t.Skipf("%s not set — skipping %s round-trip.", cfg.envVar, cfg.label)
+			var kmsName string
+			if cfg.envVar != "" {
+				kmsName = os.Getenv(cfg.envVar)
+				if kmsName == "" {
+					t.Skipf("%s not set — skipping %s round-trip.", cfg.envVar, cfg.label)
+				}
 			}
 			runKMSRoundTrip(t, cfg, kmsName)
 		})
 	}
 }
 
-// TestKMSRealRejectsSDKKey checks the server-side contract: a named slot
-// already determines the key source, so supplying IndexKey alongside KmsName is
-// contradictory and the service rejects it with a 400. This holds for every
-// provider — there is no posture where supplying both is valid. The SDK
-// forwards both fields untouched, so the rejection is the server's call, not
-// the client's. (The no-KMS path is reached by omitting KmsName and supplying
-// IndexKey alone — covered by the "none" round-trip in TestKMSBYOK.)
-func TestKMSRealRejectsSDKKey(t *testing.T) {
+// TestKMSRejectsBothFields checks the server-side mutex contract:
+// supplying IndexKey alongside KmsName is contradictory and the service
+// rejects it with a 400 for *every* provider, including the
+// SDK-supplied path. The SDK forwards both fields untouched, so the
+// rejection is the server's call, not the client's.
+//
+// Routes through the SDK helper (vs. raw HTTP) because the SDK already
+// surfaces the error reliably as a non-nil err — content inspection is
+// deferred to TestKMSStrictMutexFiresBeforeSlotLookup.
+func TestKMSRejectsBothFields(t *testing.T) {
 	if testAPIKey() == "" {
 		t.Skip("CYBORGDB_API_KEY not set — skipping live BYOK negative test.")
 	}
@@ -267,5 +295,69 @@ func TestKMSRealRejectsSDKKey(t *testing.T) {
 		defer ccancel()
 		_ = index.DeleteIndex(cleanupCtx)
 		t.Fatalf("CreateIndex with real-provider kms=%s and IndexKey: expected a rejection, got none", kmsName)
+	}
+}
+
+// TestKMSStrictMutexFiresBeforeSlotLookup pins down the ordering of the
+// server's two checks: the IndexKey + KmsName mutex check fires BEFORE
+// the registry slot lookup, so an unknown slot combined with an
+// IndexKey returns the *mutex* 400 (not an "unknown slot" 400). A
+// future server refactor that quietly swaps the ordering would let the
+// combination through for an as-yet-unknown slot — this test guards
+// against that drift.
+//
+// Hits the endpoint directly via net/http — bypassing the SDK helper
+// so we can inspect the server's `detail` field, which the SDK's
+// GenericOpenAPIError.Error() doesn't surface today.
+func TestKMSStrictMutexFiresBeforeSlotLookup(t *testing.T) {
+	if testAPIKey() == "" {
+		t.Skip("CYBORGDB_API_KEY not set — skipping strict-mutex coverage.")
+	}
+
+	indexKey, err := cyborgdb.GenerateKey()
+	if err != nil {
+		t.Fatalf("GenerateKey: %v", err)
+	}
+
+	payload, err := json.Marshal(map[string]interface{}{
+		"index_name": fmt.Sprintf("test_kms_mutex_%d", time.Now().UnixNano()),
+		"index_key":  hex.EncodeToString(indexKey),
+		"kms_name":   "definitely-not-a-registered-slot",
+		"dimension":  kmsDimension,
+	})
+	if err != nil {
+		t.Fatalf("Marshal: %v", err)
+	}
+
+	req, err := http.NewRequest(http.MethodPost,
+		testBaseURL()+"/v1/indexes/create",
+		bytes.NewReader(payload))
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-API-Key", testAPIKey())
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusBadRequest {
+		t.Fatalf("status: got %d, want 400", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("ReadAll: %v", err)
+	}
+	var parsed struct {
+		Detail string `json:"detail"`
+	}
+	if err := json.Unmarshal(body, &parsed); err != nil {
+		t.Fatalf("Unmarshal: %v (body=%q)", err, body)
+	}
+	if !strings.Contains(parsed.Detail, "index_key must not be supplied alongside") {
+		t.Errorf("detail does not match mutex message: %q", parsed.Detail)
 	}
 }
