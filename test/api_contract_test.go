@@ -1835,7 +1835,7 @@ func TestSDKConstructionOffline(t *testing.T) {
 	})
 
 	t.Run("CreateIndexRequestSerializesKmsName", func(t *testing.T) {
-		// KMS-only path: marshalled JSON must omit index_key entirely and
+		// KMS-only path: marshaled JSON must omit index_key entirely and
 		// include kms_name. Service treats absence as "KMS-resolved."
 		kmsName := "vendor-slot"
 		req := internal.CreateIndexRequest{IndexName: "x"}

@@ -139,7 +139,7 @@ func runKMSRoundTrip(t *testing.T, cfg kmsBYOKConfig, kmsName string) {
 		t.Fatalf("CreateIndex (kms=%s): %v", kmsName, err)
 	}
 	t.Cleanup(func() {
-		// Use a fresh context: the test-scoped ctx may already be cancelled
+		// Use a fresh context: the test-scoped ctx may already be canceled
 		// (e.g., if the test consumed its full timeout), which would
 		// short-circuit cleanup before the request hits the server.
 		cleanupCtx, cancel := context.WithTimeout(context.Background(), kmsCleanupTimeout)
@@ -171,7 +171,7 @@ func runKMSRoundTrip(t *testing.T, cfg kmsBYOKConfig, kmsName string) {
 	// variants, `loaded` has no SDK-held key, which is the unique
 	// regression risk of the new keyless path.
 	items, vectors := makeKMSVectors(kmsNumVectors, kmsDimension)
-	if err := loaded.Upsert(ctx, items); err != nil {
+	if err = loaded.Upsert(ctx, items); err != nil {
 		t.Fatalf("Upsert: %v", err)
 	}
 
@@ -314,6 +314,9 @@ func TestKMSStrictMutexFiresBeforeSlotLookup(t *testing.T) {
 		t.Skip("CYBORGDB_API_KEY not set — skipping strict-mutex coverage.")
 	}
 
+	ctx, cancel := context.WithTimeout(context.Background(), kmsTimeout)
+	defer cancel()
+
 	indexKey, err := cyborgdb.GenerateKey()
 	if err != nil {
 		t.Fatalf("GenerateKey: %v", err)
@@ -329,7 +332,7 @@ func TestKMSStrictMutexFiresBeforeSlotLookup(t *testing.T) {
 		t.Fatalf("Marshal: %v", err)
 	}
 
-	req, err := http.NewRequest(http.MethodPost,
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost,
 		testBaseURL()+"/v1/indexes/create",
 		bytes.NewReader(payload))
 	if err != nil {
