@@ -19,11 +19,13 @@ import (
 // checks if the IndexInfoResponseModel type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &IndexInfoResponseModel{}
 
-// IndexInfoResponseModel Response model for retrieving information about an index.  Attributes:     index_name (str): The name of the index.     is_trained (bool): Indicates whether the index has been trained.     index_config (Dict[str, Any]): The full configuration details of the index.
+// IndexInfoResponseModel Response model for retrieving information about an index.  Attributes:     index_name (str): The name of the index.     is_trained (bool): Indicates whether the index has been trained.     dimension (int): Dimensionality of the vectors. `0` before the         first upsert when create_index was called without an explicit         dimension (auto-detect).     metric (str): Distance metric (`euclidean`, `cosine`, or         `squared_euclidean`).     n_lists (int): Number of inverted lists in the IVF index. `1`         for untrained indexes.
 type IndexInfoResponseModel struct {
-	IndexConfig map[string]interface{} `json:"index_config"`
+	Dimension int32 `json:"dimension"`
 	IndexName string `json:"index_name"`
 	IsTrained bool `json:"is_trained"`
+	Metric string `json:"metric"`
+	NLists int32 `json:"n_lists"`
 }
 
 type _IndexInfoResponseModel IndexInfoResponseModel
@@ -32,11 +34,13 @@ type _IndexInfoResponseModel IndexInfoResponseModel
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewIndexInfoResponseModel(indexConfig map[string]interface{}, indexName string, isTrained bool) *IndexInfoResponseModel {
+func NewIndexInfoResponseModel(dimension int32, indexName string, isTrained bool, metric string, nLists int32) *IndexInfoResponseModel {
 	this := IndexInfoResponseModel{}
-	this.IndexConfig = indexConfig
+	this.Dimension = dimension
 	this.IndexName = indexName
 	this.IsTrained = isTrained
+	this.Metric = metric
+	this.NLists = nLists
 	return &this
 }
 
@@ -48,28 +52,28 @@ func NewIndexInfoResponseModelWithDefaults() *IndexInfoResponseModel {
 	return &this
 }
 
-// GetIndexConfig returns the IndexConfig field value
-func (o *IndexInfoResponseModel) GetIndexConfig() map[string]interface{} {
+// GetDimension returns the Dimension field value
+func (o *IndexInfoResponseModel) GetDimension() int32 {
 	if o == nil {
-		var ret map[string]interface{}
+		var ret int32
 		return ret
 	}
 
-	return o.IndexConfig
+	return o.Dimension
 }
 
-// GetIndexConfigOk returns a tuple with the IndexConfig field value
+// GetDimensionOk returns a tuple with the Dimension field value
 // and a boolean to check if the value has been set.
-func (o *IndexInfoResponseModel) GetIndexConfigOk() (map[string]interface{}, bool) {
+func (o *IndexInfoResponseModel) GetDimensionOk() (*int32, bool) {
 	if o == nil {
-		return map[string]interface{}{}, false
+		return nil, false
 	}
-	return o.IndexConfig, true
+	return &o.Dimension, true
 }
 
-// SetIndexConfig sets field value
-func (o *IndexInfoResponseModel) SetIndexConfig(v map[string]interface{}) {
-	o.IndexConfig = v
+// SetDimension sets field value
+func (o *IndexInfoResponseModel) SetDimension(v int32) {
+	o.Dimension = v
 }
 
 // GetIndexName returns the IndexName field value
@@ -120,6 +124,54 @@ func (o *IndexInfoResponseModel) SetIsTrained(v bool) {
 	o.IsTrained = v
 }
 
+// GetMetric returns the Metric field value
+func (o *IndexInfoResponseModel) GetMetric() string {
+	if o == nil {
+		var ret string
+		return ret
+	}
+
+	return o.Metric
+}
+
+// GetMetricOk returns a tuple with the Metric field value
+// and a boolean to check if the value has been set.
+func (o *IndexInfoResponseModel) GetMetricOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.Metric, true
+}
+
+// SetMetric sets field value
+func (o *IndexInfoResponseModel) SetMetric(v string) {
+	o.Metric = v
+}
+
+// GetNLists returns the NLists field value
+func (o *IndexInfoResponseModel) GetNLists() int32 {
+	if o == nil {
+		var ret int32
+		return ret
+	}
+
+	return o.NLists
+}
+
+// GetNListsOk returns a tuple with the NLists field value
+// and a boolean to check if the value has been set.
+func (o *IndexInfoResponseModel) GetNListsOk() (*int32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.NLists, true
+}
+
+// SetNLists sets field value
+func (o *IndexInfoResponseModel) SetNLists(v int32) {
+	o.NLists = v
+}
+
 func (o IndexInfoResponseModel) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -130,9 +182,11 @@ func (o IndexInfoResponseModel) MarshalJSON() ([]byte, error) {
 
 func (o IndexInfoResponseModel) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
-	toSerialize["index_config"] = o.IndexConfig
+	toSerialize["dimension"] = o.Dimension
 	toSerialize["index_name"] = o.IndexName
 	toSerialize["is_trained"] = o.IsTrained
+	toSerialize["metric"] = o.Metric
+	toSerialize["n_lists"] = o.NLists
 	return toSerialize, nil
 }
 
@@ -141,9 +195,11 @@ func (o *IndexInfoResponseModel) UnmarshalJSON(data []byte) (err error) {
 	// by unmarshalling the object into a generic map with string keys and checking
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
-		"index_config",
+		"dimension",
 		"index_name",
 		"is_trained",
+		"metric",
+		"n_lists",
 	}
 
 	allProperties := make(map[string]interface{})

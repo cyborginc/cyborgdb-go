@@ -573,12 +573,11 @@
         "type": "object"
       },
       "IndexInfoResponseModel": {
-        "description": "Response model for retrieving information about an index.\n\nAttributes:\n    index_name (str): The name of the index.\n    is_trained (bool): Indicates whether the index has been trained.\n    index_config (Dict[str, Any]): The full configuration details of the index.",
+        "description": "Response model for retrieving information about an index.\n\nAttributes:\n    index_name (str): The name of the index.\n    is_trained (bool): Indicates whether the index has been trained.\n    dimension (int): Dimensionality of the vectors. `0` before the\n        first upsert when create_index was called without an explicit\n        dimension (auto-detect).\n    metric (str): Distance metric (`euclidean`, `cosine`, or\n        `squared_euclidean`).\n    n_lists (int): Number of inverted lists in the IVF index. `1`\n        for untrained indexes.",
         "properties": {
-          "index_config": {
-            "additionalProperties": true,
-            "title": "Index Config",
-            "type": "object"
+          "dimension": {
+            "title": "Dimension",
+            "type": "integer"
           },
           "index_name": {
             "title": "Index Name",
@@ -587,12 +586,22 @@
           "is_trained": {
             "title": "Is Trained",
             "type": "boolean"
+          },
+          "metric": {
+            "title": "Metric",
+            "type": "string"
+          },
+          "n_lists": {
+            "title": "N Lists",
+            "type": "integer"
           }
         },
         "required": [
           "index_name",
           "is_trained",
-          "index_config"
+          "dimension",
+          "metric",
+          "n_lists"
         ],
         "title": "IndexInfoResponseModel",
         "type": "object"
