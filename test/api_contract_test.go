@@ -293,10 +293,6 @@ func TestClientCreateIndex(t *testing.T) {
 			t.Errorf("Expected index name %s, got %s", tempName, index.GetIndexName())
 		}
 
-		if index.GetIndexType() != "disk_ivf" {
-			t.Errorf("Expected index type disk_ivf, got %s", index.GetIndexType())
-		}
-
 		time.Sleep(1 * time.Second)
 	})
 
@@ -315,10 +311,6 @@ func TestClientCreateIndex(t *testing.T) {
 			t.Fatalf("Failed to create embedding index: %v", err)
 		}
 		embeddingIndex = index
-
-		if index.GetIndexType() != "disk_ivf" {
-			t.Errorf("Expected index type disk_ivf, got %s", index.GetIndexType())
-		}
 
 		time.Sleep(2 * time.Second)
 	})
@@ -389,10 +381,6 @@ func TestClientCreateIndex(t *testing.T) {
 		}
 		defer func() { _ = index.DeleteIndex(ctx) }()
 
-		if index.GetIndexType() != "disk_ivf" {
-			t.Errorf("Expected index type disk_ivf, got %s", index.GetIndexType())
-		}
-
 		time.Sleep(1 * time.Second)
 	})
 
@@ -447,15 +435,6 @@ func TestEncryptedIndexProperties(t *testing.T) {
 		}
 	})
 
-	t.Run("ExposeIndexTypeViaGetter", func(t *testing.T) {
-		indexType := testIndex.GetIndexType()
-		if indexType != "disk_ivf" {
-			t.Errorf("Expected index type disk_ivf, got %s", indexType)
-		}
-		if reflect.TypeOf(indexType).Kind() != reflect.String {
-			t.Error("Index type should be string")
-		}
-	})
 }
 
 // Test 09: EncryptedIndex.IsTrained()

@@ -49,7 +49,6 @@ const (
 	kmsNumVectors      = 10
 	kmsTimeout         = 60 * time.Second
 	kmsCleanupTimeout  = 30 * time.Second
-	kmsExpectedType    = "disk_ivf"
 	kmsEuclideanMetric = "euclidean"
 )
 
@@ -159,9 +158,6 @@ func runKMSRoundTrip(t *testing.T, cfg kmsBYOKConfig, kmsName string) {
 	}
 	if err != nil {
 		t.Fatalf("LoadIndex (kms=%s, needsSDKKey=%v): %v", kmsName, cfg.needsSDKKey, err)
-	}
-	if loaded.GetIndexType() != kmsExpectedType {
-		t.Errorf("GetIndexType: got %q, want %q", loaded.GetIndexType(), kmsExpectedType)
 	}
 
 	// --- data plane round-trip via the LoadIndex-returned handle ---

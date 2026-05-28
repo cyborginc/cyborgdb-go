@@ -17,12 +17,6 @@ import (
 const (
 	// float32ByteSize is the number of bytes in a float32.
 	float32ByteSize = 4
-
-	// defaultIndexType is the single index algorithm the service exposes
-	// (DiskIVF). The create response doesn't echo the type back, so freshly
-	// created handles are tagged with this; LoadIndex instead reads the live
-	// value from the describe response.
-	defaultIndexType = "disk_ivf"
 )
 
 var (
@@ -73,7 +67,7 @@ var (
 //
 //   - Vector operations: Upsert, Query, Get, Delete
 //   - Index management: Train, DeleteIndex, ListIDs
-//   - Metadata access: GetIndexName, GetIndexType, IsTrained
+//   - Metadata access: GetIndexName, IsTrained
 //
 // All vector data is encrypted end-to-end using the provided encryption key
 // (or, for KMS-backed indexes, resolved server-side from the index's KMSBlob).
@@ -89,9 +83,6 @@ type EncryptedIndex struct {
 	// nil for KMS-backed indexes where the service resolves the DEK from
 	// the stored KMSBlob.
 	indexKey *string
-
-	// indexType is always "disk_ivf" — kept for forward-compatibility with the API surface
-	indexType string
 
 	// client provides access to the underlying API client
 	client *internal.Client
@@ -159,14 +150,6 @@ func encodeVectorBatch(vectors [][]float32) (string, int32, error) {
 // Returns:
 //   - string: The index name as specified during creation
 func (e *EncryptedIndex) GetIndexName() string { return e.indexName }
-
-// GetIndexType returns the algorithm type of this index.
-//
-// This is a cached value that doesn't require an API call.
-//
-// Returns:
-//   - string: Index type ("disk_ivf")
-func (e *EncryptedIndex) GetIndexType() string { return e.indexType }
 
 // IsTrained checks whether this index has been optimized through training.
 //

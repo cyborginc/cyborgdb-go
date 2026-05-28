@@ -205,7 +205,6 @@ func (c *Client) CreateIndex(
 	return &EncryptedIndex{
 		indexName: params.IndexName,
 		indexKey:  keyHex,
-		indexType: defaultIndexType,
 		client:    c.internal,
 	}, nil
 }
@@ -243,7 +242,6 @@ func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byt
 	return &EncryptedIndex{
 		indexName: indexInfo.IndexName,
 		indexKey:  keyHex,
-		indexType: indexInfo.IndexType,
 		client:    c.internal,
 	}, nil
 }

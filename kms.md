@@ -167,8 +167,7 @@ ErrMissingKeyOrKMS = fmt.Errorf("create_index requires IndexKey, KmsName, or bot
    ```
 
 3. Drop all the `IndexConfig` / `IndexIVF*Model` handling in the
-   `EncryptedIndex` builder — there's no `config` field anymore (see 4.2),
-   and there's no `indexType` switch on three IVF variants.
+   `EncryptedIndex` builder — there's no `config` field anymore (see 4.2).
 
 **`Client.LoadIndex`** — make `indexKey []byte` optional:
 
@@ -188,8 +187,7 @@ if keyHex != nil {
 }
 ```
 
-Return the `EncryptedIndex` without a `config` field; `indexType` comes from
-`indexInfo.IndexType`.
+Return the `EncryptedIndex` without a `config` field.
 
 ### 4.2 `encrypted_index.go`
 
@@ -201,7 +199,6 @@ type EncryptedIndex struct {
     // indexKey is nil for KMS-backed indexes; the service resolves the DEK
     // from the stored KMSBlob.
     indexKey  *string
-    indexType string
     trained   bool
     client    *internal.Client
     // ...
@@ -284,13 +281,6 @@ references them once `CreateIndexParams.IndexConfig` is gone.
 - Bulk-convert every `IndexConfig: cyborgdb.IndexIVFFlat(dim)` to
   `Dimension: &dim`. (Variables may need promoting to `int32` via a small
   helper — see 5.4.)
-- Replace per-test hardcoded `"ivfflat"` / `"ivfpq"` / `"ivfsq"` expectations
-  for `GetIndexType()` with a shared constant:
-
-  ```go
-  const expectedIndexType = "disk_ivf"
-  ```
-
 - **Add `TestSDKConstructionOffline`** (4 sub-tests, mirrors the Python
   `TestSDKConstructionOffline`):
 
@@ -329,7 +319,6 @@ type kmsBYOKConfig struct {
     kmsName      string  // resolved registry entry name
     label        string  // sub-test label
     needsSDKKey  bool    // provider: none variant — SDK supplies the KEK
-    expectedType string  // index type the describe path should report
 }
 ```
 
@@ -346,10 +335,7 @@ its env var isn't set.
 
 ### 5.3 `test/concurrency_test.go` — delete entirely
 
-The whole `TestMixedIndexTypes*` block (`newMixedIndexSet`,
-`TestMixedIndexTypesUpsertAndQuery`,
-`TestMixedIndexTypesConcurrentWrites`,
-`TestMixedIndexTypesInterleavedOperations`, ~428 lines) goes away. The
+The whole `TestMixedIndexTypes*` block (~428 lines) goes away. The
 service now exposes a single DiskIVF index type — cross-type contamination
 is structurally impossible. Mirrors the Python
 `TestMixedIndexTypesOneClient` deletion.
@@ -372,7 +358,7 @@ is structurally impossible. Mirrors the Python
 ### 5.5 `test/helpers_test.go` and `test/quick_flow_test.go`
 
 Same `IndexConfig → Dimension` conversion as the contract tests. Drop the
-two `GetIndexConfig()` callsites. Update expected index type to `"disk_ivf"`.
+two `GetIndexConfig()` callsites.
 
 ---
 
@@ -380,8 +366,7 @@ two `GetIndexConfig()` callsites. Update expected index type to `"disk_ivf"`.
 
 Two edits:
 
-1. Feature bullet: `Flexible Indexing: Support for multiple index types
-   (IVF, IVFPQ, IVFFlat) ...` → `Encrypted DiskIVF Indexing: Disk-backed
+1. Feature bullet → `Encrypted DiskIVF Indexing: Disk-backed
    inverted-file index with customizable training parameters`.
 
 2. Fix pre-existing bug in the basic-usage example: `IndexKey` was being
@@ -430,7 +415,7 @@ Generated (do not hand-edit; `./update-openapi-client.sh` produces these):
   internal/*.go              — full regeneration
 
 Tests:
-  test/api_contract_test.go      — dim-only ctors, expectedIndexType, +TestSDKConstructionOffline
+  test/api_contract_test.go      — dim-only ctors, +TestSDKConstructionOffline
   test/comprehensive_test.go     — dim-only ctors, IVF tests folded into DiskIVF
   test/helpers_test.go           — dim-only ctors, drop GetIndexConfig calls
   test/quick_flow_test.go        — dim-only ctors

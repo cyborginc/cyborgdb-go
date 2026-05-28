@@ -687,9 +687,6 @@ func TestUnitFlow(t *testing.T) {
 		if len(results.Ids) != totalNumVectors {
 			t.Errorf("Vectors lost during retraining: expected %d, got %d", totalNumVectors, len(results.Ids))
 		}
-
-		// Verify final state - index type should be disk_ivf
-		fmt.Printf("Index type: %s\n", index.GetIndexType())
 	})
 
 	// Test 10: Trained Query Should Get Perfect Recall
@@ -990,11 +987,6 @@ func TestUnitFlow(t *testing.T) {
 		name := index.GetIndexName()
 		if name != indexName {
 			t.Errorf("Index name does not match: expected %s, got %s", indexName, name)
-		}
-
-		indexType := index.GetIndexType()
-		if indexType != "disk_ivf" {
-			t.Errorf("Index type is not disk_ivf: got %s", indexType)
 		}
 	})
 
