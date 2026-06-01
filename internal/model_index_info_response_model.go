@@ -12,8 +12,6 @@ package internal
 
 import (
 	"encoding/json"
-	"bytes"
-	"fmt"
 )
 
 // checks if the IndexInfoResponseModel type satisfies the MappedNullable interface at compile time
@@ -191,44 +189,56 @@ func (o IndexInfoResponseModel) ToMap() (map[string]interface{}, error) {
 }
 
 func (o *IndexInfoResponseModel) UnmarshalJSON(data []byte) (err error) {
-	// This validates that all required properties are included in the JSON object
-	// by unmarshalling the object into a generic map with string keys and checking
-	// that every required field exists as a key in the generic map.
-	requiredProperties := []string{
-		"dimension",
-		"index_name",
-		"is_trained",
-		"metric",
-		"n_lists",
+	// Accept both the flat shape and the legacy nested
+	// `index_config: {dimension, metric, n_lists}` shape the service
+	// still returns on /v1/indexes/describe.
+	var raw struct {
+		Dimension   *int32  `json:"dimension"`
+		IndexName   string  `json:"index_name"`
+		IsTrained   bool    `json:"is_trained"`
+		Metric      *string `json:"metric"`
+		NLists      *int32  `json:"n_lists"`
+		IndexConfig *struct {
+			Dimension *int32  `json:"dimension"`
+			Metric    *string `json:"metric"`
+			NLists    *int32  `json:"n_lists"`
+		} `json:"index_config"`
 	}
-
-	allProperties := make(map[string]interface{})
-
-	err = json.Unmarshal(data, &allProperties)
-
-	if err != nil {
-		return err;
-	}
-
-	for _, requiredProperty := range(requiredProperties) {
-		if _, exists := allProperties[requiredProperty]; !exists {
-			return fmt.Errorf("no value given for required property %v", requiredProperty)
-		}
-	}
-
-	varIndexInfoResponseModel := _IndexInfoResponseModel{}
-
-	decoder := json.NewDecoder(bytes.NewReader(data))
-	
-	err = decoder.Decode(&varIndexInfoResponseModel)
-
-	if err != nil {
+	if err := json.Unmarshal(data, &raw); err != nil {
 		return err
 	}
 
-	*o = IndexInfoResponseModel(varIndexInfoResponseModel)
+	o.IndexName = raw.IndexName
+	o.IsTrained = raw.IsTrained
 
-	return err
+	var ncDim, ncNLists *int32
+	var ncMetric *string
+	if raw.IndexConfig != nil {
+		ncDim = raw.IndexConfig.Dimension
+		ncMetric = raw.IndexConfig.Metric
+		ncNLists = raw.IndexConfig.NLists
+	}
+
+	switch {
+	case raw.Dimension != nil:
+		o.Dimension = *raw.Dimension
+	case ncDim != nil:
+		o.Dimension = *ncDim
+	}
+	switch {
+	case raw.Metric != nil:
+		o.Metric = *raw.Metric
+	case ncMetric != nil:
+		o.Metric = *ncMetric
+	}
+	switch {
+	case raw.NLists != nil:
+		o.NLists = *raw.NLists
+	case ncNLists != nil:
+		o.NLists = *ncNLists
+	}
+
+	return nil
 }
 
 type NullableIndexInfoResponseModel struct {
