@@ -434,7 +434,6 @@ func TestEncryptedIndexProperties(t *testing.T) {
 			t.Error("Index name should be string")
 		}
 	})
-
 }
 
 // Test 09: EncryptedIndex.IsTrained()
