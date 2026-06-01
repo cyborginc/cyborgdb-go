@@ -738,7 +738,7 @@ func TestEncryptedIndexListIDs(t *testing.T) {
 		}
 
 		if len(expectedIDs) > 0 {
-			missing := []string{}
+			missing := make([]string, 0, len(expectedIDs))
 			for id := range expectedIDs {
 				missing = append(missing, id)
 			}

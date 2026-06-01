@@ -6,7 +6,6 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"math"
 	"math/rand"
 	"os"
@@ -120,7 +119,7 @@ func checkMetadataResults(results []*cyborgdb.QueryResponse, metadataNeighbors [
 		}
 	}
 
-	recalls := make([]float64, 0)
+	recalls := make([]float64, 0, len(resultIds))
 
 	for idx, result := range resultIds {
 		// Get candidates for this query
@@ -227,7 +226,7 @@ func TestUnitFlow(t *testing.T) {
 	// Load test data
 	testDir := filepath.Dir(".")
 	jsonPath := filepath.Join(testDir, "unit_test_flow_data.json")
-	jsonData, err := ioutil.ReadFile(jsonPath)
+	jsonData, err := os.ReadFile(jsonPath)
 	if err != nil {
 		t.Fatalf("Failed to read test data: %v", err)
 	}
@@ -383,7 +382,7 @@ func TestUnitFlow(t *testing.T) {
 
 	// Test 03: Untrained Query Metadata
 	t.Run("test_03_untrained_query_metadata", func(t *testing.T) {
-		results := make([]*cyborgdb.QueryResponse, 0)
+		results := make([]*cyborgdb.QueryResponse, 0, len(metadataQueries))
 
 		for _, metadataQuery := range metadataQueries {
 			nProbesVal := int32(1)
@@ -734,7 +733,7 @@ func TestUnitFlow(t *testing.T) {
 
 	// Test 12: Trained Query Metadata
 	t.Run("test_12_trained_query_metadata", func(t *testing.T) {
-		results := make([]*cyborgdb.QueryResponse, 0)
+		results := make([]*cyborgdb.QueryResponse, 0, len(metadataQueries))
 
 		for _, metadataQuery := range metadataQueries {
 			nProbesVal := int32(24)
