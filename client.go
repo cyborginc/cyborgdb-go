@@ -22,6 +22,9 @@ var (
 	ErrKeyGeneration = fmt.Errorf("failed to generate key")
 	// ErrInvalidURL is returned when the base URL is invalid.
 	ErrInvalidURL = fmt.Errorf("invalid base URL")
+	// ErrMissingKeyOrKMS is returned when CreateIndex is called with neither
+	// IndexKey nor KmsName set.
+	ErrMissingKeyOrKMS = fmt.Errorf("create_index requires IndexKey, KmsName, or both")
 )
 
 // Client provides a high-level interface to the CyborgDB API (parallels the TypeScript SDK).
@@ -53,6 +56,21 @@ func GenerateKey() ([]byte, error) {
 		return nil, fmt.Errorf("%w: %v", ErrKeyGeneration, err)
 	}
 	return key, nil
+}
+
+// keyBytesToHex validates an optional 32-byte index key and returns its hex
+// encoding. Returns (nil, nil) for an empty key — callers decide whether
+// that's acceptable for the specific operation (it is for KMS-backed
+// indexes; it isn't for legacy keyed indexes).
+func keyBytesToHex(key []byte) (*string, error) {
+	if len(key) == 0 {
+		return nil, nil
+	}
+	if len(key) != KeySize {
+		return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(key))
+	}
+	h := fmt.Sprintf("%x", key)
+	return &h, nil
 }
 
 // NewClient constructs a new CyborgDB client.
@@ -113,23 +131,26 @@ func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 
 // CreateIndex creates a new encrypted DiskIVF vector index.
 //
-// The new index is empty and ready for vector operations. DiskIVF performs
-// two-stage encrypted ANN search: fast ranking over PQ codes followed by
-// reranking with stored full-precision vectors.
+// At least one of params.IndexKey or params.KmsName must be supplied
+// (ErrMissingKeyOrKMS otherwise). The service accepts exactly one of them:
 //
-// Parameters:
-//   - ctx: Context for cancellation/timeouts
-//   - params: Complete payload containing:
-//   - IndexName (required): unique index name
-//   - IndexKey  (required): 32-byte encryption key
-//   - Dimension (optional): vector dimensionality; auto-detected on first upsert if omitted
-//   - Metric (optional): distance metric (e.g., "euclidean", "cosine")
-//   - EmbeddingModel (optional): embedding model name to associate
-//   - StoragePrecision (optional): "float32" (default) or "float16" rerank dtype
+//   - IndexKey only — the SDK supplies the 32-byte wrapping key; the service
+//     records the index as provider="none" and performs no KMS round-trip. The
+//     same key must be re-supplied to LoadIndex.
+//   - KmsName only — the service generates the key and wraps it under the named
+//     kms.registry entry ("aws-kms" or "aws"); the SDK never sees the plaintext
+//     key, and LoadIndex needs no key.
+//
+// Supplying both is forwarded as-is and rejected by the service with a 400, for
+// every provider: the named slot already determines the key source, so an
+// SDK-supplied key is contradictory. Note that "none" is not a registry slot
+// type — the no-KMS path is reached by omitting KmsName, not by naming a
+// "none" slot.
 //
 // Returns:
 //   - *EncryptedIndex: Handle for vector operations
-//   - error: Any error encountered
+//   - error: Any error encountered (ErrMissingKeyOrKMS if neither is set;
+//     ErrInvalidKeyLength if IndexKey is set but not 32 bytes)
 //
 // Note: Store the encryption key securely; it cannot be recovered if lost.
 // Creating with an existing name will fail.
@@ -137,17 +158,25 @@ func (c *Client) CreateIndex(
 	ctx context.Context,
 	params *CreateIndexParams,
 ) (*EncryptedIndex, error) {
-	// Validate the key length
-	if len(params.IndexKey) != KeySize {
-		return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(params.IndexKey))
+	if len(params.IndexKey) == 0 && params.KmsName == nil {
+		return nil, ErrMissingKeyOrKMS
 	}
 
-	// Convert bytes to hex string
-	keyHex := fmt.Sprintf("%x", params.IndexKey)
+	keyHex, err := keyBytesToHex(params.IndexKey)
+	if err != nil {
+		return nil, err
+	}
 
 	req := internal.CreateIndexRequest{
 		IndexName: params.IndexName,
-		IndexKey:  keyHex,
+	}
+
+	if keyHex != nil {
+		req.IndexKey = *internal.NewNullableString(keyHex)
+	}
+
+	if params.KmsName != nil {
+		req.KmsName = *internal.NewNullableString(params.KmsName)
 	}
 
 	if params.Dimension != nil {
@@ -166,52 +195,46 @@ func (c *Client) CreateIndex(
 		req.StoragePrecision = *internal.NewNullableString(params.StoragePrecision)
 	}
 
-	// Call internal CreateIndex
-	_, _, err := c.internal.APIClient.DefaultAPI.CreateIndexV1IndexesCreatePost(ctx).
+	_, _, err = c.internal.APIClient.DefaultAPI.CreateIndexV1IndexesCreatePost(ctx).
 		CreateIndexRequest(req).
 		Execute()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create index: %w", err)
 	}
 
 	return &EncryptedIndex{
 		indexName: params.IndexName,
 		indexKey:  keyHex,
-		indexType: "disk_ivf",
 		client:    c.internal,
-		trained:   false,
 	}, nil
 }
 
-// LoadIndex loads an existing encrypted index by name and key.
+// LoadIndex loads an existing encrypted index by name.
 //
-// The provided key must match the one used at creation time. Configuration and
-// metadata are fetched from the server.
+// indexKey is required for legacy / "provider: none" indexes where the SDK
+// owns the KEK. For KMS-backed indexes the service resolves the DEK via the
+// stored KMSBlob, so indexKey may be nil (or zero-length).
 //
 // Parameters:
 //   - ctx: Context for cancellation/timeouts
 //   - indexName: Existing index name
-//   - indexKey: 32-byte encryption key
+//   - indexKey: 32-byte encryption key, or nil for KMS-backed indexes
 //
 // Returns:
 //   - *EncryptedIndex: Handle for vector operations
 //   - error: Any error encountered
 func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byte) (*EncryptedIndex, error) {
-	// Validate the key length
-	if len(indexKey) != KeySize {
-		return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(indexKey))
+	keyHex, err := keyBytesToHex(indexKey)
+	if err != nil {
+		return nil, err
 	}
 
-	keyHex := fmt.Sprintf("%x", indexKey)
-
-	describeReq := internal.IndexOperationRequest{
-		IndexName: indexName,
-		IndexKey:  keyHex,
+	var key internal.NullableString
+	if keyHex != nil {
+		key = *internal.NewNullableString(keyHex)
 	}
 
-	indexInfo, _, err := c.internal.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
-		IndexOperationRequest(describeReq).
-		Execute()
+	indexInfo, err := describeIndex(ctx, c.internal, indexName, key)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get index info: %w", err)
 	}
@@ -219,9 +242,7 @@ func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byt
 	return &EncryptedIndex{
 		indexName: indexInfo.IndexName,
 		indexKey:  keyHex,
-		indexType: indexInfo.IndexType,
 		client:    c.internal,
-		trained:   indexInfo.IsTrained,
 	}, nil
 }
 

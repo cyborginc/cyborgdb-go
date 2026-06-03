@@ -8,7 +8,7 @@ This SDK provides an interface to [`cyborgdb-service`](https://pypi.org/project/
 * **End-to-End Encryption**: All vector operations maintain encryption with client-side keys
 * **Full Go Type Safety**: Complete type definitions and compile-time safety
 * **Batch Operations**: Efficient batch queries and upserts for high-throughput applications
-* **Flexible Indexing**: Support for multiple index types (IVF, IVFPQ, IVFFlat) with customizable parameters
+* **Encrypted DiskIVF Indexing**: Disk-backed inverted-file index with customizable training parameters
 * **Context Support**: Built-in support for Go's context package for cancellation and timeouts
 * **Performance Optimized**: Designed for high-performance Go applications
 
@@ -63,9 +63,11 @@ func main() {
     }
     
     // Create an encrypted index
+    dimension := int32(128)
     createParams := &cyborgdb.CreateIndexParams{
         IndexName: "my-index",
-        IndexKey:  fmt.Sprintf("%x", indexKey),
+        IndexKey:  indexKey,
+        Dimension: &dimension,
     }
     
     index, err := client.CreateIndex(context.Background(), createParams)
@@ -74,11 +76,10 @@ func main() {
     }
     
     // Add encrypted vector items
-    items := []cyborgdb.VectorItem{
+    items := cyborgdb.VectorItems{
         {
             Id:     "doc1",
             Vector: []float32{0.1, 0.2, 0.3}, // ... 128 dimensions
-            Contents: stringPtr("Hello world!"),
             Metadata: map[string]interface{}{
                 "category": "greeting",
                 "language": "en",
@@ -87,7 +88,6 @@ func main() {
         {
             Id:     "doc2",
             Vector: []float32{0.4, 0.5, 0.6}, // ... 128 dimensions
-            Contents: stringPtr("Bonjour le monde!"),
             Metadata: map[string]interface{}{
                 "category": "greeting",
                 "language": "fr",
@@ -112,17 +112,14 @@ func main() {
         log.Fatal(err)
     }
     
-    // Print the results
-    for _, resultSet := range response.Results {
-        for _, result := range resultSet {
-            fmt.Printf("ID: %s, Distance: %f\n", result.Id, *result.Distance)
+    // Print the results. For a single-vector query the matches are in
+    // Results.ArrayOfQueryResultItem (batch queries populate
+    // ArrayOfArrayOfQueryResultItem instead).
+    if response.Results.ArrayOfQueryResultItem != nil {
+        for _, result := range *response.Results.ArrayOfQueryResultItem {
+            fmt.Printf("ID: %s, Distance: %f\n", result.Id, result.GetDistance())
         }
     }
-}
-
-// Helper function for string pointers
-func stringPtr(s string) *string {
-    return &s
 }
 ```
 
@@ -174,6 +171,54 @@ queryParams := cyborgdb.QueryParams{
 }
 results, err := index.Query(context.Background(), queryParams)
 ```
+
+#### Bring Your Own Key (BYOK) via KMS
+
+When the service is configured with a `kms.registry` entry, the SDK can
+delegate key management entirely to the server-side KMS. The service
+generates the data encryption key, wraps it under the named KMS slot, and
+persists the envelope — the SDK never sees or holds the key.
+
+```go
+// Create a KMS-backed index — no IndexKey from the SDK side.
+// "vendor-kms-slot" must match an entry in the service's cyborgdb.yaml.
+kmsName := "vendor-kms-slot"
+dimension := int32(128)
+metric := "euclidean"
+index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+    IndexName: "kms-backed-index",
+    KmsName:   &kmsName,
+    Dimension: &dimension,
+    Metric:    &metric,
+})
+
+// Reopening the index later doesn't require a key either; the service
+// resolves the data key from the index's stored KMS envelope.
+loaded, err := client.LoadIndex(ctx, "kms-backed-index", nil)
+```
+
+For `provider: none` registry entries, the SDK still supplies the KEK on
+every call — pass both `IndexKey` and `KmsName`:
+
+```go
+kmsName := "plain"   // registry slot with provider: none
+index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+    IndexName: "sdk-keyed-index",
+    IndexKey:  indexKey,
+    KmsName:   &kmsName,
+    Dimension: &dimension,
+})
+```
+
+> **How slots are configured.** A `kms.registry` slot is added to the
+> service's `cyborgdb.yaml` by your **cyborgdb-service operator** — not
+> from the SDK. Each slot declares one provider (`aws-kms`, `aws`,
+> or `none`) plus the AWS identifiers needed to wrap/unwrap data keys.
+> For real-KMS slots (`aws-kms` / `aws`), set-up also requires IAM
+> work on the customer's AWS account; see `BYOK.md` in the
+> cyborgdb-service repo for the full operator + customer walkthrough.
+> From the SDK side, you only need the slot name your operator
+> provisioned.
 
 ## Documentation
 

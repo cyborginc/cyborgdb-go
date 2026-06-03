@@ -10,11 +10,10 @@ if [ ! -f "openapi.json" ]; then
     exit 1
 fi
 
-# Check if openapi-generator is installed
-if ! command -v openapi-generator &> /dev/null; then
-    echo "Error: openapi-generator not found"
-    echo "Please install it with: brew install openapi-generator"
-    exit 1
+# Check if openapi-generator-cli is installed
+if ! command -v openapi-generator-cli &> /dev/null; then
+    echo "Installing openapi-generator-cli..."
+    npm install -g @openapitools/openapi-generator-cli
 fi
 
 # Backup custom wrapper file
@@ -27,7 +26,7 @@ rm -f internal/*.go
 
 # Generate the Go client
 echo "Generating Go client..."
-openapi-generator generate \
+openapi-generator-cli generate \
     -i openapi.json \
     -g go \
     -o ./internal \

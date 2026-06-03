@@ -2,6 +2,8 @@ package test
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"reflect"
@@ -291,10 +293,6 @@ func TestClientCreateIndex(t *testing.T) {
 			t.Errorf("Expected index name %s, got %s", tempName, index.GetIndexName())
 		}
 
-		if index.GetIndexType() != "disk_ivf" {
-			t.Errorf("Expected index type disk_ivf, got %s", index.GetIndexType())
-		}
-
 		time.Sleep(1 * time.Second)
 	})
 
@@ -313,10 +311,6 @@ func TestClientCreateIndex(t *testing.T) {
 			t.Fatalf("Failed to create embedding index: %v", err)
 		}
 		embeddingIndex = index
-
-		if index.GetIndexType() != "disk_ivf" {
-			t.Errorf("Expected index type disk_ivf, got %s", index.GetIndexType())
-		}
 
 		time.Sleep(2 * time.Second)
 	})
@@ -387,10 +381,6 @@ func TestClientCreateIndex(t *testing.T) {
 		}
 		defer func() { _ = index.DeleteIndex(ctx) }()
 
-		if index.GetIndexType() != "disk_ivf" {
-			t.Errorf("Expected index type disk_ivf, got %s", index.GetIndexType())
-		}
-
 		time.Sleep(1 * time.Second)
 	})
 
@@ -442,16 +432,6 @@ func TestEncryptedIndexProperties(t *testing.T) {
 		}
 		if reflect.TypeOf(name).Kind() != reflect.String {
 			t.Error("Index name should be string")
-		}
-	})
-
-	t.Run("ExposeIndexTypeViaGetter", func(t *testing.T) {
-		indexType := testIndex.GetIndexType()
-		if indexType != "disk_ivf" {
-			t.Errorf("Expected index type disk_ivf, got %s", indexType)
-		}
-		if reflect.TypeOf(indexType).Kind() != reflect.String {
-			t.Error("Index type should be string")
 		}
 	})
 }
@@ -758,7 +738,7 @@ func TestEncryptedIndexListIDs(t *testing.T) {
 		}
 
 		if len(expectedIDs) > 0 {
-			missing := []string{}
+			missing := make([]string, 0, len(expectedIDs))
 			for id := range expectedIDs {
 				missing = append(missing, id)
 			}
@@ -1785,6 +1765,137 @@ func TestEncryptedIndexDeleteIndex(t *testing.T) {
 		})
 		if !deleted {
 			t.Errorf("Temp index %s still found after polling timeout", tempName)
+		}
+	})
+}
+
+// TestSDKConstructionOffline exercises SDK-side construction and validation
+// paths that do not require a live cyborgdb-service. Mirrors the Python
+// TestSDKConstructionOffline class.
+func TestSDKConstructionOffline(t *testing.T) {
+	// Client.NewClient does not make any network calls; safe to instantiate
+	// without a server.
+	client, err := cyborgdb.NewClient("http://localhost:8000", "offline-test-key", false)
+	if err != nil {
+		t.Fatalf("NewClient: unexpected error: %v", err)
+	}
+
+	t.Run("CreateIndexRequiresKeyOrKMS", func(t *testing.T) {
+		// Neither IndexKey nor KmsName supplied — must fail before any
+		// network call with ErrMissingKeyOrKMS.
+		_, err := client.CreateIndex(context.Background(), &cyborgdb.CreateIndexParams{
+			IndexName: "x",
+		})
+		if !errors.Is(err, cyborgdb.ErrMissingKeyOrKMS) {
+			t.Fatalf("expected ErrMissingKeyOrKMS, got %v", err)
+		}
+	})
+
+	t.Run("CreateIndexRejectsWrongLengthKey", func(t *testing.T) {
+		// IndexKey set but not 32 bytes — must fail upstream of the
+		// network call with ErrInvalidKeyLength.
+		_, err := client.CreateIndex(context.Background(), &cyborgdb.CreateIndexParams{
+			IndexName: "x",
+			IndexKey:  make([]byte, 16),
+		})
+		if !errors.Is(err, cyborgdb.ErrInvalidKeyLength) {
+			t.Fatalf("expected ErrInvalidKeyLength, got %v", err)
+		}
+	})
+
+	t.Run("LoadIndexRejectsWrongLengthKey", func(t *testing.T) {
+		// indexKey set but not 32 bytes — must fail upstream of the
+		// describe network call with ErrInvalidKeyLength.
+		_, err := client.LoadIndex(context.Background(), "x", make([]byte, 16))
+		if !errors.Is(err, cyborgdb.ErrInvalidKeyLength) {
+			t.Fatalf("expected ErrInvalidKeyLength, got %v", err)
+		}
+	})
+
+	t.Run("CreateIndexRequestSerializesKmsName", func(t *testing.T) {
+		// KMS-only path: marshaled JSON must omit index_key entirely and
+		// include kms_name. Service treats absence as "KMS-resolved."
+		kmsName := "vendor-slot"
+		req := internal.CreateIndexRequest{IndexName: "x"}
+		req.KmsName = *internal.NewNullableString(&kmsName)
+
+		raw, err := json.Marshal(req)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		var payload map[string]interface{}
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if payload["index_name"] != "x" {
+			t.Errorf("index_name: got %v", payload["index_name"])
+		}
+		if payload["kms_name"] != "vendor-slot" {
+			t.Errorf("kms_name: got %v", payload["kms_name"])
+		}
+		if _, present := payload["index_key"]; present {
+			t.Errorf("index_key should be omitted, got %v", payload["index_key"])
+		}
+	})
+
+	t.Run("IndexOperationRequestKeylessBuildsKeylessPayload", func(t *testing.T) {
+		// Load-index / describe / delete path: an IndexOperationRequest
+		// with IndexKey left at the zero value must marshal without
+		// index_key on the wire.
+		req := internal.IndexOperationRequest{IndexName: "x"}
+
+		raw, err := json.Marshal(req)
+		if err != nil {
+			t.Fatalf("marshal: %v", err)
+		}
+		var payload map[string]interface{}
+		if err := json.Unmarshal(raw, &payload); err != nil {
+			t.Fatalf("unmarshal: %v", err)
+		}
+		if payload["index_name"] != "x" {
+			t.Errorf("index_name: got %v", payload["index_name"])
+		}
+		if _, present := payload["index_key"]; present {
+			t.Errorf("index_key should be omitted, got %v", payload["index_key"])
+		}
+	})
+
+	t.Run("AllDataPlaneRequestsAcceptKeylessConstruction", func(t *testing.T) {
+		// Every data-plane request model the SDK constructs must accept an
+		// unset index_key so KMS-backed indexes can use them without an
+		// SDK-held key. Regression risk: if the openapi regen flips
+		// index_key back to required on any of these, the SDK breaks at
+		// runtime, not at type-check time.
+		type marshaller interface {
+			MarshalJSON() ([]byte, error)
+		}
+		cases := []struct {
+			name string
+			req  marshaller
+		}{
+			{"QueryRequest", &internal.QueryRequest{IndexName: "x"}},
+			{"UpsertRequest", &internal.UpsertRequest{IndexName: "x", Items: []internal.VectorItem{}}},
+			{"GetRequest", &internal.GetRequest{IndexName: "x", Ids: []string{"a"}}},
+			{"DeleteRequest", &internal.DeleteRequest{IndexName: "x", Ids: []string{"a"}}},
+			{"TrainRequest", &internal.TrainRequest{IndexName: "x"}},
+			{"ListIDsRequest", &internal.ListIDsRequest{IndexName: "x"}},
+			{"BinaryQueryRequest", &internal.BinaryQueryRequest{IndexName: "x", Batch: internal.BinaryQueryBatch{}}},
+			{"BinaryUpsertRequest", &internal.BinaryUpsertRequest{IndexName: "x", Batch: internal.BinaryVectorBatch{}}},
+		}
+		for _, c := range cases {
+			t.Run(c.name, func(t *testing.T) {
+				raw, err := c.req.MarshalJSON()
+				if err != nil {
+					t.Fatalf("marshal: %v", err)
+				}
+				var payload map[string]interface{}
+				if err := json.Unmarshal(raw, &payload); err != nil {
+					t.Fatalf("unmarshal: %v", err)
+				}
+				if v, present := payload["index_key"]; present && v != nil {
+					t.Errorf("index_key should be absent or null on the wire, got %v", v)
+				}
+			})
 		}
 	})
 }

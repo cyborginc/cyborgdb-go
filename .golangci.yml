@@ -1,135 +1,128 @@
+version: "2"
 run:
-  timeout: 5m
   tests: true
-
+linters:
+  enable:
+    - dupl
+    - err113
+    - funlen
+    - gochecknoinits
+    - goconst
+    - godot
+    - godox
+    - gomodguard_v2
+    - goprintffuncname
+    - misspell
+    - mnd
+    - nakedret
+    - noctx
+    - nolintlint
+    - prealloc
+    - revive
+    - rowserrcheck
+    - staticcheck
+    - unconvert
+    - unparam
+    - whitespace
+  disable:
+    - depguard
+    - exhaustive
+    - gochecknoglobals
+    - gocognit
+    - gocritic
+    - gocyclo
+    - lll
+    - nestif
+    - nlreturn
+    - testpackage
+    - tparallel
+    - wrapcheck
+    - wsl
+  settings:
+    dupl:
+      threshold: 100
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+    funlen:
+      lines: 100
+      statements: 60
+    goconst:
+      min-len: 3
+      min-occurrences: 3
+    gocritic:
+      enabled-tags:
+        - diagnostic
+        - experimental
+        - opinionated
+        - performance
+        - style
+    govet:
+      enable:
+        - shadow
+    lll:
+      line-length: 120
+    misspell:
+      locale: US
+    mnd:
+      checks:
+        - argument
+        - case
+        - condition
+        - operation
+        - return
+        - assign
+    revive:
+      confidence: 0.8
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - dupl
+          - errcheck
+          - funlen
+          - gochecknoglobals
+          - goconst
+          - godot
+          - mnd
+          - wsl
+        path: _test\.go
+      - linters:
+          - all
+        path: vendor/
+      - linters:
+          - all
+        path: internal/
+    paths:
+      - .*\.pb\.go$
+      - internal
+      - third_party$
+      - builtin$
+      - examples$
 issues:
-  exclude-dirs:
-    - internal  # Skip auto-generated OpenAPI SDK code
-  exclude-files:
-    - ".*\\.pb\\.go$"  # Skip protobuf generated files if any
-  
-  exclude-rules:
-    # Exclude test files from some linters
-    - path: _test\.go
-      linters:
-        - dupl
-        - funlen
-        - goconst
-        - mnd
-        - gochecknoglobals
-        - wsl
-        - godot
-        - errcheck
-
-    # Exclude vendor directory if it exists
-    - path: vendor/
-      linters:
-        - all
-
-    # Exclude internal directory (auto-generated code)
-    - path: internal/
-      linters:
-        - all
-
   max-issues-per-linter: 0
   max-same-issues: 0
   new: false
-
-linters:
+formatters:
   enable:
     - gofmt
     - goimports
-    - govet
-    - errcheck
-    - staticcheck
-    - ineffassign
-    - typecheck
-    - gosimple
-    - goconst
-    - misspell
-    - unparam
-    - nakedret
-    - prealloc
-    - gochecknoinits
-    - dupl
-    - funlen
-    - whitespace
-    - godot
-    - godox
-    - err113
-    - mnd
-    - gomodguard
-    - goprintffuncname
-    - noctx
-    - nolintlint
-    - rowserrcheck
-    - stylecheck
-    - unconvert
-    - revive
-
-  disable:
-    - exhaustive
-    - gocognit
-    - gocyclo
-    - nestif
-    - depguard
-    - wrapcheck      # Too noisy for internal packages
-    - gocritic       # Style preferences - re-enable when ready  
-    - wsl            # Whitespace rules too pedantic
-    - nlreturn       # Blank line requirements too strict
-    - lll            # Line length can be too restrictive
-    - gochecknoglobals # Tests often need globals
-    - testpackage    # Same package tests are fine
-    - tparallel      # Not all tests need parallelization
-
-linters-settings:
-  errcheck:
-    check-type-assertions: true
-    check-blank: true
-
-  govet:
-    enable:
-      - shadow
-
-  revive:
-    confidence: 0.8
-
-  gofmt:
-    simplify: true
-
-  goimports:
-    local-prefixes: github.com/cyborginc/cyborgdb-go
-
-  goconst:
-    min-len: 3
-    min-occurrences: 3
-
-  misspell:
-    locale: US
-
-  lll:
-    line-length: 120
-
-  gocritic:
-    enabled-tags:
-      - diagnostic
-      - experimental
-      - opinionated
-      - performance
-      - style
-
-  funlen:
-    lines: 100
-    statements: 60
-
-  dupl:
-    threshold: 100
-
-  mnd:
-    checks:
-      - argument
-      - case
-      - condition
-      - operation
-      - return
-      - assign
+  settings:
+    gofmt:
+      simplify: true
+    goimports:
+      local-prefixes:
+        - github.com/cyborginc/cyborgdb-go
+  exclusions:
+    generated: lax
+    paths:
+      - .*\.pb\.go$
+      - internal
+      - third_party$
+      - builtin$
+      - examples$

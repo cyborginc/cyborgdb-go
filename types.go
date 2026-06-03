@@ -59,27 +59,32 @@ const (
 	StoragePrecisionFloat16 = "float16"
 )
 
-// CreateIndexParams defines the parameters for creating a new encrypted vector index.
+// CreateIndexParams defines the parameters for creating a new encrypted DiskIVF index.
 //
-// All indexes are DiskIVF: a two-stage encrypted ANN index that uses PQ codes for
-// fast stage-1 ranking and reranks with the stored full-precision vectors.
+// At least one of IndexKey or KmsName must be provided:
 //
-// Fields:
-//   - IndexName: Unique identifier for the index (required)
-//   - IndexKey: 32-byte encryption key (required)
-//   - Dimension: Vector dimensionality. Auto-detected from the first upsert if omitted.
-//   - Metric: Distance metric for similarity calculations (optional, defaults to "euclidean")
-//   - EmbeddingModel: Name of embedding model to associate with the index (optional)
-//   - StoragePrecision: "float32" (default) or "float16" rerank-vector dtype (optional)
+//   - IndexKey only — the SDK supplies the 32-byte DEK directly (legacy path).
+//   - KmsName only — the service generates a fresh DEK and wraps it under the
+//     named kms.registry entry; the SDK never sees the plaintext DEK.
+//   - IndexKey + KmsName — only valid when KmsName references a "provider: none"
+//     registry entry, in which case IndexKey is the wrapping KEK rather than
+//     the DEK itself. Passing both against a real-KMS slot
+//     ("provider: aws-kms" or "aws") is rejected by the service with a 400.
 type CreateIndexParams struct {
 	// IndexName is the unique identifier for this index.
 	// Must be unique within your project and contain only alphanumeric characters,
 	// hyphens, and underscores.
 	IndexName string `json:"index_name"`
 
-	// IndexKey is the 32-byte encryption key used for end-to-end encryption of vector data.
-	// Generate using GenerateKey() or provide your own 32-byte key.
-	IndexKey []byte `json:"index_key"`
+	// IndexKey is the 32-byte encryption key. Optional when KmsName is set
+	// against a real KMS entry (the service generates and wraps the DEK).
+	// Required when KmsName is unset (legacy) or references a
+	// "provider: none" entry (the KEK).
+	IndexKey []byte `json:"index_key,omitempty"`
+
+	// KmsName is the name of a kms.registry entry in the service YAML.
+	// When supplied, the service handles DEK generation and wrapping.
+	KmsName *string `json:"kms_name,omitempty"`
 
 	// Dimension is the vector dimensionality for this index.
 	// If nil, the server auto-detects dimensionality from the first upsert.
