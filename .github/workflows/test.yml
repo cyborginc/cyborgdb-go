@@ -129,7 +129,7 @@ jobs:
           echo "=== Testing with Standard version ==="
           # Set up environment for Standard
           export CYBORGDB_API_KEY="${CYBORGDB_API_KEY}"
-          export CYBORGDB_DB_TYPE=standalone
+          export CYBORGDB_DB_TYPE=disk
           export CYBORGDB_SERVICE_LOG_LEVEL=DEBUG
           export CYBORGDB_BASE_URL=http://localhost:8000
           
