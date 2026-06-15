@@ -21,7 +21,6 @@ import (
 	"log"
 	"mime/multipart"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -244,31 +243,13 @@ func parameterToJson(obj interface{}) (string, error) {
 	return string(jsonBuf), err
 }
 
-// dumpRedactedRequest dumps an outgoing request for debug logging with the
-// X-API-Key header masked, so credentials are never written to the log in
-// clear text. The original header value is restored before returning, so the
-// request is still sent with valid auth.
-func dumpRedactedRequest(request *http.Request) ([]byte, error) {
-	const apiKeyHeader = "X-API-Key"
-	original := request.Header.Get(apiKeyHeader)
-	if original != "" {
-		request.Header.Set(apiKeyHeader, "[REDACTED]")
-	}
-	dump, err := httputil.DumpRequestOut(request, true)
-	if original != "" {
-		request.Header.Set(apiKeyHeader, original)
-	}
-	return dump, err
-}
-
 // callAPI do the request.
 func (c *APIClient) callAPI(request *http.Request) (*http.Response, error) {
 	if c.cfg.Debug {
-		dump, err := dumpRedactedRequest(request)
-		if err != nil {
-			return nil, err
-		}
-		log.Printf("\n%s\n", string(dump))
+		// Log only the method and path. A full request dump would include the
+		// X-API-Key header and the request body (which carries index keys),
+		// so the sensitive parts are intentionally omitted from logs.
+		log.Printf("\nDEBUG request: %s %s\n", request.Method, request.URL.Path)
 	}
 
 	resp, err := c.cfg.HTTPClient.Do(request)
@@ -277,11 +258,9 @@ func (c *APIClient) callAPI(request *http.Request) (*http.Response, error) {
 	}
 
 	if c.cfg.Debug {
-		dump, err := httputil.DumpResponse(resp, true)
-		if err != nil {
-			return resp, err
-		}
-		log.Printf("\n%s\n", string(dump))
+		// Log only the status. The response body may contain secrets (e.g.
+		// minted API keys in create-user responses), so it is omitted.
+		log.Printf("\nDEBUG response: %s\n", resp.Status)
 	}
 	return resp, err
 }

@@ -154,38 +154,18 @@ for f in internal/model_*.go; do
     sed -i '' 's/decoder.DisallowUnknownFields()//g' "$f" 2>/dev/null || true
 done
 
-# Redact the X-API-Key header from the debug request dump so credentials are
-# never written to logs in clear text (CodeQL go/clear-text-logging). The
-# generated callAPI dumps the full request, including the auth header, when
-# Debug is enabled. Route it through a wrapper that masks the header.
-# Order matters: replace the call in callAPI FIRST (so the lone generated
-# DumpRequestOut becomes dumpRedactedRequest), THEN insert the helper (which
-# legitimately calls DumpRequestOut itself).
-echo "Redacting sensitive headers from debug logging..."
-sed -i '' 's|dump, err := httputil.DumpRequestOut(request, true)|dump, err := dumpRedactedRequest(request)|' internal/client.go
-REDACT_HELPER=$(cat << 'EOF'
-// dumpRedactedRequest dumps an outgoing request for debug logging with the
-// X-API-Key header masked, so credentials are never written to the log in
-// clear text. The original header value is restored before returning, so the
-// request is still sent with valid auth.
-func dumpRedactedRequest(request *http.Request) ([]byte, error) {
-	const apiKeyHeader = "X-API-Key"
-	original := request.Header.Get(apiKeyHeader)
-	if original != "" {
-		request.Header.Set(apiKeyHeader, "[REDACTED]")
-	}
-	dump, err := httputil.DumpRequestOut(request, true)
-	if original != "" {
-		request.Header.Set(apiKeyHeader, original)
-	}
-	return dump, err
-}
-
-EOF
-)
-# $(...) strips trailing newlines, so re-add the blank line between the helper
-# and the callAPI comment to keep the output gofmt-clean.
-REDACT_HELPER="$REDACT_HELPER" perl -0777 -i -pe 's{// callAPI do the request\.}{$ENV{REDACT_HELPER}\n\n// callAPI do the request.}' internal/client.go
+# Strip sensitive data from the generated debug HTTP logging
+# (CodeQL go/clear-text-logging). When Debug is enabled, the generated callAPI
+# dumps the full request and response, which logs the X-API-Key header, the
+# request body (which carries index keys), and response bodies (which carry
+# minted user API keys). Replace both dumps with method/path/status only and
+# drop the now-unused httputil import. In-place redaction does not satisfy
+# CodeQL (its taint model treats the whole request/response as tainted), so the
+# sensitive values must never reach the log sink at all.
+echo "Stripping sensitive data from debug logging..."
+perl -0777 -i -pe 's{\t\tdump, err := httputil\.DumpRequestOut\(request, true\)\n\t\tif err != nil \{\n\t\t\treturn nil, err\n\t\t\}\n\t\tlog\.Printf\("\\n%s\\n", string\(dump\)\)}{\t\t// Log only the method and path. A full request dump would include the\n\t\t// X-API-Key header and the request body (which carries index keys),\n\t\t// so the sensitive parts are intentionally omitted from logs.\n\t\tlog.Printf("\\nDEBUG request: %s %s\\n", request.Method, request.URL.Path)}' internal/client.go
+perl -0777 -i -pe 's{\t\tdump, err := httputil\.DumpResponse\(resp, true\)\n\t\tif err != nil \{\n\t\t\treturn resp, err\n\t\t\}\n\t\tlog\.Printf\("\\n%s\\n", string\(dump\)\)}{\t\t// Log only the status. The response body may contain secrets (e.g.\n\t\t// minted API keys in create-user responses), so it is omitted.\n\t\tlog.Printf("\\nDEBUG response: %s\\n", resp.Status)}' internal/client.go
+sed -i '' '\|"net/http/httputil"|d' internal/client.go
 
 # Clean up extra generated files
 echo "Cleaning up extra files..."
