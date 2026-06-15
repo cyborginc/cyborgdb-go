@@ -154,17 +154,12 @@ for f in internal/model_*.go; do
     sed -i '' 's/decoder.DisallowUnknownFields()//g' "$f" 2>/dev/null || true
 done
 
-# Strip sensitive data from the generated debug HTTP logging
-# (CodeQL go/clear-text-logging). When Debug is enabled, the generated callAPI
-# dumps the full request and response, which logs the X-API-Key header, the
-# request body (which carries index keys), and response bodies (which carry
-# minted user API keys). Replace both dumps with method/path/status only and
-# drop the now-unused httputil import. In-place redaction does not satisfy
-# CodeQL (its taint model treats the whole request/response as tainted), so the
-# sensitive values must never reach the log sink at all.
+# Debug logging dumps the full request/response, leaking the X-API-Key header,
+# request bodies (index keys), and response bodies (minted user keys). Log only
+# method/path/status instead (CodeQL go/clear-text-logging).
 echo "Stripping sensitive data from debug logging..."
-perl -0777 -i -pe 's{\t\tdump, err := httputil\.DumpRequestOut\(request, true\)\n\t\tif err != nil \{\n\t\t\treturn nil, err\n\t\t\}\n\t\tlog\.Printf\("\\n%s\\n", string\(dump\)\)}{\t\t// Log only the method and path. A full request dump would include the\n\t\t// X-API-Key header and the request body (which carries index keys),\n\t\t// so the sensitive parts are intentionally omitted from logs.\n\t\tlog.Printf("\\nDEBUG request: %s %s\\n", request.Method, request.URL.Path)}' internal/client.go
-perl -0777 -i -pe 's{\t\tdump, err := httputil\.DumpResponse\(resp, true\)\n\t\tif err != nil \{\n\t\t\treturn resp, err\n\t\t\}\n\t\tlog\.Printf\("\\n%s\\n", string\(dump\)\)}{\t\t// Log only the status. The response body may contain secrets (e.g.\n\t\t// minted API keys in create-user responses), so it is omitted.\n\t\tlog.Printf("\\nDEBUG response: %s\\n", resp.Status)}' internal/client.go
+sed -i '' 's|dump, err := httputil.DumpRequestOut(request, true)|dump, err := []byte(fmt.Sprintf("%s %s", request.Method, request.URL.Path)), error(nil)|' internal/client.go
+sed -i '' 's|dump, err := httputil.DumpResponse(resp, true)|dump, err := []byte(resp.Status), error(nil)|' internal/client.go
 sed -i '' '\|"net/http/httputil"|d' internal/client.go
 
 # Clean up extra generated files
