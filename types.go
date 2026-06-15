@@ -242,6 +242,11 @@ type QueryParams struct {
 	// May affect result quality. If not set, uses index default.
 	Greedy *bool `json:"greedy,omitempty"`
 
+	// RerankMult is the stage-1 retrieval multiplier for reranking indexes.
+	// Higher values retrieve more candidates before reranking, trading speed
+	// for recall. If not set, the server applies its default (10).
+	RerankMult *int32 `json:"rerank_mult,omitempty"`
+
 	// Filters applies metadata-based filtering to search results.
 	// Map keys are metadata field names, values are filter criteria.
 	// Exact filter syntax depends on server implementation.
@@ -251,4 +256,30 @@ type QueryParams struct {
 	// Common values: ["metadata"], ["vector"], ["metadata", "vector"].
 	// An empty slice may return only IDs and distances.
 	Include []string `json:"include"`
+}
+
+// CreatedUser holds the credentials minted by EncryptedIndex.CreateUser.
+//
+// The APIKey is returned exactly once and is never stored by the service —
+// capture it immediately, as it cannot be recovered. Hand it to the user;
+// they authenticate by passing it as the apiKey to NewClient and need no
+// index key of their own.
+type CreatedUser struct {
+	// UserID is the hex-encoded identifier for the new user.
+	UserID string `json:"user_id"`
+
+	// APIKey is the cdbk_ user API key. Returned once; never recoverable.
+	APIKey string `json:"api_key"`
+}
+
+// UserInfo describes a user provisioned for an index, as returned by
+// EncryptedIndex.ListUsers.
+type UserInfo struct {
+	// UserID is the hex-encoded identifier for the user.
+	UserID string `json:"user_id"`
+
+	// Permissions is the granted subset of {"read", "write"}, derived from
+	// which wrapped keys exist for the user (the cryptographic source of
+	// truth), not a stored field.
+	Permissions []string `json:"permissions"`
 }

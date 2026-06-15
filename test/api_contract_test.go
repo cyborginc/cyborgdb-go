@@ -434,6 +434,42 @@ func TestEncryptedIndexProperties(t *testing.T) {
 			t.Error("Index name should be string")
 		}
 	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	// testIndex is created with dimension=384, metric="cosine" (see
+	// CreateMainTestIndex). These mirror the Python index-property tests.
+	t.Run("Dimension", func(t *testing.T) {
+		dim, err := testIndex.Dimension(ctx)
+		if err != nil {
+			t.Fatalf("Dimension failed: %v", err)
+		}
+		if dim != int32(dimension) {
+			t.Errorf("Expected dimension %d, got %d", dimension, dim)
+		}
+	})
+
+	t.Run("Metric", func(t *testing.T) {
+		metric, err := testIndex.Metric(ctx)
+		if err != nil {
+			t.Fatalf("Metric failed: %v", err)
+		}
+		if metric != "cosine" {
+			t.Errorf("Expected metric cosine, got %q", metric)
+		}
+	})
+
+	t.Run("NLists", func(t *testing.T) {
+		nLists, err := testIndex.NLists(ctx)
+		if err != nil {
+			t.Fatalf("NLists failed: %v", err)
+		}
+		// 1 for untrained indexes; the trained cluster count after training.
+		if nLists < 1 {
+			t.Errorf("Expected n_lists >= 1, got %d", nLists)
+		}
+	})
 }
 
 // Test 09: EncryptedIndex.IsTrained()
