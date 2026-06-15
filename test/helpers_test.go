@@ -178,8 +178,6 @@ func newIsolatedClient(t *testing.T) *cyborgdb.Client {
 
 // newIsolatedIndex creates a uniquely-named IVFFlat index with its own cleanup.
 // Must be called from the test goroutine (uses t.Fatalf). Registers cleanup via t.Cleanup.
-//
-//nolint:unparam // dimension kept as parameter for call-site readability
 func newIsolatedIndex(t *testing.T, client *cyborgdb.Client, prefix string, dimension int32) (*cyborgdb.EncryptedIndex, string) {
 	t.Helper()
 	name := generateUniqueName(prefix + "_")

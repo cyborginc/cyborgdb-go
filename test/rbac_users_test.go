@@ -176,8 +176,8 @@ func TestRBACReadWriteUserCanDoBoth(t *testing.T) {
 
 	writer := rbacUserIndex(t, user.APIKey, name)
 
-	if err := writer.UpsertVectors(ctx, []string{"w"}, [][]float32{{0.0, 0.0, 0.0, 1.0}}, nil); err != nil {
-		t.Fatalf("read-write user upsert failed: %v", err)
+	if upErr := writer.UpsertVectors(ctx, []string{"w"}, [][]float32{{0.0, 0.0, 0.0, 1.0}}, nil); upErr != nil {
+		t.Fatalf("read-write user upsert failed: %v", upErr)
 	}
 	resp, err := writer.Query(ctx, cyborgdb.QueryParams{
 		QueryVector: []float32{0.0, 0.0, 0.0, 1.0},
@@ -216,8 +216,8 @@ func TestRBACListThenRevoke(t *testing.T) {
 	}
 
 	// Revoke; the user must disappear from the list.
-	if err := index.DeleteUser(ctx, user.UserID); err != nil {
-		t.Fatalf("DeleteUser failed: %v", err)
+	if delErr := index.DeleteUser(ctx, user.UserID); delErr != nil {
+		t.Fatalf("DeleteUser failed: %v", delErr)
 	}
 	users, err = index.ListUsers(ctx)
 	if err != nil {
