@@ -154,6 +154,39 @@ for f in internal/model_*.go; do
     sed -i '' 's/decoder.DisallowUnknownFields()//g' "$f" 2>/dev/null || true
 done
 
+# Redact the X-API-Key header from the debug request dump so credentials are
+# never written to logs in clear text (CodeQL go/clear-text-logging). The
+# generated callAPI dumps the full request, including the auth header, when
+# Debug is enabled. Route it through a wrapper that masks the header.
+# Order matters: replace the call in callAPI FIRST (so the lone generated
+# DumpRequestOut becomes dumpRedactedRequest), THEN insert the helper (which
+# legitimately calls DumpRequestOut itself).
+echo "Redacting sensitive headers from debug logging..."
+sed -i '' 's|dump, err := httputil.DumpRequestOut(request, true)|dump, err := dumpRedactedRequest(request)|' internal/client.go
+REDACT_HELPER=$(cat << 'EOF'
+// dumpRedactedRequest dumps an outgoing request for debug logging with the
+// X-API-Key header masked, so credentials are never written to the log in
+// clear text. The original header value is restored before returning, so the
+// request is still sent with valid auth.
+func dumpRedactedRequest(request *http.Request) ([]byte, error) {
+	const apiKeyHeader = "X-API-Key"
+	original := request.Header.Get(apiKeyHeader)
+	if original != "" {
+		request.Header.Set(apiKeyHeader, "[REDACTED]")
+	}
+	dump, err := httputil.DumpRequestOut(request, true)
+	if original != "" {
+		request.Header.Set(apiKeyHeader, original)
+	}
+	return dump, err
+}
+
+EOF
+)
+# $(...) strips trailing newlines, so re-add the blank line between the helper
+# and the callAPI comment to keep the output gofmt-clean.
+REDACT_HELPER="$REDACT_HELPER" perl -0777 -i -pe 's{// callAPI do the request\.}{$ENV{REDACT_HELPER}\n\n// callAPI do the request.}' internal/client.go
+
 # Clean up extra generated files
 echo "Cleaning up extra files..."
 rm -rf internal/docs internal/test internal/api internal/.openapi-generator

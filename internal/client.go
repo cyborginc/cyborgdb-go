@@ -244,10 +244,27 @@ func parameterToJson(obj interface{}) (string, error) {
 	return string(jsonBuf), err
 }
 
+// dumpRedactedRequest dumps an outgoing request for debug logging with the
+// X-API-Key header masked, so credentials are never written to the log in
+// clear text. The original header value is restored before returning, so the
+// request is still sent with valid auth.
+func dumpRedactedRequest(request *http.Request) ([]byte, error) {
+	const apiKeyHeader = "X-API-Key"
+	original := request.Header.Get(apiKeyHeader)
+	if original != "" {
+		request.Header.Set(apiKeyHeader, "[REDACTED]")
+	}
+	dump, err := httputil.DumpRequestOut(request, true)
+	if original != "" {
+		request.Header.Set(apiKeyHeader, original)
+	}
+	return dump, err
+}
+
 // callAPI do the request.
 func (c *APIClient) callAPI(request *http.Request) (*http.Response, error) {
 	if c.cfg.Debug {
-		dump, err := httputil.DumpRequestOut(request, true)
+		dump, err := dumpRedactedRequest(request)
 		if err != nil {
 			return nil, err
 		}
