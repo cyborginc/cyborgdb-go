@@ -16,39 +16,39 @@ import (
 	"fmt"
 )
 
-// checks if the ListIDsRequest type satisfies the MappedNullable interface at compile time
-var _ MappedNullable = &ListIDsRequest{}
+// checks if the CreateUserRequest type satisfies the MappedNullable interface at compile time
+var _ MappedNullable = &CreateUserRequest{}
 
-// ListIDsRequest Request model for listing all IDs in the index.  Inherits:     IndexOperationRequest: Includes `index_name` and `index_key`.
-type ListIDsRequest struct {
-	// 32-byte encryption key as hex string.  Required for SDK-supplied indexes; must be omitted for KMS-backed indexes (the service resolves the KEK via the index's KMSBlob).
+// CreateUserRequest struct for CreateUserRequest
+type CreateUserRequest struct {
+	// Index KEK (hex) for SDK-supplied indexes. Omit for KMS-backed indexes — the service resolves the KEK server-side.
 	IndexKey NullableString `json:"index_key,omitempty"`
-	// ID name
-	IndexName string `json:"index_name"`
+	// Subset of {\"read\", \"write\"}; at least one.
+	Permissions []string `json:"permissions"`
 }
 
-type _ListIDsRequest ListIDsRequest
+type _CreateUserRequest CreateUserRequest
 
-// NewListIDsRequest instantiates a new ListIDsRequest object
+// NewCreateUserRequest instantiates a new CreateUserRequest object
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewListIDsRequest(indexName string) *ListIDsRequest {
-	this := ListIDsRequest{}
-	this.IndexName = indexName
+func NewCreateUserRequest(permissions []string) *CreateUserRequest {
+	this := CreateUserRequest{}
+	this.Permissions = permissions
 	return &this
 }
 
-// NewListIDsRequestWithDefaults instantiates a new ListIDsRequest object
+// NewCreateUserRequestWithDefaults instantiates a new CreateUserRequest object
 // This constructor will only assign default values to properties that have it defined,
 // but it doesn't guarantee that properties required by API are set
-func NewListIDsRequestWithDefaults() *ListIDsRequest {
-	this := ListIDsRequest{}
+func NewCreateUserRequestWithDefaults() *CreateUserRequest {
+	this := CreateUserRequest{}
 	return &this
 }
 
 // GetIndexKey returns the IndexKey field value if set, zero value otherwise (both if not set or set to explicit null).
-func (o *ListIDsRequest) GetIndexKey() string {
+func (o *CreateUserRequest) GetIndexKey() string {
 	if o == nil || IsNil(o.IndexKey.Get()) {
 		var ret string
 		return ret
@@ -59,7 +59,7 @@ func (o *ListIDsRequest) GetIndexKey() string {
 // GetIndexKeyOk returns a tuple with the IndexKey field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 // NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *ListIDsRequest) GetIndexKeyOk() (*string, bool) {
+func (o *CreateUserRequest) GetIndexKeyOk() (*string, bool) {
 	if o == nil {
 		return nil, false
 	}
@@ -67,7 +67,7 @@ func (o *ListIDsRequest) GetIndexKeyOk() (*string, bool) {
 }
 
 // HasIndexKey returns a boolean if a field has been set.
-func (o *ListIDsRequest) HasIndexKey() bool {
+func (o *CreateUserRequest) HasIndexKey() bool {
 	if o != nil && o.IndexKey.IsSet() {
 		return true
 	}
@@ -76,44 +76,44 @@ func (o *ListIDsRequest) HasIndexKey() bool {
 }
 
 // SetIndexKey gets a reference to the given NullableString and assigns it to the IndexKey field.
-func (o *ListIDsRequest) SetIndexKey(v string) {
+func (o *CreateUserRequest) SetIndexKey(v string) {
 	o.IndexKey.Set(&v)
 }
 // SetIndexKeyNil sets the value for IndexKey to be an explicit nil
-func (o *ListIDsRequest) SetIndexKeyNil() {
+func (o *CreateUserRequest) SetIndexKeyNil() {
 	o.IndexKey.Set(nil)
 }
 
 // UnsetIndexKey ensures that no value is present for IndexKey, not even an explicit nil
-func (o *ListIDsRequest) UnsetIndexKey() {
+func (o *CreateUserRequest) UnsetIndexKey() {
 	o.IndexKey.Unset()
 }
 
-// GetIndexName returns the IndexName field value
-func (o *ListIDsRequest) GetIndexName() string {
+// GetPermissions returns the Permissions field value
+func (o *CreateUserRequest) GetPermissions() []string {
 	if o == nil {
-		var ret string
+		var ret []string
 		return ret
 	}
 
-	return o.IndexName
+	return o.Permissions
 }
 
-// GetIndexNameOk returns a tuple with the IndexName field value
+// GetPermissionsOk returns a tuple with the Permissions field value
 // and a boolean to check if the value has been set.
-func (o *ListIDsRequest) GetIndexNameOk() (*string, bool) {
+func (o *CreateUserRequest) GetPermissionsOk() ([]string, bool) {
 	if o == nil {
 		return nil, false
 	}
-	return &o.IndexName, true
+	return o.Permissions, true
 }
 
-// SetIndexName sets field value
-func (o *ListIDsRequest) SetIndexName(v string) {
-	o.IndexName = v
+// SetPermissions sets field value
+func (o *CreateUserRequest) SetPermissions(v []string) {
+	o.Permissions = v
 }
 
-func (o ListIDsRequest) MarshalJSON() ([]byte, error) {
+func (o CreateUserRequest) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
 		return []byte{}, err
@@ -121,21 +121,21 @@ func (o ListIDsRequest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(toSerialize)
 }
 
-func (o ListIDsRequest) ToMap() (map[string]interface{}, error) {
+func (o CreateUserRequest) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	if o.IndexKey.IsSet() {
 		toSerialize["index_key"] = o.IndexKey.Get()
 	}
-	toSerialize["index_name"] = o.IndexName
+	toSerialize["permissions"] = o.Permissions
 	return toSerialize, nil
 }
 
-func (o *ListIDsRequest) UnmarshalJSON(data []byte) (err error) {
+func (o *CreateUserRequest) UnmarshalJSON(data []byte) (err error) {
 	// This validates that all required properties are included in the JSON object
 	// by unmarshalling the object into a generic map with string keys and checking
 	// that every required field exists as a key in the generic map.
 	requiredProperties := []string{
-		"index_name",
+		"permissions",
 	}
 
 	allProperties := make(map[string]interface{})
@@ -152,53 +152,53 @@ func (o *ListIDsRequest) UnmarshalJSON(data []byte) (err error) {
 		}
 	}
 
-	varListIDsRequest := _ListIDsRequest{}
+	varCreateUserRequest := _CreateUserRequest{}
 
 	decoder := json.NewDecoder(bytes.NewReader(data))
 	
-	err = decoder.Decode(&varListIDsRequest)
+	err = decoder.Decode(&varCreateUserRequest)
 
 	if err != nil {
 		return err
 	}
 
-	*o = ListIDsRequest(varListIDsRequest)
+	*o = CreateUserRequest(varCreateUserRequest)
 
 	return err
 }
 
-type NullableListIDsRequest struct {
-	value *ListIDsRequest
+type NullableCreateUserRequest struct {
+	value *CreateUserRequest
 	isSet bool
 }
 
-func (v NullableListIDsRequest) Get() *ListIDsRequest {
+func (v NullableCreateUserRequest) Get() *CreateUserRequest {
 	return v.value
 }
 
-func (v *NullableListIDsRequest) Set(val *ListIDsRequest) {
+func (v *NullableCreateUserRequest) Set(val *CreateUserRequest) {
 	v.value = val
 	v.isSet = true
 }
 
-func (v NullableListIDsRequest) IsSet() bool {
+func (v NullableCreateUserRequest) IsSet() bool {
 	return v.isSet
 }
 
-func (v *NullableListIDsRequest) Unset() {
+func (v *NullableCreateUserRequest) Unset() {
 	v.value = nil
 	v.isSet = false
 }
 
-func NewNullableListIDsRequest(val *ListIDsRequest) *NullableListIDsRequest {
-	return &NullableListIDsRequest{value: val, isSet: true}
+func NewNullableCreateUserRequest(val *CreateUserRequest) *NullableCreateUserRequest {
+	return &NullableCreateUserRequest{value: val, isSet: true}
 }
 
-func (v NullableListIDsRequest) MarshalJSON() ([]byte, error) {
+func (v NullableCreateUserRequest) MarshalJSON() ([]byte, error) {
 	return json.Marshal(v.value)
 }
 
-func (v *NullableListIDsRequest) UnmarshalJSON(src []byte) error {
+func (v *NullableCreateUserRequest) UnmarshalJSON(src []byte) error {
 	v.isSet = true
 	return json.Unmarshal(src, &v.value)
 }

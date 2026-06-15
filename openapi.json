@@ -2,7 +2,7 @@
   "components": {
     "schemas": {
       "BatchQueryRequest": {
-        "description": "Request model for batch similarity search.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    query_vectors (List[List[float]]): List of vectors to search for in batch mode.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    filters (Optional[Dict[str, Any]]): JSON-like dictionary specifying metadata filters. Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned).",
+        "description": "Request model for batch similarity search.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    query_vectors (List[List[float]]): List of vectors to search for in batch mode.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.\n    filters (Optional[Dict[str, Any]]): JSON-like dictionary specifying metadata filters. Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned).",
         "properties": {
           "filters": {
             "anyOf": [
@@ -74,6 +74,17 @@
             "title": "Query Vectors",
             "type": "array"
           },
+          "rerank_mult": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rerank Mult"
+          },
           "top_k": {
             "anyOf": [
               {
@@ -113,7 +124,7 @@
         "type": "object"
       },
       "BinaryQueryRequest": {
-        "description": "Request model for batch similarity search using binary format.\n\nThis is more efficient than BatchQueryRequest for large batches as vectors\nare sent as base64-encoded binary data instead of JSON arrays.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    batch (BinaryQueryBatch): The batch of query vectors in binary format.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    filters (Optional[Dict[str, Any]]): JSON-like dictionary specifying metadata filters. Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned).",
+        "description": "Request model for batch similarity search using binary format.\n\nThis is more efficient than BatchQueryRequest for large batches as vectors\nare sent as base64-encoded binary data instead of JSON arrays.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    batch (BinaryQueryBatch): The batch of query vectors in binary format.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.\n    filters (Optional[Dict[str, Any]]): JSON-like dictionary specifying metadata filters. Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned).",
         "properties": {
           "batch": {
             "$ref": "#/components/schemas/BinaryQueryBatch"
@@ -177,6 +188,17 @@
               }
             ],
             "title": "N Probes"
+          },
+          "rerank_mult": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rerank Mult"
           },
           "top_k": {
             "anyOf": [
@@ -387,6 +409,55 @@
           "index_name"
         ],
         "title": "CreateIndexRequest",
+        "type": "object"
+      },
+      "CreateUserRequest": {
+        "properties": {
+          "index_key": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "description": "Index KEK (hex) for SDK-supplied indexes. Omit for KMS-backed indexes \u2014 the service resolves the KEK server-side.",
+            "title": "Index Key"
+          },
+          "permissions": {
+            "description": "Subset of {\"read\", \"write\"}; at least one.",
+            "items": {
+              "type": "string"
+            },
+            "title": "Permissions",
+            "type": "array"
+          }
+        },
+        "required": [
+          "permissions"
+        ],
+        "title": "CreateUserRequest",
+        "type": "object"
+      },
+      "CreateUserResponse": {
+        "properties": {
+          "api_key": {
+            "description": "The cdbk_ user API key. Returned once; never stored.",
+            "title": "Api Key",
+            "type": "string"
+          },
+          "user_id": {
+            "description": "Hex-encoded user id.",
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "api_key"
+        ],
+        "title": "CreateUserResponse",
         "type": "object"
       },
       "DeleteRequest": {
@@ -756,8 +827,24 @@
         "title": "ListIDsResponse",
         "type": "object"
       },
+      "ListUsersResponse": {
+        "properties": {
+          "users": {
+            "items": {
+              "$ref": "#/components/schemas/UserInfo"
+            },
+            "title": "Users",
+            "type": "array"
+          }
+        },
+        "required": [
+          "users"
+        ],
+        "title": "ListUsersResponse",
+        "type": "object"
+      },
       "QueryRequest": {
-        "description": "Request model for performing a similarity search in the encrypted index.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    query_vectors (Optional[List[float]]): The vector used for the similarity search.\n    query_contents (Optional[str]): Text-based content used for semantic search.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    filters (Optional[Dict[str, Any]]): JSON-like dictionary specifying metadata filters. Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned).",
+        "description": "Request model for performing a similarity search in the encrypted index.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    query_vectors (Optional[List[float]]): The vector used for the similarity search.\n    query_contents (Optional[str]): Text-based content used for semantic search.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.\n    filters (Optional[Dict[str, Any]]): JSON-like dictionary specifying metadata filters. Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned).",
         "properties": {
           "filters": {
             "anyOf": [
@@ -843,6 +930,17 @@
               }
             ],
             "title": "Query Vectors"
+          },
+          "rerank_mult": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Rerank Mult"
           },
           "top_k": {
             "anyOf": [
@@ -1060,6 +1158,27 @@
         "title": "UpsertRequest",
         "type": "object"
       },
+      "UserInfo": {
+        "properties": {
+          "permissions": {
+            "items": {
+              "type": "string"
+            },
+            "title": "Permissions",
+            "type": "array"
+          },
+          "user_id": {
+            "title": "User Id",
+            "type": "string"
+          }
+        },
+        "required": [
+          "user_id",
+          "permissions"
+        ],
+        "title": "UserInfo",
+        "type": "object"
+      },
       "ValidationError": {
         "properties": {
           "ctx": {
@@ -1205,7 +1324,7 @@
   "info": {
     "description": "REST API for CyborgDB: The Confidential Vector Database",
     "title": "CyborgDB Service",
-    "version": "0.16.3.dev86"
+    "version": "0.17.0"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1599,6 +1718,305 @@
           }
         },
         "summary": "Get Training Status"
+      }
+    },
+    "/v1/indexes/{index_name}/users": {
+      "get": {
+        "description": "List the users provisioned for this index. Root API key required.",
+        "operationId": "list_users_v1_indexes__index_name__users_get",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "index_name",
+            "required": true,
+            "schema": {
+              "title": "Index Name",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Index KEK (hex) for SDK-supplied indexes; omit for KMS-backed indexes.",
+            "in": "query",
+            "name": "index_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Index Key"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ListUsersResponse"
+                }
+              }
+            },
+            "description": "Successful response"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            },
+            "description": "Authentication failed"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            },
+            "description": "Root API key required (RBAC)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            },
+            "description": "Index not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            },
+            "description": "Unexpected server error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "List an index's users"
+      },
+      "post": {
+        "description": "Mint a user API key with the given permissions, scoped to this index. Root API key required. The api_key is returned once and never stored.",
+        "operationId": "create_user_v1_indexes__index_name__users_post",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "index_name",
+            "required": true,
+            "schema": {
+              "title": "Index Name",
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreateUserRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreateUserResponse"
+                }
+              }
+            },
+            "description": "User created; api_key returned once"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            },
+            "description": "Authentication failed"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            },
+            "description": "Root API key required (RBAC)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            },
+            "description": "Index not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            },
+            "description": "Unexpected server error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Create a user for an index"
+      }
+    },
+    "/v1/indexes/{index_name}/users/{user_id}": {
+      "delete": {
+        "description": "Revoke a user, erasing their wrapped keys for this index. Root API key required.",
+        "operationId": "delete_user_v1_indexes__index_name__users__user_id__delete",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "index_name",
+            "required": true,
+            "schema": {
+              "title": "Index Name",
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "user_id",
+            "required": true,
+            "schema": {
+              "title": "User Id",
+              "type": "string"
+            }
+          },
+          {
+            "description": "Index KEK (hex) for SDK-supplied indexes; omit for KMS-backed indexes.",
+            "in": "query",
+            "name": "index_key",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Index Key"
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "User revoked"
+          },
+          "401": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            },
+            "description": "Authentication failed"
+          },
+          "403": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            },
+            "description": "Root API key required (RBAC)"
+          },
+          "404": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            },
+            "description": "Index not found"
+          },
+          "422": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/HTTPValidationError"
+                }
+              }
+            },
+            "description": "Validation Error"
+          },
+          "500": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            },
+            "description": "Unexpected server error"
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ],
+        "summary": "Delete (revoke) a user"
       }
     },
     "/v1/vectors/delete": {
