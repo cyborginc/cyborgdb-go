@@ -293,7 +293,7 @@ func (e *EncryptedIndex) CreateUser(ctx context.Context, permissions []string) (
 func (e *EncryptedIndex) ListUsers(ctx context.Context) ([]UserInfo, error) {
 	request := e.client.APIClient.DefaultAPI.ListUsersV1IndexesIndexNameUsersGet(ctx, e.indexName)
 	if e.indexKey != nil {
-		request = request.IndexKey(*e.indexKey)
+		request = request.XIndexKey(*e.indexKey)
 	}
 	resp, _, err := request.Execute()
 	if err != nil {
@@ -321,7 +321,7 @@ func (e *EncryptedIndex) ListUsers(ctx context.Context) ([]UserInfo, error) {
 func (e *EncryptedIndex) DeleteUser(ctx context.Context, userID string) error {
 	request := e.client.APIClient.DefaultAPI.DeleteUserV1IndexesIndexNameUsersUserIdDelete(ctx, e.indexName, userID)
 	if e.indexKey != nil {
-		request = request.IndexKey(*e.indexKey)
+		request = request.XIndexKey(*e.indexKey)
 	}
 	_, err := request.Execute()
 	if err != nil {

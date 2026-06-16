@@ -412,6 +412,7 @@
         "type": "object"
       },
       "CreateUserRequest": {
+        "description": "Request model for minting a user API key scoped to one index.\n\nAttributes:\n    permissions (List[str]): Subset of {\"read\", \"write\"}; at least one.\n    index_key (Optional[str]): Index KEK (hex) for SDK-supplied indexes.\n        Omit for KMS-backed indexes \u2014 the service resolves the KEK server-side.",
         "properties": {
           "index_key": {
             "anyOf": [
@@ -422,7 +423,6 @@
                 "type": "null"
               }
             ],
-            "description": "Index KEK (hex) for SDK-supplied indexes. Omit for KMS-backed indexes \u2014 the service resolves the KEK server-side.",
             "title": "Index Key"
           },
           "permissions": {
@@ -441,14 +441,13 @@
         "type": "object"
       },
       "CreateUserResponse": {
+        "description": "Response model for user creation.\n\nAttributes:\n    user_id (str): The minted user's id (hex).\n    api_key (str): The user's API key. Returned once and never stored.",
         "properties": {
           "api_key": {
-            "description": "The cdbk_ user API key. Returned once; never stored.",
             "title": "Api Key",
             "type": "string"
           },
           "user_id": {
-            "description": "Hex-encoded user id.",
             "title": "User Id",
             "type": "string"
           }
@@ -828,6 +827,7 @@
         "type": "object"
       },
       "ListUsersResponse": {
+        "description": "Response model for listing an index's users.\n\nAttributes:\n    users (List[UserInfo]): The users scoped to the index.",
         "properties": {
           "users": {
             "items": {
@@ -1159,6 +1159,7 @@
         "type": "object"
       },
       "UserInfo": {
+        "description": "Summary of a single user scoped to an index.\n\nAttributes:\n    user_id (str): The user's id (hex).\n    permissions (List[str]): Subset of {\"read\", \"write\"}.",
         "properties": {
           "permissions": {
             "items": {
@@ -1324,7 +1325,7 @@
   "info": {
     "description": "REST API for CyborgDB: The Confidential Vector Database",
     "title": "CyborgDB Service",
-    "version": "0.17.0"
+    "version": "0.16.3.dev154"
   },
   "openapi": "3.1.0",
   "paths": {
@@ -1427,7 +1428,7 @@
     },
     "/v1/indexes/delete": {
       "post": {
-        "description": "Delete a specific index.",
+        "description": "Delete a specific index.\n\nAdmin-only: deleting an index drops the KMS envelope and every user's\nwrapped DEK, so it sits alongside create/train as a root operation rather\nthan a per-user write op.",
         "operationId": "delete_index_v1_indexes_delete_post",
         "requestBody": {
           "content": {
@@ -1619,7 +1620,7 @@
     },
     "/v1/indexes/train": {
       "post": {
-        "description": "Train the index for efficient querying.\n\nTraining is queued and processed asynchronously. If the index is already\nbeing trained or queued, returns the current status.\n\nNote: Automatic training is also triggered based on vector count thresholds\nafter upserts.",
+        "description": "Train the index for efficient querying.\n\nTraining is queued and processed asynchronously. If the index is already\nbeing trained or queued, returns the current status.",
         "operationId": "train_index_v1_indexes_train_post",
         "requestBody": {
           "content": {
@@ -1722,7 +1723,6 @@
     },
     "/v1/indexes/{index_name}/users": {
       "get": {
-        "description": "List the users provisioned for this index. Root API key required.",
         "operationId": "list_users_v1_indexes__index_name__users_get",
         "parameters": [
           {
@@ -1735,9 +1735,9 @@
             }
           },
           {
-            "description": "Index KEK (hex) for SDK-supplied indexes; omit for KMS-backed indexes.",
-            "in": "query",
-            "name": "index_key",
+            "description": "Index KEK (hex) for SDK-supplied indexes; omit for KMS-backed.",
+            "in": "header",
+            "name": "X-Index-Key",
             "required": false,
             "schema": {
               "anyOf": [
@@ -1748,7 +1748,8 @@
                   "type": "null"
                 }
               ],
-              "title": "Index Key"
+              "description": "Index KEK (hex) for SDK-supplied indexes; omit for KMS-backed.",
+              "title": "X-Index-Key"
             }
           }
         ],
@@ -1763,6 +1764,16 @@
             },
             "description": "Successful response"
           },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            },
+            "description": "Invalid request"
+          },
           "401": {
             "content": {
               "application/json": {
@@ -1771,27 +1782,7 @@
                 }
               }
             },
-            "description": "Authentication failed"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            },
-            "description": "Root API key required (RBAC)"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            },
-            "description": "Index not found"
+            "description": "Permission denied from license issue"
           },
           "422": {
             "content": {
@@ -1822,7 +1813,7 @@
         "summary": "List an index's users"
       },
       "post": {
-        "description": "Mint a user API key with the given permissions, scoped to this index. Root API key required. The api_key is returned once and never stored.",
+        "description": "Mint a user API key with the given permissions, scoped to this index.\n\nThe api_key is returned once and never stored \u2014 only the user holds it.",
         "operationId": "create_user_v1_indexes__index_name__users_post",
         "parameters": [
           {
@@ -1854,7 +1845,17 @@
                 }
               }
             },
-            "description": "User created; api_key returned once"
+            "description": "Successful response"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            },
+            "description": "Invalid request"
           },
           "401": {
             "content": {
@@ -1864,27 +1865,7 @@
                 }
               }
             },
-            "description": "Authentication failed"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            },
-            "description": "Root API key required (RBAC)"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            },
-            "description": "Index not found"
+            "description": "Permission denied from license issue"
           },
           "422": {
             "content": {
@@ -1917,7 +1898,6 @@
     },
     "/v1/indexes/{index_name}/users/{user_id}": {
       "delete": {
-        "description": "Revoke a user, erasing their wrapped keys for this index. Root API key required.",
         "operationId": "delete_user_v1_indexes__index_name__users__user_id__delete",
         "parameters": [
           {
@@ -1939,9 +1919,9 @@
             }
           },
           {
-            "description": "Index KEK (hex) for SDK-supplied indexes; omit for KMS-backed indexes.",
-            "in": "query",
-            "name": "index_key",
+            "description": "Index KEK (hex) for SDK-supplied indexes; omit for KMS-backed.",
+            "in": "header",
+            "name": "X-Index-Key",
             "required": false,
             "schema": {
               "anyOf": [
@@ -1952,13 +1932,24 @@
                   "type": "null"
                 }
               ],
-              "title": "Index Key"
+              "description": "Index KEK (hex) for SDK-supplied indexes; omit for KMS-backed.",
+              "title": "X-Index-Key"
             }
           }
         ],
         "responses": {
           "204": {
             "description": "User revoked"
+          },
+          "400": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            },
+            "description": "Invalid request"
           },
           "401": {
             "content": {
@@ -1968,27 +1959,7 @@
                 }
               }
             },
-            "description": "Authentication failed"
-          },
-          "403": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            },
-            "description": "Root API key required (RBAC)"
-          },
-          "404": {
-            "content": {
-              "application/json": {
-                "schema": {
-                  "$ref": "#/components/schemas/ErrorResponseModel"
-                }
-              }
-            },
-            "description": "Index not found"
+            "description": "Permission denied from license issue"
           },
           "422": {
             "content": {
