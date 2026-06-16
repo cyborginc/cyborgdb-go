@@ -19,9 +19,11 @@ import (
 // let the root enumerate and revoke users. After revocation the key stops
 // working on the next request.
 //
-// These run live against an RBAC-enabled, KMS-backed service and skip unless
-// both CYBORGDB_ROOT_API_KEY and CYBORGDB_KMS_NAME are set. The index must be
-// KMS-backed so user keys can resolve the index KEK server-side.
+// These run live against an RBAC-enabled, KMS-backed service. Both
+// CYBORGDB_ROOT_API_KEY and CYBORGDB_KMS_NAME must be set; if either is
+// missing the tests fail hard (rather than skipping) so a misconfigured
+// environment can't quietly drop RBAC coverage. The index must be KMS-backed
+// so user keys can resolve the index KEK server-side.
 
 const rbacDimension = 4
 
@@ -34,13 +36,27 @@ func rbacSeed() ([]string, [][]float32) {
 }
 
 // rbacRootIndex creates a KMS-backed index owned by the root key, seeds it, and
-// registers cleanup. Skips the test if the RBAC env is not configured.
+// registers cleanup. Fails the test if the RBAC env is not configured.
 func rbacRootIndex(t *testing.T) (*cyborgdb.EncryptedIndex, string) {
 	t.Helper()
 	rootKey := os.Getenv("CYBORGDB_ROOT_API_KEY")
-	kmsName := os.Getenv("CYBORGDB_KMS_NAME")
-	if rootKey == "" || kmsName == "" {
-		t.Skip("set CYBORGDB_ROOT_API_KEY and CYBORGDB_KMS_NAME against an RBAC-enabled service")
+	kmsName := os.Getenv("CYBORGDB_KMS_NAME_REAL")
+	var missing []string
+	if rootKey == "" {
+		missing = append(missing, "CYBORGDB_ROOT_API_KEY")
+	}
+	if kmsName == "" {
+		missing = append(missing, "CYBORGDB_KMS_NAME")
+	}
+	if len(missing) > 0 {
+		t.Fatalf("RBAC tests require %s.\n"+
+			"These tests run against an RBAC-enabled, KMS-backed service:\n"+
+			"  - Start cyborgdb-service with CYBORGDB_ROOT_API_KEY set (this turns RBAC on)\n"+
+			"    and a kms.registry slot defined in its cyborgdb.yaml (provider aws or aws-kms,\n"+
+			"    which requires AWS BYOK credentials).\n"+
+			"  - Export CYBORGDB_ROOT_API_KEY (the same value as the server) and\n"+
+			"    CYBORGDB_KMS_NAME (the registry slot name) into the test environment.",
+			strings.Join(missing, " and "))
 	}
 
 	root, err := cyborgdb.NewClient(testBaseURL(), rootKey)
