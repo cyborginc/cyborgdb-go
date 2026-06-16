@@ -154,6 +154,14 @@ for f in internal/model_*.go; do
     sed -i '' 's/decoder.DisallowUnknownFields()//g' "$f" 2>/dev/null || true
 done
 
+# Debug logging dumps the full request/response, leaking the X-API-Key header,
+# request bodies (index keys), and response bodies (minted user keys). Log only
+# method/path/status instead (CodeQL go/clear-text-logging).
+echo "Stripping sensitive data from debug logging..."
+sed -i '' 's|dump, err := httputil.DumpRequestOut(request, true)|dump, err := []byte(fmt.Sprintf("%s %s", request.Method, request.URL.Path)), error(nil)|' internal/client.go
+sed -i '' 's|dump, err := httputil.DumpResponse(resp, true)|dump, err := []byte(resp.Status), error(nil)|' internal/client.go
+sed -i '' '\|"net/http/httputil"|d' internal/client.go
+
 # Clean up extra generated files
 echo "Cleaning up extra files..."
 rm -rf internal/docs internal/test internal/api internal/.openapi-generator

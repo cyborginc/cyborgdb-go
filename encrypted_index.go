@@ -192,6 +192,144 @@ func (e *EncryptedIndex) CheckTrainingStatus(ctx context.Context) (bool, error) 
 	return false, nil
 }
 
+// Dimension returns the vector dimensionality of this index.
+//
+// The value is 0 if the index was created without an explicit dimension and
+// the first upsert hasn't happened yet; otherwise it is the real dimension.
+// Each call queries the describe endpoint for live state.
+//
+// Returns:
+//   - int32: The vector dimension
+//   - error: Any error encountered during the lookup
+func (e *EncryptedIndex) Dimension(ctx context.Context) (int32, error) {
+	resp, err := describeIndex(ctx, e.client, e.indexName, e.indexKeyField())
+	if err != nil {
+		return 0, fmt.Errorf("failed to get index dimension: %w", err)
+	}
+	return resp.GetDimension(), nil
+}
+
+// Metric returns the distance metric used by this index
+// ("euclidean", "cosine", or "squared_euclidean").
+//
+// Each call queries the describe endpoint for live state.
+//
+// Returns:
+//   - string: The distance metric
+//   - error: Any error encountered during the lookup
+func (e *EncryptedIndex) Metric(ctx context.Context) (string, error) {
+	resp, err := describeIndex(ctx, e.client, e.indexName, e.indexKeyField())
+	if err != nil {
+		return "", fmt.Errorf("failed to get index metric: %w", err)
+	}
+	return resp.GetMetric(), nil
+}
+
+// NLists returns the number of inverted lists for this index.
+//
+// The value is 1 for untrained indexes and the trained cluster count after
+// Train. Each call queries the describe endpoint so post-training callers see
+// the updated value.
+//
+// Returns:
+//   - int32: The number of inverted lists
+//   - error: Any error encountered during the lookup
+func (e *EncryptedIndex) NLists(ctx context.Context) (int32, error) {
+	resp, err := describeIndex(ctx, e.client, e.indexName, e.indexKeyField())
+	if err != nil {
+		return 0, fmt.Errorf("failed to get index n_lists: %w", err)
+	}
+	return resp.GetNLists(), nil
+}
+
+// CreateUser mints a user API key scoped to this index.
+//
+// permissions must be a non-empty subset of {"read", "write"}. The grant is
+// enforced cryptographically by the service, not by a checked policy field.
+//
+// The returned CreatedUser.APIKey is provided exactly once and is never stored
+// by the service — capture it now, it cannot be recovered. The new user
+// authenticates by passing it as the apiKey to NewClient and needs no index
+// key of their own.
+//
+// Requires the client to be using the index's root key.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - permissions: Non-empty subset of {"read", "write"}
+//
+// Returns:
+//   - *CreatedUser: The new user's ID and one-time API key
+//   - error: Any error encountered (e.g. not using the root key, or invalid permissions)
+func (e *EncryptedIndex) CreateUser(ctx context.Context, permissions []string) (*CreatedUser, error) {
+	// SDK-supplied-KEK indexes: the service needs the index key to unwrap the
+	// root DEK and re-wrap it under the new user's key. KMS-backed indexes
+	// resolve it server-side, so IndexKey is left unset.
+	req := internal.CreateUserRequest{
+		Permissions: permissions,
+		IndexKey:    e.indexKeyField(),
+	}
+	resp, _, err := e.client.APIClient.DefaultAPI.CreateUserV1IndexesIndexNameUsersPost(ctx, e.indexName).
+		CreateUserRequest(req).
+		Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user: %w", err)
+	}
+	return &CreatedUser{UserID: resp.GetUserId(), APIKey: resp.GetApiKey()}, nil
+}
+
+// ListUsers lists the users provisioned for this index.
+//
+// Permissions are derived from which wrapped keys exist for each user (the
+// cryptographic source of truth), not a stored field. Requires the client to
+// be using the index's root key.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//
+// Returns:
+//   - []UserInfo: The index's users and their permissions
+//   - error: Any error encountered (e.g. not using the root key)
+func (e *EncryptedIndex) ListUsers(ctx context.Context) ([]UserInfo, error) {
+	request := e.client.APIClient.DefaultAPI.ListUsersV1IndexesIndexNameUsersGet(ctx, e.indexName)
+	if e.indexKey != nil {
+		request = request.IndexKey(*e.indexKey)
+	}
+	resp, _, err := request.Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list users: %w", err)
+	}
+	users := make([]UserInfo, 0, len(resp.GetUsers()))
+	for _, u := range resp.GetUsers() {
+		users = append(users, UserInfo{UserID: u.GetUserId(), Permissions: u.GetPermissions()})
+	}
+	return users, nil
+}
+
+// DeleteUser revokes a user, erasing their wrapped keys for this index.
+//
+// After this returns, the user's API key is rejected on the next request — the
+// service can no longer unwrap any key for them. Requires the client to be
+// using the index's root key.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - userID: The hex user_id returned by CreateUser (also surfaced by ListUsers)
+//
+// Returns:
+//   - error: Any error encountered during deletion
+func (e *EncryptedIndex) DeleteUser(ctx context.Context, userID string) error {
+	request := e.client.APIClient.DefaultAPI.DeleteUserV1IndexesIndexNameUsersUserIdDelete(ctx, e.indexName, userID)
+	if e.indexKey != nil {
+		request = request.IndexKey(*e.indexKey)
+	}
+	_, err := request.Execute()
+	if err != nil {
+		return fmt.Errorf("failed to delete user: %w", err)
+	}
+	return nil
+}
+
 // Upsert inserts new vectors or updates existing ones in the index.
 //
 // Vector data is encrypted end-to-end before transmission. If a vector ID
@@ -349,6 +487,9 @@ func (e *EncryptedIndex) queryParams(ctx context.Context, params QueryParams) (*
 		}
 
 		batchReq.TopK, batchReq.NProbes, batchReq.Greedy = nullableQueryOpts(params.TopK, params.NProbes, params.Greedy)
+		if params.RerankMult != nil {
+			batchReq.RerankMult = *internal.NewNullableInt32(params.RerankMult)
+		}
 
 		request := internal.Request{
 			BatchQueryRequest: &batchReq,
@@ -377,6 +518,9 @@ func (e *EncryptedIndex) queryParams(ctx context.Context, params QueryParams) (*
 	}
 
 	req.TopK, req.NProbes, req.Greedy = nullableQueryOpts(params.TopK, params.NProbes, params.Greedy)
+	if params.RerankMult != nil {
+		req.RerankMult = *internal.NewNullableInt32(params.RerankMult)
+	}
 
 	request := internal.Request{
 		QueryRequest: &req,

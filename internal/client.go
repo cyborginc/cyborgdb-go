@@ -21,7 +21,6 @@ import (
 	"log"
 	"mime/multipart"
 	"net/http"
-	"net/http/httputil"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -247,7 +246,7 @@ func parameterToJson(obj interface{}) (string, error) {
 // callAPI do the request.
 func (c *APIClient) callAPI(request *http.Request) (*http.Response, error) {
 	if c.cfg.Debug {
-		dump, err := httputil.DumpRequestOut(request, true)
+		dump, err := []byte(fmt.Sprintf("%s %s", request.Method, request.URL.Path)), error(nil)
 		if err != nil {
 			return nil, err
 		}
@@ -260,7 +259,7 @@ func (c *APIClient) callAPI(request *http.Request) (*http.Response, error) {
 	}
 
 	if c.cfg.Debug {
-		dump, err := httputil.DumpResponse(resp, true)
+		dump, err := []byte(resp.Status), error(nil)
 		if err != nil {
 			return resp, err
 		}
