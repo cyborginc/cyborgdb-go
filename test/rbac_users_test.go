@@ -49,7 +49,7 @@ func rbacRootIndex(t *testing.T) (*cyborgdb.EncryptedIndex, string) {
 		missing = append(missing, "CYBORGDB_KMS_NAME")
 	}
 	if len(missing) > 0 {
-		t.Fatalf("RBAC tests require %s.\n"+
+		t.Skipf("RBAC tests require %s.\n"+
 			"These tests run against an RBAC-enabled, KMS-backed service:\n"+
 			"  - Start cyborgdb-service with CYBORGDB_ROOT_API_KEY set (this turns RBAC on)\n"+
 			"    and a kms.registry slot defined in its cyborgdb.yaml (provider aws or aws-kms,\n"+
