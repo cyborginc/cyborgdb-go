@@ -1,16 +1,30 @@
+<p align="center">
+  <a href="https://www.cyborg.co">
+    <picture>
+      <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/cyborginc/cyborgdb-go/main/assets/cyborgdb-logo-dark.svg">
+      <img src="https://raw.githubusercontent.com/cyborginc/cyborgdb-go/main/assets/cyborgdb-logo-light.svg" alt="CyborgDB" width="320">
+    </picture>
+  </a>
+</p>
+
 # CyborgDB Go SDK
 
-The **CyborgDB Go SDK** provides a comprehensive client library for interacting with [CyborgDB](https://www.cyborg.co), the first Confidential Vector Database. This SDK enables you to perform encrypted vector operations including ingestion, search, and retrieval while maintaining end-to-end encryption of your vector embeddings. Built with Go's strong typing system, it offers excellent performance and seamless integration into Go applications and microservices.
+[![Go Reference](https://pkg.go.dev/badge/github.com/cyborginc/cyborgdb-go.svg)](https://pkg.go.dev/github.com/cyborginc/cyborgdb-go)
+![License](https://img.shields.io/github/license/cyborginc/cyborgdb-go)
+![Go Version](https://img.shields.io/github/go-mod/go-version/cyborginc/cyborgdb-go)
 
-This SDK provides an interface to [`cyborgdb-service`](https://pypi.org/project/cyborgdb-service/) which you will need to separately install and run in order to use the SDK. For more info, please see our [docs](https://docs.cyborg.co)
+The **CyborgDB Go SDK** is the Go client for [CyborgDB](https://www.cyborg.co) — the vector database that stays encrypted even while it's searching. Run similarity search directly on encrypted data with client-side keys; only the result of a query is ever decrypted, never the index. Built with Go's type system and `context` support for services and microservices.
+
+This SDK talks to [`cyborgdb-service`](https://hub.docker.com/r/cyborginc/cyborgdb-service), which you self-host in your own VPC or on-prem and run alongside your app. Install and start it separately. See our [docs](https://docs.cyborg.co) for more info.
+
 ## Key Features
 
-* **End-to-End Encryption**: All vector operations maintain encryption with client-side keys
-* **Full Go Type Safety**: Complete type definitions and compile-time safety
-* **Batch Operations**: Efficient batch queries and upserts for high-throughput applications
-* **Encrypted DiskIVF Indexing**: Disk-backed inverted-file index with customizable training parameters
-* **Context Support**: Built-in support for Go's context package for cancellation and timeouts
-* **Performance Optimized**: Designed for high-performance Go applications
+- **Encryption-in-use**: Search runs directly on ciphertext — only the query result is decrypted, never the index or stored vectors
+- **Encrypted ANN**: Disk-backed encrypted DiskIVF index with recall within 2% of a plaintext baseline ([read the benchmarks](https://www.cyborg.co/performance))
+- **Filters on encrypted metadata**: Combine vector similarity with equality and range predicates in a single request
+- **BYOK / HYOK**: Bring your own key via AWS, GCP, or Azure KMS, or keep the key client-side — you control the key material
+- **Per-tenant key isolation**: Per-index, per-user keys with cryptographic RBAC; revoke a user and their keys are erased
+- **Idiomatic Go API**: Strong typing with `context` support for cancellation and timeouts
 
 ## Getting Started
 
@@ -22,10 +36,7 @@ To get started in minutes, check out our [Quickstart Guide](https://docs.cyborg.
 1. Install `cyborgdb-service`
 
 ```bash
-# Install the CyborgDB Service
-pip install cyborgdb-service
-
-# Or via Docker
+# Pull the CyborgDB Service image
 docker pull cyborginc/cyborgdb-service
 ```
 
@@ -42,7 +53,6 @@ package main
 
 import (
     "context"
-    "crypto/rand"
     "fmt"
     "log"
     
@@ -51,14 +61,14 @@ import (
 
 func main() {
     // Initialize the client
-    client, err := cyborgdb.NewClient("http://localhost:8000", "your-api-key", false)
+    client, err := cyborgdb.NewClient("https://localhost:8000", "your-api-key", false)
     if err != nil {
         log.Fatal(err)
     }
     
     // Generate a 32-byte encryption key
-    indexKey := make([]byte, 32)
-    if _, err := rand.Read(indexKey); err != nil {
+    indexKey, err := cyborgdb.GenerateKey()
+    if err != nil {
         log.Fatal(err)
     }
     
