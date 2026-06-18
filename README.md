@@ -22,7 +22,7 @@ This SDK talks to [`cyborgdb-service`](https://hub.docker.com/r/cyborginc/cyborg
 - **Encryption-in-use**: Search runs directly on ciphertext — only the query result is decrypted, never the index or stored vectors
 - **Encrypted ANN**: Disk-backed encrypted DiskIVF index with recall within 2% of a plaintext baseline ([read the benchmarks](https://www.cyborg.co/performance))
 - **Filters on encrypted metadata**: Combine vector similarity with equality and range predicates in a single request
-- **BYOK / HYOK**: Bring your own key via AWS, GCP, or Azure KMS, or keep the key client-side — you control the key material
+- **BYOK / HYOK**: Wrap per-index keys with AWS KMS or AWS Secrets Manager, or hold the key client-side — you control the key material
 - **Per-tenant key isolation**: Per-index, per-user keys with cryptographic RBAC; revoke a user and their keys are erased
 - **Idiomatic Go API**: Strong typing with `context` support for cancellation and timeouts
 
