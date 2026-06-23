@@ -514,9 +514,9 @@ func TestUnitFlow(t *testing.T) {
 
 	// Test 06: Upsert to Trigger Auto-Train
 	t.Run("test_06_upsert_to_trigger_auto_train", func(t *testing.T) {
-		// Upsert 1 vector to exceed 10,000 and trigger auto-train
-		// (RETRAIN_THRESHOLD=10000 means auto-train triggers when num_vectors > 10000)
-		autoTrainTrigger := 10001
+		// Upsert enough vectors to exceed AUTO_TRAIN_MIN_VECTORS and trigger auto-train.
+		// (Service default AUTO_TRAIN_MIN_VECTORS=65536 means auto-train triggers when num_vectors > 65536.)
+		autoTrainTrigger := 65537
 		numToUpsert := autoTrainTrigger - numUntrainedVectors
 		items := make(cyborgdb.VectorItems, numToUpsert)
 		for i := 0; i < numToUpsert; i++ {
@@ -566,7 +566,7 @@ func TestUnitFlow(t *testing.T) {
 
 	// Test 07: Wait for Auto-Train
 	t.Run("test_07_wait_for_auto_train", func(t *testing.T) {
-		// WAIT FOR AUTO TRAINING TO COMPLETE (triggered at >10,000 vectors)
+		// WAIT FOR AUTO TRAINING TO COMPLETE (triggered at >65,536 vectors)
 		numRetries := 60
 		trained := false
 
@@ -593,8 +593,8 @@ func TestUnitFlow(t *testing.T) {
 
 	// Test 08: Upsert Remaining Vectors
 	t.Run("test_08_upsert_remaining_vectors", func(t *testing.T) {
-		// Upsert remaining vectors (10001 to 49999) after auto-train
-		autoTrainTrigger := 10001
+		// Upsert remaining vectors after auto-train (IDs autoTrainTrigger to totalNumVectors-1)
+		autoTrainTrigger := 65537
 		numToUpsert := totalNumVectors - autoTrainTrigger
 		items := make(cyborgdb.VectorItems, numToUpsert)
 		for i := 0; i < numToUpsert; i++ {
