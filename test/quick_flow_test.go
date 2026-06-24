@@ -651,7 +651,7 @@ func TestUnitFlow(t *testing.T) {
 		for attempt := 0; attempt < numRetries; attempt++ {
 			time.Sleep(2 * time.Second)
 
-			isTraining, checkErr := index.CheckTrainingStatus(ctx)
+			isTraining, checkErr := index.IsTraining(ctx)
 			if checkErr != nil {
 				fmt.Printf("Error checking training status: %v, retrying... (%d/%d)\n", checkErr, attempt+1, numRetries)
 				continue

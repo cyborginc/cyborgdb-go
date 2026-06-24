@@ -170,15 +170,14 @@ func (e *EncryptedIndex) IsTrained(ctx context.Context) (bool, error) {
 	return resp.GetIsTrained(), nil
 }
 
-// CheckTrainingStatus queries the server to check whether this index is
-// currently being trained (e.g. by an auto-training trigger). It reflects live
-// server state on every call and holds no cached status, matching the Python
-// SDK's is_training.
+// IsTraining queries the server to check whether this index is currently being
+// trained (e.g. by an auto-training trigger). It reflects live server state on
+// every call and holds no cached status, matching the Python SDK's is_training.
 //
 // Returns:
 //   - bool: true if the index is currently being trained, false otherwise
 //   - error: Any error encountered during the status check
-func (e *EncryptedIndex) CheckTrainingStatus(ctx context.Context) (bool, error) {
+func (e *EncryptedIndex) IsTraining(ctx context.Context) (bool, error) {
 	result, _, err := e.client.APIClient.DefaultAPI.GetTrainingStatusV1IndexesTrainingStatusGet(ctx).Execute()
 	if err != nil {
 		return false, fmt.Errorf("failed to get training status: %w", err)
@@ -607,7 +606,7 @@ func (e *EncryptedIndex) Delete(ctx context.Context, ids []string) error {
 // be suboptimal until training completes.
 //
 // All parameters are optional with sensible defaults. Use IsTrained or
-// CheckTrainingStatus to observe training state, which is read live from the
+// IsTraining to observe training state, which is read live from the
 // server.
 //
 // Parameters:
