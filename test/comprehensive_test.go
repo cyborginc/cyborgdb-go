@@ -65,6 +65,9 @@ func compTestIndex(t *testing.T) *cyborgdb.EncryptedIndex {
 func TestInvalidAPIKeyRejected(t *testing.T) {
 	// Catches: auth bypass, missing auth enforcement on server.
 	// A bad API key must be rejected on any mutating operation.
+	if os.Getenv("CYBORGDB_SERVICE_ROOT_KEY") == "" {
+		t.Skip("auth disabled (no CYBORGDB_SERVICE_ROOT_KEY) — the service accepts any key")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), baseTimeout)
 	defer cancel()
 
