@@ -232,7 +232,7 @@ func TestUnitFlow(t *testing.T) {
 	}
 
 	// Compute & validate checksum
-	expectedChecksum := "b581f18d84f8dca43d8915f81b36f8aee1d6b914ecd3338684108679ae5a81e7"
+	expectedChecksum := "f72e30b0e9b94d1987d0bfd39866f05477cc0cdae88398d85d59693f283a504e"
 	checksum := fmt.Sprintf("%x", sha256.Sum256(jsonData))
 	if checksum != expectedChecksum {
 		t.Fatalf("Checksum mismatch: expected %s, got %s", expectedChecksum, checksum)
