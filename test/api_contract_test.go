@@ -510,11 +510,11 @@ func TestClientIsTraining(t *testing.T) {
 	defer cancel()
 
 	t.Run("ReturnTrainingStatusWithCorrectSchema", func(t *testing.T) {
-		// Note: In Go SDK, this is CheckTrainingStatus on the index, not client
+		// Note: In Go SDK, this is IsTraining on the index, not client
 		// But we can verify the behavior exists
-		isTraining, err := testIndex.CheckTrainingStatus(ctx)
+		isTraining, err := testIndex.IsTraining(ctx)
 		if err != nil {
-			t.Fatalf("CheckTrainingStatus failed: %v", err)
+			t.Fatalf("IsTraining failed: %v", err)
 		}
 
 		if reflect.TypeOf(isTraining).Kind() != reflect.Bool {

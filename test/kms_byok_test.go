@@ -210,8 +210,8 @@ func runKMSRoundTrip(t *testing.T, cfg kmsBYOKConfig, kmsName string) {
 	if _, err := loaded.IsTrained(ctx); err != nil {
 		t.Errorf("IsTrained: %v", err)
 	}
-	if _, err := loaded.CheckTrainingStatus(ctx); err != nil {
-		t.Errorf("CheckTrainingStatus: %v", err)
+	if _, err := loaded.IsTraining(ctx); err != nil {
+		t.Errorf("IsTraining: %v", err)
 	}
 
 	if err := loaded.Delete(ctx, []string{"0"}); err != nil {
