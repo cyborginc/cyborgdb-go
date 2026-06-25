@@ -3,7 +3,9 @@ package cyborgdb
 
 import (
 	"compress/gzip"
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -31,6 +33,18 @@ const (
 	// numSampleQueries is how many leading queries are surfaced as
 	// SampleQueries for quick demos.
 	numSampleQueries = 10
+
+	// sampleCacheDirPerm is the permission used for the local cache directory.
+	sampleCacheDirPerm = 0o755
+	// sampleCacheFilePerm is the permission used for the cached dataset file.
+	sampleCacheFilePerm = 0o644
+)
+
+var (
+	// ErrUnknownSampleDataset is returned when an unrecognized dataset name is requested.
+	ErrUnknownSampleDataset = errors.New("unknown sample dataset")
+	// ErrSampleDatasetDownload is returned when the dataset download fails.
+	ErrSampleDatasetDownload = errors.New("failed to download sample dataset")
 )
 
 // sampleDatasets maps a dataset name to its object path within the bucket.
@@ -116,7 +130,9 @@ func (ds *SampleDataset) hydrate() {
 	for i, id := range ds.Ids {
 		var md map[string]interface{}
 		if i < len(ds.Metadata) {
-			md, _ = ds.Metadata[i].(map[string]interface{})
+			if m, ok := ds.Metadata[i].(map[string]interface{}); ok {
+				md = m
+			}
 		}
 		var vec []float32
 		if i < len(ds.Vectors) {
@@ -161,7 +177,7 @@ func LoadSampleDatasetWithOptions(name string, opts LoadSampleDatasetOptions) (*
 		for k := range sampleDatasets {
 			known = append(known, k)
 		}
-		return nil, fmt.Errorf("unknown sample dataset %q; available datasets: %s", name, strings.Join(known, ", "))
+		return nil, fmt.Errorf("%w %q; available datasets: %s", ErrUnknownSampleDataset, name, strings.Join(known, ", "))
 	}
 
 	cacheDir := opts.CacheDir
@@ -185,15 +201,20 @@ func LoadSampleDatasetWithOptions(name string, opts LoadSampleDatasetOptions) (*
 	}
 
 	url := fmt.Sprintf("%s/%s", sampleDatasetsBaseURL(), objectPath)
-	client := &http.Client{Timeout: defaultSampleDatasetTimeout}
-	resp, err := client.Get(url)
+	ctx, cancel := context.WithTimeout(context.Background(), defaultSampleDatasetTimeout)
+	defer cancel()
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create request for sample dataset %q: %w", name, err)
+	}
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return nil, fmt.Errorf("failed to download sample dataset %q from %s: %w", name, url, err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("failed to download sample dataset %q from %s: HTTP %d", name, url, resp.StatusCode)
+		return nil, fmt.Errorf("%w %q from %s: HTTP %d", ErrSampleDatasetDownload, name, url, resp.StatusCode)
 	}
 
 	// The object is stored as an opaque gzip blob (no Content-Encoding: gzip),
@@ -216,8 +237,11 @@ func LoadSampleDatasetWithOptions(name string, opts LoadSampleDatasetOptions) (*
 
 	// Best-effort local cache of the raw payload; a failed write must not break
 	// the load. Items/SampleQueries are rebuilt by hydrate() on read.
-	if err := os.MkdirAll(cacheDir, 0o755); err == nil {
-		_ = os.WriteFile(cacheFile, jsonData, 0o644)
+	if mkErr := os.MkdirAll(cacheDir, sampleCacheDirPerm); mkErr == nil {
+		// A failed cache write is non-fatal: the dataset still loads this call.
+		if wErr := os.WriteFile(cacheFile, jsonData, sampleCacheFilePerm); wErr != nil {
+			_ = wErr
+		}
 	}
 
 	ds.hydrate()

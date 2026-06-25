@@ -60,8 +60,9 @@ func gzipBytes(t *testing.T, v interface{}) []byte {
 	return buf.Bytes()
 }
 
-// newServer serves the gzipped payload and counts requests.
-func newServer(t *testing.T, payload []byte, status int) (*httptest.Server, *int) {
+// newServer serves the gzipped payload and returns a pointer to the request
+// count. The server is closed automatically via t.Cleanup.
+func newServer(t *testing.T, payload []byte, status int) *int {
 	t.Helper()
 	calls := 0
 	ts := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
@@ -75,11 +76,11 @@ func newServer(t *testing.T, payload []byte, status int) (*httptest.Server, *int
 	}))
 	t.Cleanup(ts.Close)
 	t.Setenv("CYBORGDB_SAMPLE_DATASETS_BASE_URL", ts.URL)
-	return ts, &calls
+	return &calls
 }
 
 func TestLoadSampleDataset_DownloadAndHydrate(t *testing.T) {
-	_, calls := newServer(t, gzipBytes(t, fakeRaw), http.StatusOK)
+	calls := newServer(t, gzipBytes(t, fakeRaw), http.StatusOK)
 
 	ds, err := cyborgdb.LoadSampleDatasetWithOptions("quickstart-75k",
 		cyborgdb.LoadSampleDatasetOptions{CacheDir: t.TempDir()})
@@ -118,7 +119,7 @@ func TestLoadSampleDataset_DownloadAndHydrate(t *testing.T) {
 }
 
 func TestLoadSampleDataset_SecondCallUsesCache(t *testing.T) {
-	_, calls := newServer(t, gzipBytes(t, fakeRaw), http.StatusOK)
+	calls := newServer(t, gzipBytes(t, fakeRaw), http.StatusOK)
 	cacheDir := t.TempDir()
 	opts := cyborgdb.LoadSampleDatasetOptions{CacheDir: cacheDir}
 
@@ -134,7 +135,7 @@ func TestLoadSampleDataset_SecondCallUsesCache(t *testing.T) {
 }
 
 func TestLoadSampleDataset_ForceDownloadRefetches(t *testing.T) {
-	_, calls := newServer(t, gzipBytes(t, fakeRaw), http.StatusOK)
+	calls := newServer(t, gzipBytes(t, fakeRaw), http.StatusOK)
 	cacheDir := t.TempDir()
 
 	if _, err := cyborgdb.LoadSampleDatasetWithOptions("",
@@ -151,7 +152,7 @@ func TestLoadSampleDataset_ForceDownloadRefetches(t *testing.T) {
 }
 
 func TestLoadSampleDataset_UnknownDatasetErrors(t *testing.T) {
-	_, calls := newServer(t, gzipBytes(t, fakeRaw), http.StatusOK)
+	calls := newServer(t, gzipBytes(t, fakeRaw), http.StatusOK)
 	if _, err := cyborgdb.LoadSampleDatasetWithOptions("does-not-exist",
 		cyborgdb.LoadSampleDatasetOptions{CacheDir: t.TempDir()}); err == nil {
 		t.Fatal("expected error for unknown dataset")
