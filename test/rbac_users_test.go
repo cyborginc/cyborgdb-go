@@ -20,7 +20,7 @@ import (
 // working on the next request.
 //
 // These run live against an RBAC-enabled, KMS-backed service. Both
-// CYBORGDB_ROOT_API_KEY and CYBORGDB_KMS_NAME must be set; if either is
+// CYBORGDB_SERVICE_ROOT_KEY and CYBORGDB_KMS_NAME must be set; if either is
 // missing the tests fail hard (rather than skipping) so a misconfigured
 // environment can't quietly drop RBAC coverage. The index must be KMS-backed
 // so user keys can resolve the index KEK server-side.
@@ -39,11 +39,11 @@ func rbacSeed() ([]string, [][]float32) {
 // registers cleanup. Fails the test if the RBAC env is not configured.
 func rbacRootIndex(t *testing.T) (*cyborgdb.EncryptedIndex, string) {
 	t.Helper()
-	rootKey := os.Getenv("CYBORGDB_ROOT_API_KEY")
+	rootKey := os.Getenv("CYBORGDB_SERVICE_ROOT_KEY")
 	kmsName := os.Getenv("CYBORGDB_KMS_NAME_REAL")
 	var missing []string
 	if rootKey == "" {
-		missing = append(missing, "CYBORGDB_ROOT_API_KEY")
+		missing = append(missing, "CYBORGDB_SERVICE_ROOT_KEY")
 	}
 	if kmsName == "" {
 		missing = append(missing, "CYBORGDB_KMS_NAME")
@@ -51,10 +51,10 @@ func rbacRootIndex(t *testing.T) (*cyborgdb.EncryptedIndex, string) {
 	if len(missing) > 0 {
 		t.Skipf("RBAC tests require %s.\n"+
 			"These tests run against an RBAC-enabled, KMS-backed service:\n"+
-			"  - Start cyborgdb-service with CYBORGDB_ROOT_API_KEY set (this turns RBAC on)\n"+
+			"  - Start cyborgdb-service with CYBORGDB_SERVICE_ROOT_KEY set (this turns RBAC on)\n"+
 			"    and a kms.registry slot defined in its cyborgdb.yaml (provider aws or aws-kms,\n"+
 			"    which requires AWS BYOK credentials).\n"+
-			"  - Export CYBORGDB_ROOT_API_KEY (the same value as the server) and\n"+
+			"  - Export CYBORGDB_SERVICE_ROOT_KEY (the same value as the server) and\n"+
 			"    CYBORGDB_KMS_NAME (the registry slot name) into the test environment.",
 			strings.Join(missing, " and "))
 	}
