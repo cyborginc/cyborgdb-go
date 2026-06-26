@@ -686,6 +686,58 @@ func TestLargeMetadataRoundTrip(t *testing.T) {
 	}
 }
 
+func TestEmptyQueryResults(t *testing.T) {
+	// Catches: query against an empty index erroring or returning garbage
+	// instead of a clean empty result set.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	index := compTestIndex(t)
+
+	resp, err := index.Query(ctx, cyborgdb.QueryParams{
+		QueryVector: generateTestVectors(1, 128)[0],
+		TopK:        10,
+	})
+	if err != nil {
+		t.Fatalf("Query on empty index failed: %v", err)
+	}
+	if items := getQueryResultItems(&resp.Results); len(items) != 0 {
+		t.Errorf("Expected 0 results from empty index, got %d", len(items))
+	}
+}
+
+func TestIndexCleanupErrorHandling(t *testing.T) {
+	// Catches: deleting an already-deleted index silently succeeding instead of
+	// erroring, which would mask state-management bugs.
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	client, err := createClient()
+	if err != nil {
+		t.Fatalf("Failed to create client: %v", err)
+	}
+
+	metric := "euclidean"
+	index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+		IndexName: generateUniqueName("cleanup_"),
+		IndexKey:  generateRandomKey(),
+		Dimension: int32Ptr(128),
+		Metric:    &metric,
+	})
+	if err != nil {
+		t.Fatalf("CreateIndex failed: %v", err)
+	}
+
+	if delErr := index.DeleteIndex(ctx); delErr != nil {
+		t.Fatalf("First DeleteIndex failed: %v", delErr)
+	}
+
+	// Deleting again must error.
+	if delErr := index.DeleteIndex(ctx); delErr == nil {
+		t.Error("expected second DeleteIndex to fail, got nil error")
+	}
+}
+
 // ---------------------------------------------------------------------------
 // Demo API Key
 // ---------------------------------------------------------------------------
