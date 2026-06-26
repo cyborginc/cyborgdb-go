@@ -63,6 +63,8 @@ const (
 var (
 	errMissingID        = errors.New("result missing ID")
 	errNegativeDistance = errors.New("negative distance")
+	errGetWrongItem     = errors.New("get returned wrong item")
+	errVectorMismatch   = errors.New("retrieved vector mismatch")
 )
 
 // ---------------------------------------------------------------------------
@@ -207,7 +209,7 @@ func TestConcurrentUpsertsOverlappingIDs(t *testing.T) {
 		storedVec := item.GetVector()
 		matched := false
 		for _, c := range candidates {
-			if vectorsApproxEqual(storedVec, c, 1e-5) {
+			if vectorsApproxEqual(storedVec, c) {
 				matched = true
 				break
 			}
@@ -952,7 +954,7 @@ func TestConcurrentWritesToDifferentIndexes(t *testing.T) {
 				continue
 			}
 			retrievedVec := retrieved.Results[0].GetVector()
-			if !vectorsApproxEqual(retrievedVec, data.vectors[checkIdx], 1e-5) {
+			if !vectorsApproxEqual(retrievedVec, data.vectors[checkIdx]) {
 				t.Errorf("Index '%s', ID '%s': vector mismatch — data routed to wrong index",
 					data.name, data.ids[checkIdx])
 			}
@@ -1112,13 +1114,13 @@ func TestConcurrentWriteThenVerifyPerThread(t *testing.T) {
 			}
 			if len(resp.Results) != 1 || resp.Results[0].GetId() != ids[0] {
 				mu.Lock()
-				errs = append(errs, fmt.Errorf("goroutine %d: get returned wrong item", gid))
+				errs = append(errs, fmt.Errorf("goroutine %d: %w", gid, errGetWrongItem))
 				mu.Unlock()
 				return
 			}
-			if !vectorsApproxEqual(resp.Results[0].GetVector(), vectors[0], 1e-5) {
+			if !vectorsApproxEqual(resp.Results[0].GetVector(), vectors[0]) {
 				mu.Lock()
-				errs = append(errs, fmt.Errorf("goroutine %d: retrieved vector mismatch", gid))
+				errs = append(errs, fmt.Errorf("goroutine %d: %w", gid, errVectorMismatch))
 				mu.Unlock()
 			}
 		}(g)
@@ -1278,7 +1280,7 @@ func TestRapidRoundRobinAcrossIndexes(t *testing.T) {
 		if gErr != nil {
 			t.Fatalf("get index %d: %v", i, gErr)
 		}
-		if len(got.Results) != 1 || !vectorsApproxEqual(got.Results[0].GetVector(), perIndexLastVecs[i][0], 1e-5) {
+		if len(got.Results) != 1 || !vectorsApproxEqual(got.Results[0].GetVector(), perIndexLastVecs[i][0]) {
 			t.Errorf("Index %d: last-round vector mismatch", i)
 		}
 	}
