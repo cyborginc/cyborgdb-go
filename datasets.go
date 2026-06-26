@@ -4,6 +4,8 @@ package cyborgdb
 import (
 	"compress/gzip"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,7 +22,6 @@ const (
 	// (public-read S3 bucket). Datasets live at versioned per-dataset paths
 	// ("<name>/v<n>/dataset.json.gz"), so the dataset can be iterated without an
 	// SDK release: re-upload under a new version path and bump sampleDatasets.
-	// It can be overridden via the CYBORGDB_SAMPLE_DATASETS_BASE_URL env var.
 	SampleDatasetsBaseURL = "https://cyborgdb-sample-datasets.s3.amazonaws.com"
 
 	// DefaultSampleDataset is the dataset loaded when LoadSampleDataset is
@@ -29,6 +30,11 @@ const (
 
 	// defaultSampleDatasetTimeout bounds the dataset download.
 	defaultSampleDatasetTimeout = 120 * time.Second
+
+	// maxDecompressedBytes caps the decompressed dataset size, guarding against
+	// a decompression bomb: a tiny gzip that expands to many GBs and OOMs the
+	// host. The largest shipped dataset is well under this generous cap.
+	maxDecompressedBytes = 512 * 1024 * 1024
 
 	// numSampleQueries is how many leading queries are surfaced as
 	// SampleQueries for quick demos.
@@ -47,10 +53,29 @@ var (
 	ErrSampleDatasetDownload = errors.New("failed to download sample dataset")
 )
 
-// sampleDatasets maps a dataset name to its object path within the bucket.
-var sampleDatasets = map[string]string{
-	"quickstart-75k": "quickstart-75k/v1/dataset.json.gz",
+// sampleDatasetEntry describes where a dataset lives and how to verify it.
+type sampleDatasetEntry struct {
+	// objectPath is the dataset's path within the bucket.
+	objectPath string
+	// sha256 is the hex SHA-256 of the decompressed JSON, pinned so a bucket
+	// compromise or a poisoned local cache file can't be trusted silently. The
+	// same digest is verified post-download and on cache read.
+	sha256 string
 }
+
+// sampleDatasets maps a dataset name to its catalog entry.
+var sampleDatasets = map[string]sampleDatasetEntry{
+	"quickstart-75k": {
+		objectPath: "quickstart-75k/v1/dataset.json.gz",
+		sha256:     "6e2db96a0932f036698ebf5e25cf0871cc69b649f7fb352f9e3dddcf9af0540f",
+	},
+}
+
+// sampleDatasetsBaseURLOverride is an unexported test hook to redirect dataset
+// downloads at the transport layer. Production code never sets it; tests in
+// this package point it at a local httptest server. Unlike an env var, it is
+// not a redirect/downgrade surface reachable from outside the package.
+var sampleDatasetsBaseURLOverride string
 
 // SampleFilter is a curated, named metadata filter guaranteed to match rows.
 type SampleFilter struct {
@@ -109,8 +134,8 @@ type LoadSampleDatasetOptions struct {
 }
 
 func sampleDatasetsBaseURL() string {
-	if v := os.Getenv("CYBORGDB_SAMPLE_DATASETS_BASE_URL"); v != "" {
-		return v
+	if sampleDatasetsBaseURLOverride != "" {
+		return sampleDatasetsBaseURLOverride
 	}
 	return SampleDatasetsBaseURL
 }
@@ -171,7 +196,7 @@ func LoadSampleDatasetWithOptions(name string, opts LoadSampleDatasetOptions) (*
 		name = DefaultSampleDataset
 	}
 
-	objectPath, ok := sampleDatasets[name]
+	entry, ok := sampleDatasets[name]
 	if !ok {
 		known := make([]string, 0, len(sampleDatasets))
 		for k := range sampleDatasets {
@@ -186,21 +211,25 @@ func LoadSampleDatasetWithOptions(name string, opts LoadSampleDatasetOptions) (*
 	}
 	// Cache key mirrors the versioned object path so a dataset bump never
 	// serves a stale cached copy.
-	cacheName := strings.TrimSuffix(strings.ReplaceAll(objectPath, "/", "_"), ".gz")
+	cacheName := strings.TrimSuffix(strings.ReplaceAll(entry.objectPath, "/", "_"), ".gz")
 	cacheFile := filepath.Join(cacheDir, cacheName)
 
 	if !opts.ForceDownload {
 		if cached, err := os.ReadFile(cacheFile); err == nil {
-			var ds SampleDataset
-			if err := json.Unmarshal(cached, &ds); err == nil {
-				ds.hydrate()
-				return &ds, nil
+			// Verify the cached file against the pinned digest: a poisoned cache
+			// must not be trusted. A mismatch falls through to re-download.
+			if hex.EncodeToString(sumSHA256(cached)) == entry.sha256 {
+				var ds SampleDataset
+				if err := json.Unmarshal(cached, &ds); err == nil {
+					ds.hydrate()
+					return &ds, nil
+				}
+				// Corrupt cache — fall through and re-download.
 			}
-			// Corrupt cache — fall through and re-download.
 		}
 	}
 
-	url := fmt.Sprintf("%s/%s", sampleDatasetsBaseURL(), objectPath)
+	url := fmt.Sprintf("%s/%s", sampleDatasetsBaseURL(), entry.objectPath)
 	ctx, cancel := context.WithTimeout(context.Background(), defaultSampleDatasetTimeout)
 	defer cancel()
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, http.NoBody)
@@ -225,9 +254,18 @@ func LoadSampleDatasetWithOptions(name string, opts LoadSampleDatasetOptions) (*
 	}
 	defer func() { _ = gz.Close() }()
 
-	jsonData, err := io.ReadAll(gz)
+	// Read one byte past the cap so we can detect (rather than silently
+	// truncate) a payload that exceeds the decompression-bomb limit.
+	jsonData, err := io.ReadAll(io.LimitReader(gz, maxDecompressedBytes+1))
 	if err != nil {
 		return nil, fmt.Errorf("failed to decompress sample dataset %q: %w", name, err)
+	}
+	if int64(len(jsonData)) > maxDecompressedBytes {
+		return nil, fmt.Errorf("sample dataset %q exceeds maximum decompressed size of %d bytes", name, maxDecompressedBytes)
+	}
+
+	if got := hex.EncodeToString(sumSHA256(jsonData)); got != entry.sha256 {
+		return nil, fmt.Errorf("integrity check failed for sample dataset %q: expected SHA-256 %s, got %s", name, entry.sha256, got)
 	}
 
 	var ds SampleDataset
@@ -246,4 +284,10 @@ func LoadSampleDatasetWithOptions(name string, opts LoadSampleDatasetOptions) (*
 
 	ds.hydrate()
 	return &ds, nil
+}
+
+// sumSHA256 returns the SHA-256 digest of data.
+func sumSHA256(data []byte) []byte {
+	sum := sha256.Sum256(data)
+	return sum[:]
 }
