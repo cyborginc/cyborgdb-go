@@ -85,21 +85,35 @@ func main() {
         log.Fatal(err)
     }
     
-    // Load the hosted sample dataset (fetched from S3 on first use, cached locally)
-    dataset, err := cyborgdb.LoadSampleDataset("") // 75k 128-dim vectors with metadata
-    if err != nil {
-        log.Fatal(err)
+    // Add encrypted vector items
+    items := cyborgdb.VectorItems{
+        {
+            Id:     "doc1",
+            Vector: []float32{0.1, 0.2, 0.3}, // ... 128 dimensions
+            Metadata: map[string]interface{}{
+                "category": "greeting",
+                "language": "en",
+            },
+        },
+        {
+            Id:     "doc2",
+            Vector: []float32{0.4, 0.5, 0.6}, // ... 128 dimensions
+            Metadata: map[string]interface{}{
+                "category": "greeting",
+                "language": "fr",
+            },
+        },
     }
-
-    // Add the encrypted vector items
-    err = index.Upsert(context.Background(), dataset.Items)
+    
+    err = index.Upsert(context.Background(), items)
     if err != nil {
         log.Fatal(err)
     }
     
-    // Query the encrypted index with a sample query vector
+    // Query the encrypted index
+    queryVector := []float32{0.1, 0.2, 0.3} // ... 128 dimensions
     queryParams := cyborgdb.QueryParams{
-        QueryVector: dataset.SampleQueries[0],
+        QueryVector: queryVector,
         TopK:        10,
         Include:     []string{"metadata"},
     }
@@ -108,9 +122,9 @@ func main() {
         log.Fatal(err)
     }
     
-    // Print the results (guaranteed non-empty against the sample dataset). For a
-    // single-vector query the matches are in Results.ArrayOfQueryResultItem
-    // (batch queries populate ArrayOfArrayOfQueryResultItem instead).
+    // Print the results. For a single-vector query the matches are in
+    // Results.ArrayOfQueryResultItem (batch queries populate
+    // ArrayOfArrayOfQueryResultItem instead).
     if response.Results.ArrayOfQueryResultItem != nil {
         for _, result := range *response.Results.ArrayOfQueryResultItem {
             fmt.Printf("ID: %s, Distance: %f\n", result.Id, result.GetDistance())
@@ -118,21 +132,6 @@ func main() {
     }
 }
 ```
-
-> **Sample dataset:** `LoadSampleDataset("")` pulls a small reference dataset
-> from S3 on demand and caches it locally — it is not bundled into the SDK. Each
-> item has an explicit `Id`, a 128-dim `Vector`, and `Metadata` with both string
-> (`string`) and numeric (`number`) fields, so the same dataset drives ANN
-> similarity search, metadata filter queries, and numeric range queries. It also
-> ships `SampleQueries` (query vectors) and `ExampleFilters` (curated,
-> guaranteed-to-match filters).
-
-> **Encryption model:** the index is encrypted at rest, but an encrypted DB does
-> **not** mean vectors are auto-hidden from you. You must pass your index key on
-> `LoadIndex` / `Get` / `Query` to retrieve **decrypted** vectors and metadata —
-> without the key, only encrypted ciphertext is ever readable. HYOK-level
-> security is not implied unless you manage the key material yourself (see BYOK
-> below).
 
 ### Advanced Usage
 
@@ -156,37 +155,31 @@ if err != nil {
 }
 ```
 
-#### Metadata Filtering & Range Queries
+#### Complex Metadata Filtering
 
 ```go
-dataset, _ := cyborgdb.LoadSampleDataset("")
-queryVector := dataset.SampleQueries[0]
-
-// Equality filter on a string field
-filtered, err := index.Query(context.Background(), cyborgdb.QueryParams{
-    QueryVector: queryVector,
-    TopK:        10,
-    Filters:     map[string]interface{}{"string": "string_0"},
-    Include:     []string{"distance", "metadata"},
-})
-
-// Numeric range query (bounded) — combine similarity with a range predicate
-ranged, err := index.Query(context.Background(), cyborgdb.QueryParams{
-    QueryVector: queryVector,
-    TopK:        10,
-    Filters:     map[string]interface{}{"number": map[string]interface{}{"$gte": 1250, "$lte": 2500}},
-    Include:     []string{"distance", "metadata"},
-})
-
-// The dataset also ships curated, guaranteed-to-match filters:
-for _, example := range dataset.ExampleFilters {
-    res, _ := index.Query(context.Background(), cyborgdb.QueryParams{
-        QueryVector: queryVector,
-        TopK:        5,
-        Filters:     example.Filter,
-    })
-    fmt.Printf("%s: %d results\n", example.Name, len(*res.Results.ArrayOfQueryResultItem))
+// Advanced metadata filtering with operators
+complexFilter := map[string]interface{}{
+    "$and": []map[string]interface{}{
+        {"category": "greeting"},
+        {"metadata.score": map[string]interface{}{"$gt": 0.8}},
+        {"language": map[string]interface{}{"$in": []string{"en", "fr"}}},
+    },
 }
+
+queryVector := []float32{0.1, 0.2, 0.3} // ... your query vector
+nProbes := int32(1)
+greedy := false
+
+queryParams := cyborgdb.QueryParams{
+    QueryVector: queryVector,
+    TopK:        10,
+    NProbes:     &nProbes,
+    Greedy:      &greedy,
+    Filters:     complexFilter,
+    Include:     []string{"distance", "metadata", "contents"},
+}
+results, err := index.Query(context.Background(), queryParams)
 ```
 
 #### Bring Your Own Key (BYOK) via KMS
