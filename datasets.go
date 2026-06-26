@@ -51,6 +51,10 @@ var (
 	ErrUnknownSampleDataset = errors.New("unknown sample dataset")
 	// ErrSampleDatasetDownload is returned when the dataset download fails.
 	ErrSampleDatasetDownload = errors.New("failed to download sample dataset")
+	// ErrSampleDatasetTooLarge is returned when a dataset exceeds the decompression-bomb limit.
+	ErrSampleDatasetTooLarge = errors.New("sample dataset exceeds maximum decompressed size")
+	// ErrSampleDatasetIntegrity is returned when a dataset's SHA-256 checksum does not match.
+	ErrSampleDatasetIntegrity = errors.New("sample dataset integrity check failed")
 )
 
 // sampleDatasetEntry describes where a dataset lives and how to verify it.
@@ -261,11 +265,11 @@ func LoadSampleDatasetWithOptions(name string, opts LoadSampleDatasetOptions) (*
 		return nil, fmt.Errorf("failed to decompress sample dataset %q: %w", name, err)
 	}
 	if int64(len(jsonData)) > maxDecompressedBytes {
-		return nil, fmt.Errorf("sample dataset %q exceeds maximum decompressed size of %d bytes", name, maxDecompressedBytes)
+		return nil, fmt.Errorf("%w: %q over %d bytes", ErrSampleDatasetTooLarge, name, maxDecompressedBytes)
 	}
 
 	if got := hex.EncodeToString(sumSHA256(jsonData)); got != entry.sha256 {
-		return nil, fmt.Errorf("integrity check failed for sample dataset %q: expected SHA-256 %s, got %s", name, entry.sha256, got)
+		return nil, fmt.Errorf("%w for %q: expected SHA-256 %s, got %s", ErrSampleDatasetIntegrity, name, entry.sha256, got)
 	}
 
 	var ds SampleDataset
