@@ -45,6 +45,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -62,6 +63,8 @@ const (
 var (
 	errMissingID        = errors.New("result missing ID")
 	errNegativeDistance = errors.New("negative distance")
+	errGetWrongItem     = errors.New("get returned wrong item")
+	errVectorMismatch   = errors.New("retrieved vector mismatch")
 )
 
 // ---------------------------------------------------------------------------
@@ -206,7 +209,7 @@ func TestConcurrentUpsertsOverlappingIDs(t *testing.T) {
 		storedVec := item.GetVector()
 		matched := false
 		for _, c := range candidates {
-			if vectorsApproxEqual(storedVec, c, 1e-5) {
+			if vectorsApproxEqual(storedVec, c) {
 				matched = true
 				break
 			}
@@ -951,7 +954,7 @@ func TestConcurrentWritesToDifferentIndexes(t *testing.T) {
 				continue
 			}
 			retrievedVec := retrieved.Results[0].GetVector()
-			if !vectorsApproxEqual(retrievedVec, data.vectors[checkIdx], 1e-5) {
+			if !vectorsApproxEqual(retrievedVec, data.vectors[checkIdx]) {
 				t.Errorf("Index '%s', ID '%s': vector mismatch — data routed to wrong index",
 					data.name, data.ids[checkIdx])
 			}
@@ -1059,5 +1062,226 @@ func TestStress20Goroutines200VectorsEach(t *testing.T) {
 	}
 	if len(missing) > 0 {
 		t.Errorf("%d/%d IDs missing after 20-goroutine stress test", len(missing), len(allIDs))
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Portable extras (ported from cyborgdb-py/tests/test_concurrency.py)
+// ---------------------------------------------------------------------------
+
+func TestConcurrentWriteThenVerifyPerThread(t *testing.T) {
+	t.Parallel()
+	// 8 goroutines share one index. Each upserts unique vectors then reads one
+	// back via Get and verifies an exact vector match.
+	// Catches: request/response routing corruption on the shared client.
+	client := newIsolatedClient(t)
+	index, _ := newIsolatedIndex(t, client, "conc_verify", int32(concDimension))
+
+	numGoroutines := 8
+	var mu sync.Mutex
+	var errs []error
+	var wg sync.WaitGroup
+
+	for g := 0; g < numGoroutines; g++ {
+		wg.Add(1)
+		go func(gid int) {
+			defer wg.Done()
+			vectors := generateRandomVectors(10, concDimension)
+			ids := make([]string, 10)
+			for i := 0; i < 10; i++ {
+				ids[i] = fmt.Sprintf("verify_%d_%d", gid, i)
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			err := index.UpsertVectors(ctx, ids, vectors, nil)
+			cancel()
+			if err != nil {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("goroutine %d upsert: %w", gid, err))
+				mu.Unlock()
+				return
+			}
+			time.Sleep(1 * time.Second)
+
+			ctx2, cancel2 := context.WithTimeout(context.Background(), 30*time.Second)
+			resp, err := index.Get(ctx2, []string{ids[0]}, []string{"vector"})
+			cancel2()
+			if err != nil {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("goroutine %d get: %w", gid, err))
+				mu.Unlock()
+				return
+			}
+			if len(resp.Results) != 1 || resp.Results[0].GetId() != ids[0] {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("goroutine %d: %w", gid, errGetWrongItem))
+				mu.Unlock()
+				return
+			}
+			if !vectorsApproxEqual(resp.Results[0].GetVector(), vectors[0]) {
+				mu.Lock()
+				errs = append(errs, fmt.Errorf("goroutine %d: %w", gid, errVectorMismatch))
+				mu.Unlock()
+			}
+		}(g)
+	}
+	wg.Wait()
+
+	if len(errs) > 0 {
+		t.Fatalf("write-then-verify errors: %v", errs)
+	}
+}
+
+func TestListIDsIsolation(t *testing.T) {
+	t.Parallel()
+	// Each index's ListIDs must contain only its own IDs.
+	client := newIsolatedClient(t)
+
+	numIndexes := 3
+	indexes := make([]*cyborgdb.EncryptedIndex, numIndexes)
+	for i := 0; i < numIndexes; i++ {
+		idx, _ := newIsolatedIndex(t, client, fmt.Sprintf("listiso_%d", i), int32(concDimension))
+		ids := make([]string, 30)
+		for j := 0; j < 30; j++ {
+			ids[j] = fmt.Sprintf("idx%d_vec%d", i, j)
+		}
+		vectors := generateRandomVectors(30, concDimension)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		err := idx.UpsertVectors(ctx, ids, vectors, nil)
+		cancel()
+		if err != nil {
+			t.Fatalf("Failed to upsert to index %d: %v", i, err)
+		}
+		indexes[i] = idx
+	}
+
+	for i := 0; i < numIndexes; i++ {
+		i := i
+		if !pollUntil(pollTimeout, func() bool {
+			ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+			defer cancel()
+			resp, err := indexes[i].ListIDs(ctx)
+			return err == nil && len(resp.Ids) >= 30
+		}) {
+			t.Fatalf("Timed out waiting for index %d to propagate", i)
+		}
+	}
+
+	for i := 0; i < numIndexes; i++ {
+		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+		resp, err := indexes[i].ListIDs(ctx)
+		cancel()
+		if err != nil {
+			t.Fatalf("ListIDs failed for index %d: %v", i, err)
+		}
+		if len(resp.Ids) == 0 {
+			t.Errorf("Index %d has no IDs", i)
+		}
+		prefix := fmt.Sprintf("idx%d_", i)
+		for _, id := range resp.Ids {
+			if !strings.HasPrefix(id, prefix) {
+				t.Errorf("Index %d contains foreign ID '%s' (expected prefix '%s')", i, id, prefix)
+			}
+		}
+	}
+}
+
+func TestRapidRoundRobinAcrossIndexes(t *testing.T) {
+	t.Parallel()
+	// One caller rapidly alternates ops across 5 indexes: upsert to index i,
+	// query index i+1, etc. Validates the shared client scopes each request to
+	// the right index when the same caller touches different indexes back-to-back.
+	client := newIsolatedClient(t)
+
+	numIndexes := 5
+	indexes := make([]*cyborgdb.EncryptedIndex, numIndexes)
+	for i := 0; i < numIndexes; i++ {
+		idx, _ := newIsolatedIndex(t, client, fmt.Sprintf("switch_%d", i), int32(concDimension))
+		indexes[i] = idx
+	}
+
+	rounds := 10
+	vecsPerRound := 5
+	perIndexIDs := make(map[int][]string)
+	perIndexLastVecs := make(map[int][][]float32)
+
+	for r := 0; r < rounds; r++ {
+		for idx := 0; idx < numIndexes; idx++ {
+			ids := make([]string, vecsPerRound)
+			for j := 0; j < vecsPerRound; j++ {
+				ids[j] = fmt.Sprintf("sw%d_r%d_%d", idx, r, j)
+			}
+			vectors := generateRandomVectors(vecsPerRound, concDimension)
+			ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+			err := indexes[idx].UpsertVectors(ctx, ids, vectors, nil)
+			cancel()
+			if err != nil {
+				t.Fatalf("upsert idx %d round %d: %v", idx, r, err)
+			}
+			perIndexIDs[idx] = append(perIndexIDs[idx], ids...)
+			perIndexLastVecs[idx] = vectors
+
+			// Immediately query a different index to force context switching.
+			other := (idx + 1) % numIndexes
+			ctx2, cancel2 := context.WithTimeout(context.Background(), 30*time.Second)
+			resp, qErr := indexes[other].Query(ctx2, cyborgdb.QueryParams{
+				QueryVector: generateRandomVectors(1, concDimension)[0],
+				TopK:        5,
+			})
+			cancel2()
+			if qErr != nil {
+				t.Fatalf("query idx %d: %v", other, qErr)
+			}
+			for _, item := range getQueryResultItems(&resp.Results) {
+				if item.GetId() == "" {
+					t.Error("query returned empty id during round-robin")
+				}
+			}
+		}
+	}
+
+	// Each index ends with only its own IDs; last-round vectors stay intact.
+	for i := 0; i < numIndexes; i++ {
+		i := i
+		expected := perIndexIDs[i]
+		if !pollUntil(pollTimeout, func() bool {
+			ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+			defer cancel()
+			resp, err := indexes[i].ListIDs(ctx)
+			return err == nil && len(resp.Ids) >= len(expected)
+		}) {
+			t.Fatalf("Timed out waiting for index %d to propagate", i)
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), concTimeout)
+		resp, err := indexes[i].ListIDs(ctx)
+		cancel()
+		if err != nil {
+			t.Fatalf("ListIDs failed for index %d: %v", i, err)
+		}
+		stored := make(map[string]bool, len(resp.Ids))
+		for _, id := range resp.Ids {
+			stored[id] = true
+		}
+		if len(stored) != len(expected) {
+			t.Errorf("Index %d: expected %d IDs, got %d", i, len(expected), len(stored))
+		}
+		for _, id := range expected {
+			if !stored[id] {
+				t.Errorf("Index %d missing expected ID '%s'", i, id)
+			}
+		}
+
+		// Spot-check last-round vector integrity.
+		lastIDs := expected[len(expected)-vecsPerRound:]
+		ctx2, cancel2 := context.WithTimeout(context.Background(), 30*time.Second)
+		got, gErr := indexes[i].Get(ctx2, []string{lastIDs[0]}, []string{"vector"})
+		cancel2()
+		if gErr != nil {
+			t.Fatalf("get index %d: %v", i, gErr)
+		}
+		if len(got.Results) != 1 || !vectorsApproxEqual(got.Results[0].GetVector(), perIndexLastVecs[i][0]) {
+			t.Errorf("Index %d: last-round vector mismatch", i)
+		}
 	}
 }

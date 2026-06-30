@@ -138,7 +138,8 @@ func generateRandomVectors(count, dimension int) [][]float32 {
 }
 
 // vectorsApproxEqual checks if two float32 vectors are approximately equal.
-func vectorsApproxEqual(a, b []float32, rtol float64) bool {
+func vectorsApproxEqual(a, b []float32) bool {
+	const rtol = 1e-5
 	if len(a) != len(b) {
 		return false
 	}
