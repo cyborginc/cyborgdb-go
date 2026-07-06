@@ -3,13 +3,11 @@ package test
 import (
 	"context"
 	cryptoRand "crypto/rand"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"testing"
@@ -198,24 +196,6 @@ func checkMetadataResults(results []*cyborgdb.QueryResponse, metadataNeighbors [
 	return recalls
 }
 
-type TestData struct {
-	Vectors                    [][]float32   `json:"vectors"`
-	Queries                    [][]float32   `json:"queries"`
-	UntrainedNeighbors         [][]int32     `json:"untrained_neighbors"`
-	TrainedNeighbors           [][]int32     `json:"trained_neighbors"`
-	Metadata                   []interface{} `json:"metadata"`
-	MetadataQueries            []interface{} `json:"metadata_queries"`
-	MetadataQueryNames         []string      `json:"metadata_query_names"`
-	UntrainedMetadataMatches   [][]int32     `json:"untrained_metadata_matches"`
-	TrainedMetadataMatches     [][]int32     `json:"trained_metadata_matches"`
-	UntrainedMetadataNeighbors [][][]int32   `json:"untrained_metadata_neighbors"`
-	TrainedMetadataNeighbors   [][][]int32   `json:"trained_metadata_neighbors"`
-	UntrainedRecall            float64       `json:"untrained_recall"`
-	TrainedRecall              float64       `json:"trained_recall"`
-	NumUntrainedVectors        int           `json:"num_untrained_vectors"`
-	NumTrainedVectors          int           `json:"num_trained_vectors"`
-}
-
 func TestUnitFlow(t *testing.T) {
 	// Load environment variables from .env.local (ignore error - file may not exist)
 	_ = godotenv.Load("../.env.local")
@@ -223,24 +203,12 @@ func TestUnitFlow(t *testing.T) {
 	// Create context for all operations
 	ctx := context.Background()
 
-	// Load test data
-	testDir := filepath.Dir(".")
-	jsonPath := filepath.Join(testDir, "unit_test_flow_data.json")
-	jsonData, err := os.ReadFile(jsonPath)
+	// Fetch the hosted sample dataset (downloaded from S3 on first use and
+	// cached locally). It carries the full ground-truth arrays this recall test
+	// needs, so it replaces the previously-committed JSON fixture.
+	data, err := cyborgdb.LoadSampleDataset("")
 	if err != nil {
-		t.Fatalf("Failed to read test data: %v", err)
-	}
-
-	// Compute & validate checksum
-	expectedChecksum := "f72e30b0e9b94d1987d0bfd39866f05477cc0cdae88398d85d59693f283a504e"
-	checksum := fmt.Sprintf("%x", sha256.Sum256(jsonData))
-	if checksum != expectedChecksum {
-		t.Fatalf("Checksum mismatch: expected %s, got %s", expectedChecksum, checksum)
-	}
-
-	var data TestData
-	if err = json.Unmarshal(jsonData, &data); err != nil {
-		t.Fatalf("Failed to parse test data: %v", err)
+		t.Fatalf("Failed to load sample dataset: %v", err)
 	}
 
 	// Set up test variables
