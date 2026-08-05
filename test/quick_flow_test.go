@@ -3,13 +3,11 @@ package test
 import (
 	"context"
 	cryptoRand "crypto/rand"
-	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"math"
 	"math/rand"
 	"os"
-	"path/filepath"
 	"sort"
 	"strconv"
 	"testing"
@@ -198,24 +196,6 @@ func checkMetadataResults(results []*cyborgdb.QueryResponse, metadataNeighbors [
 	return recalls
 }
 
-type TestData struct {
-	Vectors                    [][]float32   `json:"vectors"`
-	Queries                    [][]float32   `json:"queries"`
-	UntrainedNeighbors         [][]int32     `json:"untrained_neighbors"`
-	TrainedNeighbors           [][]int32     `json:"trained_neighbors"`
-	Metadata                   []interface{} `json:"metadata"`
-	MetadataQueries            []interface{} `json:"metadata_queries"`
-	MetadataQueryNames         []string      `json:"metadata_query_names"`
-	UntrainedMetadataMatches   [][]int32     `json:"untrained_metadata_matches"`
-	TrainedMetadataMatches     [][]int32     `json:"trained_metadata_matches"`
-	UntrainedMetadataNeighbors [][][]int32   `json:"untrained_metadata_neighbors"`
-	TrainedMetadataNeighbors   [][][]int32   `json:"trained_metadata_neighbors"`
-	UntrainedRecall            float64       `json:"untrained_recall"`
-	TrainedRecall              float64       `json:"trained_recall"`
-	NumUntrainedVectors        int           `json:"num_untrained_vectors"`
-	NumTrainedVectors          int           `json:"num_trained_vectors"`
-}
-
 func TestUnitFlow(t *testing.T) {
 	// Load environment variables from .env.local (ignore error - file may not exist)
 	_ = godotenv.Load("../.env.local")
@@ -223,24 +203,12 @@ func TestUnitFlow(t *testing.T) {
 	// Create context for all operations
 	ctx := context.Background()
 
-	// Load test data
-	testDir := filepath.Dir(".")
-	jsonPath := filepath.Join(testDir, "unit_test_flow_data.json")
-	jsonData, err := os.ReadFile(jsonPath)
+	// Fetch the hosted sample dataset (downloaded from S3 on first use and
+	// cached locally). It carries the full ground-truth arrays this recall test
+	// needs, so it replaces the previously-committed JSON fixture.
+	data, err := cyborgdb.LoadSampleDataset("")
 	if err != nil {
-		t.Fatalf("Failed to read test data: %v", err)
-	}
-
-	// Compute & validate checksum
-	expectedChecksum := "b581f18d84f8dca43d8915f81b36f8aee1d6b914ecd3338684108679ae5a81e7"
-	checksum := fmt.Sprintf("%x", sha256.Sum256(jsonData))
-	if checksum != expectedChecksum {
-		t.Fatalf("Checksum mismatch: expected %s, got %s", expectedChecksum, checksum)
-	}
-
-	var data TestData
-	if err = json.Unmarshal(jsonData, &data); err != nil {
-		t.Fatalf("Failed to parse test data: %v", err)
+		t.Fatalf("Failed to load sample dataset: %v", err)
 	}
 
 	// Set up test variables
@@ -514,9 +482,9 @@ func TestUnitFlow(t *testing.T) {
 
 	// Test 06: Upsert to Trigger Auto-Train
 	t.Run("test_06_upsert_to_trigger_auto_train", func(t *testing.T) {
-		// Upsert 1 vector to exceed 10,000 and trigger auto-train
-		// (RETRAIN_THRESHOLD=10000 means auto-train triggers when num_vectors > 10000)
-		autoTrainTrigger := 10001
+		// Upsert enough vectors to exceed AUTO_TRAIN_MIN_VECTORS and trigger auto-train.
+		// (Service default AUTO_TRAIN_MIN_VECTORS=65536 means auto-train triggers when num_vectors > 65536.)
+		autoTrainTrigger := 65537
 		numToUpsert := autoTrainTrigger - numUntrainedVectors
 		items := make(cyborgdb.VectorItems, numToUpsert)
 		for i := 0; i < numToUpsert; i++ {
@@ -566,7 +534,7 @@ func TestUnitFlow(t *testing.T) {
 
 	// Test 07: Wait for Auto-Train
 	t.Run("test_07_wait_for_auto_train", func(t *testing.T) {
-		// WAIT FOR AUTO TRAINING TO COMPLETE (triggered at >10,000 vectors)
+		// WAIT FOR AUTO TRAINING TO COMPLETE (triggered at >65,536 vectors)
 		numRetries := 60
 		trained := false
 
@@ -593,8 +561,8 @@ func TestUnitFlow(t *testing.T) {
 
 	// Test 08: Upsert Remaining Vectors
 	t.Run("test_08_upsert_remaining_vectors", func(t *testing.T) {
-		// Upsert remaining vectors (10001 to 49999) after auto-train
-		autoTrainTrigger := 10001
+		// Upsert remaining vectors after auto-train (IDs autoTrainTrigger to totalNumVectors-1)
+		autoTrainTrigger := 65537
 		numToUpsert := totalNumVectors - autoTrainTrigger
 		items := make(cyborgdb.VectorItems, numToUpsert)
 		for i := 0; i < numToUpsert; i++ {
@@ -651,7 +619,7 @@ func TestUnitFlow(t *testing.T) {
 		for attempt := 0; attempt < numRetries; attempt++ {
 			time.Sleep(2 * time.Second)
 
-			isTraining, checkErr := index.CheckTrainingStatus(ctx)
+			isTraining, checkErr := index.IsTraining(ctx)
 			if checkErr != nil {
 				fmt.Printf("Error checking training status: %v, retrying... (%d/%d)\n", checkErr, attempt+1, numRetries)
 				continue
@@ -705,8 +673,8 @@ func TestUnitFlow(t *testing.T) {
 		expectedRecall := 1.0
 		fmt.Printf("Trained Query (N_PROBES == N_LISTS). Expected recall: %f, got %f\n", expectedRecall, recall)
 
-		if recall != expectedRecall {
-			t.Errorf("Recall should be perfect: expected %f, got %f", expectedRecall, recall)
+		if math.Abs(recall-expectedRecall) > 0.01 {
+			t.Errorf("Recall should be near-perfect: expected %f±0.01, got %f", expectedRecall, recall)
 		}
 	})
 

@@ -20,7 +20,7 @@ import (
 // working on the next request.
 //
 // These run live against an RBAC-enabled, KMS-backed service. Both
-// CYBORGDB_ROOT_API_KEY and CYBORGDB_KMS_NAME must be set; if either is
+// CYBORGDB_SERVICE_ROOT_KEY and CYBORGDB_KMS_NAME must be set; if either is
 // missing the tests fail hard (rather than skipping) so a misconfigured
 // environment can't quietly drop RBAC coverage. The index must be KMS-backed
 // so user keys can resolve the index KEK server-side.
@@ -39,11 +39,11 @@ func rbacSeed() ([]string, [][]float32) {
 // registers cleanup. Fails the test if the RBAC env is not configured.
 func rbacRootIndex(t *testing.T) (*cyborgdb.EncryptedIndex, string) {
 	t.Helper()
-	rootKey := os.Getenv("CYBORGDB_ROOT_API_KEY")
+	rootKey := os.Getenv("CYBORGDB_SERVICE_ROOT_KEY")
 	kmsName := os.Getenv("CYBORGDB_KMS_NAME_REAL")
 	var missing []string
 	if rootKey == "" {
-		missing = append(missing, "CYBORGDB_ROOT_API_KEY")
+		missing = append(missing, "CYBORGDB_SERVICE_ROOT_KEY")
 	}
 	if kmsName == "" {
 		missing = append(missing, "CYBORGDB_KMS_NAME")
@@ -51,10 +51,10 @@ func rbacRootIndex(t *testing.T) (*cyborgdb.EncryptedIndex, string) {
 	if len(missing) > 0 {
 		t.Skipf("RBAC tests require %s.\n"+
 			"These tests run against an RBAC-enabled, KMS-backed service:\n"+
-			"  - Start cyborgdb-service with CYBORGDB_ROOT_API_KEY set (this turns RBAC on)\n"+
+			"  - Start cyborgdb-service with CYBORGDB_SERVICE_ROOT_KEY set (this turns RBAC on)\n"+
 			"    and a kms.registry slot defined in its cyborgdb.yaml (provider aws or aws-kms,\n"+
 			"    which requires AWS BYOK credentials).\n"+
-			"  - Export CYBORGDB_ROOT_API_KEY (the same value as the server) and\n"+
+			"  - Export CYBORGDB_SERVICE_ROOT_KEY (the same value as the server) and\n"+
 			"    CYBORGDB_KMS_NAME (the registry slot name) into the test environment.",
 			strings.Join(missing, " and "))
 	}
@@ -258,5 +258,138 @@ func TestRBACListThenRevoke(t *testing.T) {
 		TopK:        1,
 	}); qErr == nil {
 		t.Error("expected query with revoked key to fail, got nil error")
+	}
+}
+
+// Mirrors test_read_only_user_lists_with_read_permission.
+func TestRBACReadOnlyUserListedWithReadPermission(t *testing.T) {
+	index, _ := rbacRootIndex(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	user, err := index.CreateUser(ctx, []string{"read"})
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+	defer func() { _ = index.DeleteUser(ctx, user.UserID) }()
+
+	users, err := index.ListUsers(ctx)
+	if err != nil {
+		t.Fatalf("ListUsers failed: %v", err)
+	}
+	listed := findRBACUser(users, user.UserID)
+	if listed == nil {
+		t.Fatalf("created user %s not found in ListUsers", user.UserID)
+	}
+	if !reflect.DeepEqual(listed.Permissions, []string{"read"}) {
+		t.Errorf("expected permissions [read], got %v", listed.Permissions)
+	}
+}
+
+// Mirrors test_write_only_user_can_write_but_not_query.
+func TestRBACWriteOnlyUserCanWriteButNotQuery(t *testing.T) {
+	index, name := rbacRootIndex(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	user, err := index.CreateUser(ctx, []string{"write"})
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+	defer func() { _ = index.DeleteUser(ctx, user.UserID) }()
+
+	writer := rbacUserIndex(t, user.APIKey, name)
+
+	// Write op succeeds.
+	if upErr := writer.UpsertVectors(ctx, []string{"wo"}, [][]float32{{0.0, 0.0, 1.0, 0.0}}, nil); upErr != nil {
+		t.Fatalf("write-only user upsert failed: %v", upErr)
+	}
+	// Read op is cryptographically denied — no read DEK for this user.
+	if _, qErr := writer.Query(ctx, cyborgdb.QueryParams{
+		QueryVector: []float32{0.0, 0.0, 1.0, 0.0},
+		TopK:        1,
+	}); qErr == nil {
+		t.Error("expected write-only user query to be denied, got nil error")
+	}
+}
+
+// Mirrors test_invalid_permissions_rejected.
+func TestRBACInvalidPermissionsRejected(t *testing.T) {
+	index, _ := rbacRootIndex(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	// The grant must be a non-empty subset of {"read","write"}; the service
+	// rejects an empty set and unknown permission names alike.
+	if _, err := index.CreateUser(ctx, []string{}); err == nil {
+		t.Error("expected empty permissions to be rejected, got nil error")
+	}
+	if _, err := index.CreateUser(ctx, []string{"admin"}); err == nil {
+		t.Error("expected unknown permission to be rejected, got nil error")
+	}
+}
+
+// Mirrors test_non_root_user_cannot_manage_users.
+func TestRBACNonRootUserCannotManageUsers(t *testing.T) {
+	index, name := rbacRootIndex(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	user, err := index.CreateUser(ctx, []string{"read", "write"})
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+	defer func() { _ = index.DeleteUser(ctx, user.UserID) }()
+
+	userIdx := rbacUserIndex(t, user.APIKey, name)
+
+	// Minting, listing, and revoking users are root-only operations; a user key
+	// is rejected on each.
+	if _, cErr := userIdx.CreateUser(ctx, []string{"read"}); cErr == nil {
+		t.Error("expected non-root CreateUser to be denied, got nil error")
+	}
+	if _, lErr := userIdx.ListUsers(ctx); lErr == nil {
+		t.Error("expected non-root ListUsers to be denied, got nil error")
+	}
+	if dErr := userIdx.DeleteUser(ctx, user.UserID); dErr == nil {
+		t.Error("expected non-root DeleteUser to be denied, got nil error")
+	}
+}
+
+// Mirrors test_revoking_one_user_leaves_another_working.
+func TestRBACRevokingOneUserLeavesAnotherWorking(t *testing.T) {
+	index, name := rbacRootIndex(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	first, err := index.CreateUser(ctx, []string{"read"})
+	if err != nil {
+		t.Fatalf("CreateUser (first) failed: %v", err)
+	}
+	second, err := index.CreateUser(ctx, []string{"read"})
+	if err != nil {
+		t.Fatalf("CreateUser (second) failed: %v", err)
+	}
+	defer func() {
+		_ = index.DeleteUser(ctx, first.UserID)
+		_ = index.DeleteUser(ctx, second.UserID)
+	}()
+
+	// Revoking one user drops only that user's wrapped keys; the other user's
+	// key keeps resolving the index.
+	if delErr := index.DeleteUser(ctx, first.UserID); delErr != nil {
+		t.Fatalf("DeleteUser (first) failed: %v", delErr)
+	}
+
+	survivor := rbacUserIndex(t, second.APIKey, name)
+	resp, err := survivor.Query(ctx, cyborgdb.QueryParams{
+		QueryVector: []float32{0.1, 0.2, 0.3, 0.4},
+		TopK:        1,
+	})
+	if err != nil {
+		t.Fatalf("survivor query failed: %v", err)
+	}
+	if len(getQueryResultItems(&resp.Results)) < 1 {
+		t.Error("expected at least one query result for surviving user")
 	}
 }
