@@ -3,7 +3,7 @@
     "info": {
         "title": "CyborgDB Service",
         "description": "REST API for CyborgDB: The Confidential Vector Database",
-        "version": "0.16.3.dev1781625678"
+        "version": "0.17.1.dev16"
     },
     "paths": {
         "/v1/health": {
@@ -76,7 +76,7 @@
         "/v1/indexes/create": {
             "post": {
                 "summary": "Create Encrypted Index",
-                "description": "Create a new encrypted index with the provided configuration.\n\nExactly one of `kms_name` / `index_key` must be set; supplying\nboth is rejected with 400.\n\n  * `kms_name` set — service generates a random KEK, wraps it via\n    the named registry slot's KMS, persists the envelope, and uses\n    the plaintext KEK as `index_key` on the core call.  CEI\n    generates the DEK and wraps it under that KEK internally.\n  * `index_key` set — SDK-supplied KEK; envelope persisted with\n    `provider=\"none\"`.  The SDK must re-supply `index_key` on\n    every subsequent request for this index.",
+                "description": "Create a new encrypted index with the provided configuration.\n\nExactly one of `kms_name` / `index_key` must be set; supplying\nboth is rejected with 400.\n\n  * `kms_name` set \u2014 service generates a random KEK, wraps it via\n    the named registry slot's KMS, persists the envelope, and uses\n    the plaintext KEK as `index_key` on the core call.  CEI\n    generates the DEK and wraps it under that KEK internally.\n  * `index_key` set \u2014 SDK-supplied KEK; envelope persisted with\n    `provider=\"none\"`.  The SDK must re-supply `index_key` on\n    every subsequent request for this index.",
                 "operationId": "create_index_v1_indexes_create_post",
                 "requestBody": {
                     "content": {
@@ -362,7 +362,7 @@
         "/v1/indexes/training-status": {
             "get": {
                 "summary": "Get Training Status",
-                "description": "Get the current training status including indexes being trained\nand the retrain threshold configuration.\n\nReturns:\n    dict: Training status information including:\n        - training_indexes: List of index names currently being trained\n        - retrain_threshold: The multiplier used for the retraining threshold",
+                "description": "Get the current training status including indexes being trained\nand the auto-train configuration.\n\nReturns:\n    dict: Training status information including:\n        - training_indexes: List of index names currently being trained\n        - retrain_threshold: Vector-count floor before the first training",
                 "operationId": "get_training_status_v1_indexes_training_status_get",
                 "responses": {
                     "200": {
@@ -901,7 +901,7 @@
         "/v1/indexes/{index_name}/users": {
             "post": {
                 "summary": "Create a user for an index",
-                "description": "Mint a user API key with the given permissions, scoped to this index.\n\nThe api_key is returned once and never stored — only the user holds it.",
+                "description": "Mint a user API key with the given permissions, scoped to this index.\n\nThe api_key is returned once and never stored \u2014 only the user holds it.",
                 "operationId": "create_user_v1_indexes__index_name__users_post",
                 "security": [
                     {
@@ -1221,17 +1221,6 @@
                         ],
                         "title": "N Probes"
                     },
-                    "greedy": {
-                        "anyOf": [
-                            {
-                                "type": "boolean"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Greedy"
-                    },
                     "rerank_mult": {
                         "anyOf": [
                             {
@@ -1242,6 +1231,17 @@
                             }
                         ],
                         "title": "Rerank Mult"
+                    },
+                    "greedy": {
+                        "anyOf": [
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Greedy"
                     },
                     "filters": {
                         "anyOf": [
@@ -1254,7 +1254,7 @@
                             }
                         ],
                         "title": "Filters",
-                        "default": {}
+                        "description": "Metadata filters as a JSON object. Operators: `$eq`, `$ne`, `$in`, `$nin`, `$exists`, `$gt`, `$gte`, `$lt`, `$lte`, `$regex`, `$contains`, combined with `$and` / `$or` / `$nor` / `$not`. Filtering works on any metadata field; the index's `metadata_schema` only decides how a filter is resolved \u2014 fields marked `filterable` (the default) are answered from the inverted index, and `$regex` / `$contains` are answered from the regex dictionary on `pattern` fields. Anything else falls back to a post-filter over the decrypted metadata, which is correct but slower. Dates have no native type: store and filter them as epoch milliseconds."
                     },
                     "include": {
                         "items": {
@@ -1271,7 +1271,7 @@
                     "query_vectors"
                 ],
                 "title": "BatchQueryRequest",
-                "description": "Request model for batch similarity search.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    query_vectors (List[List[float]]): List of vectors to search for in batch mode.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.\n    filters (Optional[Dict[str, Any]]): JSON-like dictionary specifying metadata filters. Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned)."
+                "description": "Request model for batch similarity search.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    query_vectors (List[List[float]]): List of vectors to search for in batch mode.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.\n    filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like\n        dictionary (see `FILTERS_DESCRIPTION` for the operator set).\n        Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned)."
             },
             "BinaryQueryBatch": {
                 "properties": {
@@ -1336,17 +1336,6 @@
                         ],
                         "title": "N Probes"
                     },
-                    "greedy": {
-                        "anyOf": [
-                            {
-                                "type": "boolean"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Greedy"
-                    },
                     "rerank_mult": {
                         "anyOf": [
                             {
@@ -1357,6 +1346,17 @@
                             }
                         ],
                         "title": "Rerank Mult"
+                    },
+                    "greedy": {
+                        "anyOf": [
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Greedy"
                     },
                     "filters": {
                         "anyOf": [
@@ -1369,7 +1369,7 @@
                             }
                         ],
                         "title": "Filters",
-                        "default": {}
+                        "description": "Metadata filters as a JSON object. Operators: `$eq`, `$ne`, `$in`, `$nin`, `$exists`, `$gt`, `$gte`, `$lt`, `$lte`, `$regex`, `$contains`, combined with `$and` / `$or` / `$nor` / `$not`. Filtering works on any metadata field; the index's `metadata_schema` only decides how a filter is resolved \u2014 fields marked `filterable` (the default) are answered from the inverted index, and `$regex` / `$contains` are answered from the regex dictionary on `pattern` fields. Anything else falls back to a post-filter over the decrypted metadata, which is correct but slower. Dates have no native type: store and filter them as epoch milliseconds."
                     },
                     "include": {
                         "items": {
@@ -1386,7 +1386,7 @@
                     "batch"
                 ],
                 "title": "BinaryQueryRequest",
-                "description": "Request model for batch similarity search using binary format.\n\nThis is more efficient than BatchQueryRequest for large batches as vectors\nare sent as base64-encoded binary data instead of JSON arrays.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    batch (BinaryQueryBatch): The batch of query vectors in binary format.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.\n    filters (Optional[Dict[str, Any]]): JSON-like dictionary specifying metadata filters. Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned)."
+                "description": "Request model for batch similarity search using binary format.\n\nThis is more efficient than BatchQueryRequest for large batches as vectors\nare sent as base64-encoded binary data instead of JSON arrays.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    batch (BinaryQueryBatch): The batch of query vectors in binary format.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.\n    filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like\n        dictionary (see `FILTERS_DESCRIPTION` for the operator set).\n        Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned)."
             },
             "BinaryUpsertRequest": {
                 "properties": {
@@ -1510,7 +1510,7 @@
                             }
                         ],
                         "title": "Kms Name",
-                        "description": "Name of a kms.registry entry in the service YAML. Mutually exclusive with index_key — when supplied, the service wraps a fresh KEK via that KMS and persists the envelope."
+                        "description": "Name of a kms.registry entry in the service YAML. Mutually exclusive with index_key \u2014 when supplied, the service wraps a fresh KEK via that KMS and persists the envelope."
                     },
                     "index_key": {
                         "anyOf": [
@@ -1522,7 +1522,7 @@
                             }
                         ],
                         "title": "Index Key",
-                        "description": "32-byte encryption key as hex string.  Mutually exclusive with kms_name — when supplied, the SDK provides the KEK directly and the index is persisted as `provider=none`."
+                        "description": "32-byte encryption key as hex string.  Mutually exclusive with kms_name \u2014 when supplied, the SDK provides the KEK directly and the index is persisted as `provider=none`."
                     },
                     "dimension": {
                         "anyOf": [
@@ -1571,6 +1571,29 @@
                             }
                         ],
                         "title": "Storage Precision"
+                    },
+                    "metadata_schema": {
+                        "anyOf": [
+                            {
+                                "additionalProperties": {
+                                    "$ref": "#/components/schemas/MetadataFieldPolicy"
+                                },
+                                "type": "object"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Metadata Schema",
+                        "description": "Per-field metadata indexing policy: {\"field\": {\"filterable\": true, \"pattern\": false}}. `filterable` (default true) builds inverted-index postings so filters on the field resolve from the index; `pattern` (default false) also builds the field's regex dictionary, needed for index-resolved `$regex` / `$contains`. Fields not listed are filterable (opt-out posture). Immutable after create.",
+                        "examples": [
+                            {
+                                "title": {
+                                    "filterable": true,
+                                    "pattern": true
+                                }
+                            }
+                        ]
                     }
                 },
                 "type": "object",
@@ -1578,7 +1601,7 @@
                     "index_name"
                 ],
                 "title": "CreateIndexRequest",
-                "description": "Request model for creating a new encrypted DiskIVF index.\n\nExactly one of `kms_name` / `index_key` must be supplied; supplying\nboth is rejected with 400.\n\nAttributes:\n    index_name: The name/identifier of the index.\n    kms_name: Name of a `kms.registry` entry in the service YAML.\n        When supplied (and `index_key` is omitted), the service\n        generates the KEK itself, wraps it under that entry's KMS,\n        and persists the envelope.\n    index_key: A 32-byte encryption key as a hex string.  When\n        supplied (and `kms_name` is omitted), the SDK provides the\n        KEK directly and the persisted envelope records\n        `provider=\"none\"`.\n    dimension (Optional[int]): Dimensionality of the vectors. Auto-detected\n        from the first upsert if omitted.\n    embedding_model (Optional[str]): Optional embedding model name.\n    metric (Optional[str]): Optional distance metric.\n    storage_precision (Optional[Literal[\"float32\", \"float16\"]]): On-disk\n        rerank-vector dtype. Defaults to float32 in core."
+                "description": "Request model for creating a new encrypted DiskIVF index.\n\nExactly one of `kms_name` / `index_key` must be supplied; supplying\nboth is rejected with 400.\n\nAttributes:\n    index_name: The name/identifier of the index.\n    kms_name: Name of a `kms.registry` entry in the service YAML.\n        When supplied (and `index_key` is omitted), the service\n        generates the KEK itself, wraps it under that entry's KMS,\n        and persists the envelope.\n    index_key: A 32-byte encryption key as a hex string.  When\n        supplied (and `kms_name` is omitted), the SDK provides the\n        KEK directly and the persisted envelope records\n        `provider=\"none\"`.\n    dimension (Optional[int]): Dimensionality of the vectors. Auto-detected\n        from the first upsert if omitted.\n    embedding_model (Optional[str]): Optional embedding model name.\n    metric (Optional[str]): Optional distance metric.\n    storage_precision (Optional[Literal[\"float32\", \"float16\"]]): On-disk\n        rerank-vector dtype. Defaults to float32 in core.\n    metadata_schema (Optional[Dict[str, MetadataFieldPolicy]]): Per-field\n        metadata indexing policy, keyed by field name (dot-path for\n        nested fields).  Omitted fields are filterable by default\n        (opt-out posture).  Fixed at create time and immutable."
             },
             "CreateUserRequest": {
                 "properties": {
@@ -1607,7 +1630,7 @@
                     "permissions"
                 ],
                 "title": "CreateUserRequest",
-                "description": "Request model for minting a user API key scoped to one index.\n\nAttributes:\n    permissions (List[str]): Subset of {\"read\", \"write\"}; at least one.\n    index_key (Optional[str]): Index KEK (hex) for SDK-supplied indexes.\n        Omit for KMS-backed indexes — the service resolves the KEK server-side."
+                "description": "Request model for minting a user API key scoped to one index.\n\nAttributes:\n    permissions (List[str]): Subset of {\"read\", \"write\"}; at least one.\n    index_key (Optional[str]): Index KEK (hex) for SDK-supplied indexes.\n        Omit for KMS-backed indexes \u2014 the service resolves the KEK server-side."
             },
             "CreateUserResponse": {
                 "properties": {
@@ -1832,6 +1855,14 @@
                     "n_lists": {
                         "type": "integer",
                         "title": "N Lists"
+                    },
+                    "metadata_schema": {
+                        "additionalProperties": {
+                            "$ref": "#/components/schemas/MetadataFieldPolicy"
+                        },
+                        "type": "object",
+                        "title": "Metadata Schema",
+                        "default": {}
                     }
                 },
                 "type": "object",
@@ -1843,7 +1874,7 @@
                     "n_lists"
                 ],
                 "title": "IndexInfoResponseModel",
-                "description": "Response model for retrieving information about an index.\n\nAttributes:\n    index_name (str): The name of the index.\n    is_trained (bool): Indicates whether the index has been trained.\n    dimension (int): Dimensionality of the vectors. `0` before the\n        first upsert when create_index was called without an explicit\n        dimension (auto-detect).\n    metric (str): Distance metric (`euclidean`, `cosine`, or\n        `squared_euclidean`).\n    n_lists (int): Number of inverted lists in the IVF index. `1`\n        for untrained indexes."
+                "description": "Response model for retrieving information about an index.\n\nAttributes:\n    index_name (str): The name of the index.\n    is_trained (bool): Indicates whether the index has been trained.\n    dimension (int): Dimensionality of the vectors. `0` before the\n        first upsert when create_index was called without an explicit\n        dimension (auto-detect).\n    metric (str): Distance metric (`euclidean`, `cosine`, or\n        `squared_euclidean`).\n    n_lists (int): Number of inverted lists in the IVF index. `1`\n        for untrained indexes.\n    metadata_schema (Dict[str, MetadataFieldPolicy]): Per-field metadata\n        indexing overrides recorded at create time. Empty when the\n        index uses the default index-everything posture."
             },
             "IndexListResponseModel": {
                 "properties": {
@@ -1887,7 +1918,7 @@
                     "index_name"
                 ],
                 "title": "IndexOperationRequest",
-                "description": "Request model for performing operations on an existing index (e.g., delete, describe).\n\nExactly one of two paths applies on every request:\n  * `index_key` is supplied — the SDK-supplied KEK for an index\n    whose stored envelope records `provider=\"none\"`.  The service\n    validates it against the cached hash.\n  * `index_key` is omitted — the index must be KMS-backed.  The\n    service reads the `KMSBlob` snapshot, resolves the KEK via\n    the named KMS (cached by the `kek_cache` TTL), and uses that.\n\nAttributes:\n    index_name (str): The name/identifier of the index.\n    index_key (str, optional): 32-byte encryption key as hex string.\n        Required for SDK-supplied indexes (envelope `provider=\"none\"`);\n        must be omitted for KMS-backed indexes."
+                "description": "Request model for performing operations on an existing index (e.g., delete, describe).\n\nExactly one of two paths applies on every request:\n  * `index_key` is supplied \u2014 the SDK-supplied KEK for an index\n    whose stored envelope records `provider=\"none\"`.  The service\n    validates it against the cached hash.\n  * `index_key` is omitted \u2014 the index must be KMS-backed.  The\n    service reads the `KMSBlob` snapshot, resolves the KEK via\n    the named KMS (cached by the `kek_cache` TTL), and uses that.\n\nAttributes:\n    index_name (str): The name/identifier of the index.\n    index_key (str, optional): 32-byte encryption key as hex string.\n        Required for SDK-supplied indexes (envelope `provider=\"none\"`);\n        must be omitted for KMS-backed indexes."
             },
             "IndexTrainingStatusResponseModel": {
                 "properties": {
@@ -1944,7 +1975,7 @@
                     "retrain_threshold"
                 ],
                 "title": "IndexTrainingStatusResponseModel",
-                "description": "Response model for retrieving the training status of indexes.\n\nAttributes:\n    training_indexes (List[str]): List of index names currently being trained or queued.\n    retrain_threshold (int): The multiplier used for the retraining threshold.\n    currently_training (Optional[str]): Name of the index currently being trained.\n    queued_indexes (List[str]): List of indexes queued for training.\n    worker_running (bool): Whether the training worker thread is running.\n    worker_pid (int): Deprecated - kept for backward compatibility with SDK.\n    global_training (Dict[str, Any]): Deprecated - kept for backward compatibility with SDK."
+                "description": "Response model for retrieving the training status of indexes.\n\nAttributes:\n    training_indexes (List[str]): List of index names currently being trained or queued.\n    retrain_threshold (int): Vector-count floor before the first training (was the\n        retrain multiplier; field name kept stable for SDK compatibility).\n    currently_training (Optional[str]): Name of the index currently being trained.\n    queued_indexes (List[str]): List of indexes queued for training.\n    worker_running (bool): Whether the training worker thread is running.\n    worker_pid (int): Deprecated - kept for backward compatibility with SDK.\n    global_training (Dict[str, Any]): Deprecated - kept for backward compatibility with SDK."
             },
             "ListIDsRequest": {
                 "properties": {
@@ -2012,6 +2043,24 @@
                 "title": "ListUsersResponse",
                 "description": "Response model for listing an index's users.\n\nAttributes:\n    users (List[UserInfo]): The users scoped to the index."
             },
+            "MetadataFieldPolicy": {
+                "properties": {
+                    "filterable": {
+                        "type": "boolean",
+                        "title": "Filterable",
+                        "default": true
+                    },
+                    "pattern": {
+                        "type": "boolean",
+                        "title": "Pattern",
+                        "default": false
+                    }
+                },
+                "additionalProperties": false,
+                "type": "object",
+                "title": "MetadataFieldPolicy",
+                "description": "Per-field metadata indexing policy (one entry of `metadata_schema`).\n\nMetadata itself stays schemaless \u2014 this is indexing policy, not\nvalidation.  Fields omitted from `metadata_schema` inherit the\nindex-everything default.\n\nAttributes:\n    filterable: Build inverted-index postings for the field, so\n        filters on it resolve from the index (pre-filter).  When\n        `false`, the field is still stored and still filterable, but\n        a filter referencing it forces the dense forward-blob\n        post-filter path \u2014 cheaper writes, slower filtered queries.\n    pattern: Additionally build the field's regex dictionary, which\n        makes `$regex` / `$contains` resolvable from the index.\n        Requires `filterable=true`."
+            },
             "QueryRequest": {
                 "properties": {
                     "index_name": {
@@ -2078,17 +2127,6 @@
                         ],
                         "title": "N Probes"
                     },
-                    "greedy": {
-                        "anyOf": [
-                            {
-                                "type": "boolean"
-                            },
-                            {
-                                "type": "null"
-                            }
-                        ],
-                        "title": "Greedy"
-                    },
                     "rerank_mult": {
                         "anyOf": [
                             {
@@ -2099,6 +2137,17 @@
                             }
                         ],
                         "title": "Rerank Mult"
+                    },
+                    "greedy": {
+                        "anyOf": [
+                            {
+                                "type": "boolean"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Greedy"
                     },
                     "filters": {
                         "anyOf": [
@@ -2111,7 +2160,7 @@
                             }
                         ],
                         "title": "Filters",
-                        "default": {}
+                        "description": "Metadata filters as a JSON object. Operators: `$eq`, `$ne`, `$in`, `$nin`, `$exists`, `$gt`, `$gte`, `$lt`, `$lte`, `$regex`, `$contains`, combined with `$and` / `$or` / `$nor` / `$not`. Filtering works on any metadata field; the index's `metadata_schema` only decides how a filter is resolved \u2014 fields marked `filterable` (the default) are answered from the inverted index, and `$regex` / `$contains` are answered from the regex dictionary on `pattern` fields. Anything else falls back to a post-filter over the decrypted metadata, which is correct but slower. Dates have no native type: store and filter them as epoch milliseconds."
                     },
                     "include": {
                         "items": {
@@ -2127,7 +2176,7 @@
                     "index_name"
                 ],
                 "title": "QueryRequest",
-                "description": "Request model for performing a similarity search in the encrypted index.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    query_vectors (Optional[List[float]]): The vector used for the similarity search.\n    query_contents (Optional[str]): Text-based content used for semantic search.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.\n    filters (Optional[Dict[str, Any]]): JSON-like dictionary specifying metadata filters. Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned)."
+                "description": "Request model for performing a similarity search in the encrypted index.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    query_vectors (Optional[List[float]]): The vector used for the similarity search.\n    query_contents (Optional[str]): Text-based content used for semantic search.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.\n    filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like\n        dictionary (see `FILTERS_DESCRIPTION` for the operator set).\n        Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned)."
             },
             "QueryResponse": {
                 "properties": {
