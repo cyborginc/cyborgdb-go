@@ -23,6 +23,7 @@ var _ MappedNullable = &QueryResultItem{}
 type QueryResultItem struct {
 	Id string `json:"id"`
 	Distance NullableFloat32 `json:"distance,omitempty"`
+	// Arbitrary JSON object stored alongside the vector. Schemaless — the index's `metadata_schema` governs how fields are indexed, not what may be stored. Nested objects are addressable by dot-path in filters (`loc.city`); dates have no native type, store them as epoch millis.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 	Vector []float32 `json:"vector,omitempty"`
 }
