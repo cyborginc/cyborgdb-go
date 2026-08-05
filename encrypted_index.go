@@ -241,6 +241,28 @@ func (e *EncryptedIndex) NLists(ctx context.Context) (int32, error) {
 	return resp.GetNLists(), nil
 }
 
+// MetadataSchema returns the per-field metadata indexing policy recorded at
+// create time, keyed by field name. Empty when the index uses the default
+// index-everything posture, or when the service predates the feature.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//
+// Returns:
+//   - map[string]MetadataFieldPolicy: The recorded policy, never nil
+//   - error: Any error encountered during the operation
+func (e *EncryptedIndex) MetadataSchema(ctx context.Context) (map[string]MetadataFieldPolicy, error) {
+	resp, err := describeIndex(ctx, e.client, e.indexName, e.indexKeyField())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get index metadata_schema: %w", err)
+	}
+	schema := resp.GetMetadataSchema()
+	if schema == nil {
+		schema = map[string]MetadataFieldPolicy{}
+	}
+	return schema, nil
+}
+
 // CreateUser mints a user API key scoped to this index.
 //
 // permissions must be a non-empty subset of {"read", "write"}. The grant is
@@ -714,6 +736,59 @@ func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 //			fmt.Printf("Vector ID: %s\n", id)
 //		}
 //	}
+//
+// QueryMetadata finds items by metadata alone — no query vector, no distances.
+//
+// The filter is resolved entirely from the encrypted metadata index, so this
+// works on untrained indexes and never decrypts vectors. It is also the one
+// read path where the index's per-field MetadataSchema is enforced instead of
+// merely steering performance: $regex/$contains need a pattern field, and a
+// Filterable=false field cannot be filtered on. Both return an error — run the
+// same filter through Query with a vector if you need those.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - params: Filters, plus optional TopK / OrderBy / Ascending
+//
+// Returns:
+//   - *QueryMetadataResponse: Matching IDs and their count
+//   - error: Any error encountered, including a filter the index cannot resolve
+//
+// Example:
+//
+//	res, err := index.QueryMetadata(ctx, cyborgdb.QueryMetadataParams{
+//		Filters:   map[string]interface{}{"title": map[string]interface{}{"$regex": "^intro"}},
+//		OrderBy:   "rank",
+//		Ascending: true,
+//		TopK:      10,
+//	})
+func (e *EncryptedIndex) QueryMetadata(ctx context.Context, params QueryMetadataParams) (*QueryMetadataResponse, error) {
+	filters := params.Filters
+	if filters == nil {
+		filters = map[string]interface{}{}
+	}
+
+	req := internal.QueryMetadataRequest{
+		IndexName: e.indexName,
+		IndexKey:  e.indexKeyField(),
+		Filters:   filters,
+		Ascending: &params.Ascending,
+	}
+	// TopK and OrderBy are optional on the wire; sending their zero values
+	// would mean "return nothing" and "sort by the empty field name".
+	if params.TopK > 0 {
+		req.TopK = *internal.NewNullableInt32(&params.TopK)
+	}
+	if params.OrderBy != "" {
+		req.OrderBy = *internal.NewNullableString(&params.OrderBy)
+	}
+
+	result, _, err := e.client.APIClient.DefaultAPI.QueryMetadataV1VectorsQueryMetadataPost(ctx).
+		QueryMetadataRequest(req).
+		Execute()
+	return result, err
+}
+
 func (e *EncryptedIndex) ListIDs(ctx context.Context) (*ListIDsResponse, error) {
 	req := internal.ListIDsRequest{
 		IndexName: e.indexName,

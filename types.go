@@ -51,6 +51,31 @@ type QueryResultItem = internal.QueryResultItem
 // ListIDsResponse represents the response from ListIDs operations.
 type ListIDsResponse = internal.ListIDsResponse
 
+// QueryMetadataResponse represents the response from QueryMetadata operations:
+// the matching item IDs and their count.
+type QueryMetadataResponse = internal.QueryMetadataResponse
+
+// QueryMetadataParams configures a metadata-only query.
+//
+// Filters resolve entirely from the encrypted metadata index — there is no
+// post-filter stage — so the index's MetadataSchema is enforced here rather
+// than being the performance hint it is on Query: $regex/$contains require a
+// pattern field, and a field created with Filterable=false cannot be filtered
+// on at all. Both come back as an error; use Query with a vector instead.
+type QueryMetadataParams struct {
+	// Filters is a MongoDB-style filter; nil or empty matches everything.
+	Filters map[string]interface{}
+	// TopK caps the IDs returned, applied AFTER OrderBy. Zero returns all.
+	TopK int32
+	// OrderBy sorts matches by a metadata field, post-filter. Empty leaves
+	// the result unordered.
+	OrderBy string
+	// Ascending sets the sort direction when OrderBy is set. The zero value
+	// is false, so use QueryMetadataParams{OrderBy: f, Ascending: true} for
+	// ascending order; it is ignored when OrderBy is empty.
+	Ascending bool
+}
+
 // Storage precision constants for the on-disk rerank-vector dtype.
 const (
 	// StoragePrecisionFloat32 stores rerank vectors as 32-bit floats (default).
@@ -102,7 +127,24 @@ type CreateIndexParams struct {
 	// StoragePrecision selects the on-disk rerank-vector dtype.
 	// Use StoragePrecisionFloat32 (default) or StoragePrecisionFloat16.
 	StoragePrecision *string `json:"storage_precision,omitempty"`
+
+	// MetadataSchema is the per-field metadata indexing policy, fixed at
+	// create time and immutable. Fields left out are filterable (opt-out
+	// posture); Pattern requires Filterable. On Query this only decides how a
+	// filter resolves — index vs. post-filter, same rows either way — but
+	// QueryMetadata enforces it.
+	//
+	//	MetadataSchema: map[string]cyborgdb.MetadataFieldPolicy{
+	//		"title": {Filterable: ptr(true), Pattern: ptr(true)},
+	//	}
+	MetadataSchema map[string]MetadataFieldPolicy `json:"metadata_schema,omitempty"`
 }
+
+// MetadataFieldPolicy is one field's entry in a CreateIndexParams.MetadataSchema:
+// Filterable builds inverted-index postings, Pattern additionally builds the
+// regex dictionary that $regex / $contains need. Both default to the shipped
+// posture when nil (filterable, not pattern).
+type MetadataFieldPolicy = internal.MetadataFieldPolicy
 
 // TrainParams defines the parameters for training an encrypted vector index.
 //

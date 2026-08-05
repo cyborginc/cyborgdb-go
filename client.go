@@ -195,6 +195,10 @@ func (c *Client) CreateIndex(
 		req.StoragePrecision = *internal.NewNullableString(params.StoragePrecision)
 	}
 
+	if params.MetadataSchema != nil {
+		req.MetadataSchema = params.MetadataSchema
+	}
+
 	_, _, err = c.internal.APIClient.DefaultAPI.CreateIndexV1IndexesCreatePost(ctx).
 		CreateIndexRequest(req).
 		Execute()

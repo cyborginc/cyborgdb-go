@@ -790,6 +790,80 @@
                 ]
             }
         },
+        "/v1/vectors/query_metadata": {
+            "post": {
+                "summary": "Query an Encrypted Index by Metadata Only",
+                "description": "Find items by metadata alone \u2014 no query vector, no distances.\n\nResolves the filter entirely from the encrypted metadata index and returns\nthe matching item IDs. Works on untrained indexes.\n\nBecause there is no post-filter stage to fall back on, the index's\n`metadata_schema` is enforced here: `$regex` / `$contains` need a `pattern`\nfield, and a `filterable: false` field cannot be filtered on. Both come back\nas 400 with the reason. `/query` with a vector has no such restriction.",
+                "operationId": "query_metadata_v1_vectors_query_metadata_post",
+                "requestBody": {
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/QueryMetadataRequest"
+                            }
+                        }
+                    },
+                    "required": true
+                },
+                "responses": {
+                    "200": {
+                        "description": "Successful response",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/QueryMetadataResponse"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Permission denied from license issue",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponseModel"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Unexpected server error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponseModel"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Filter references a field the metadata index cannot resolve \u2014 a `$regex`/`$contains` on a non-`pattern` field, a `filterable: false` field, or an unsupported operator",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ErrorResponseModel"
+                                }
+                            }
+                        }
+                    },
+                    "422": {
+                        "description": "Validation Error",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/HTTPValidationError"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "APIKeyHeader": []
+                    }
+                ]
+            }
+        },
         "/v1/vectors/list_ids": {
             "post": {
                 "summary": "List all IDs in an index",
@@ -1785,7 +1859,8 @@
                                 "type": "null"
                             }
                         ],
-                        "title": "Metadata"
+                        "title": "Metadata",
+                        "description": "Arbitrary JSON object stored alongside the vector. Schemaless \u2014 the index's `metadata_schema` governs how fields are indexed, not what may be stored. Nested objects are addressable by dot-path in filters (`loc.city`); dates have no native type, store them as epoch millis."
                     },
                     "contents": {
                         "anyOf": [
@@ -2061,6 +2136,98 @@
                 "title": "MetadataFieldPolicy",
                 "description": "Per-field metadata indexing policy (one entry of `metadata_schema`).\n\nMetadata itself stays schemaless \u2014 this is indexing policy, not\nvalidation.  Fields omitted from `metadata_schema` inherit the\nindex-everything default.\n\nAttributes:\n    filterable: Build inverted-index postings for the field, so\n        filters on it resolve from the index (pre-filter).  When\n        `false`, the field is still stored and still filterable, but\n        a filter referencing it forces the dense forward-blob\n        post-filter path \u2014 cheaper writes, slower filtered queries.\n    pattern: Additionally build the field's regex dictionary, which\n        makes `$regex` / `$contains` resolvable from the index.\n        Requires `filterable=true`."
             },
+            "QueryMetadataRequest": {
+                "properties": {
+                    "index_name": {
+                        "type": "string",
+                        "title": "Index Name",
+                        "description": "ID name"
+                    },
+                    "index_key": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Index Key",
+                        "description": "32-byte encryption key as hex string.  Required for SDK-supplied indexes; must be omitted for KMS-backed indexes (the service resolves the KEK via the index's KMSBlob)."
+                    },
+                    "filters": {
+                        "anyOf": [
+                            {
+                                "additionalProperties": true,
+                                "type": "object"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Filters",
+                        "description": "Metadata filters as a JSON object; empty matches everything. Same operators as `/query` EXCEPT `$type`, and with one important difference: this endpoint resolves the filter entirely from the metadata index, with no post-filter fallback, so the index's `metadata_schema` is enforced. `$regex` / `$contains` require a `pattern` field, and a field declared `filterable: false` cannot be filtered on at all \u2014 both raise 400. Use `/query` with a vector for those. Nested dot-paths (`loc.city`) are supported."
+                    },
+                    "top_k": {
+                        "anyOf": [
+                            {
+                                "type": "integer"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Top K",
+                        "description": "Cap on the number of ids returned; omit for all matches. Applied after `order_by`, so it yields the first N of the sorted result."
+                    },
+                    "order_by": {
+                        "anyOf": [
+                            {
+                                "type": "string"
+                            },
+                            {
+                                "type": "null"
+                            }
+                        ],
+                        "title": "Order By",
+                        "description": "Metadata field to sort matches by, applied after filtering. Unordered when omitted. Items missing the field, or holding a non-scalar, sort last."
+                    },
+                    "ascending": {
+                        "type": "boolean",
+                        "title": "Ascending",
+                        "description": "Sort direction when `order_by` is set.",
+                        "default": true
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "index_name"
+                ],
+                "title": "QueryMetadataRequest",
+                "description": "Request model for a metadata-only query (no query vector).\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like\n        dictionary. Unlike `/query`, every leaf must be resolvable from\n        the metadata index \u2014 see the field description.\n    top_k (Optional[int]): Cap on the number of ids returned. `None`\n        returns every match. Applied AFTER `order_by`.\n    order_by (Optional[str]): Metadata field to sort the matches by\n        (post-filter). Unordered when omitted.\n    ascending (bool): Sort direction when `order_by` is set."
+            },
+            "QueryMetadataResponse": {
+                "properties": {
+                    "ids": {
+                        "items": {
+                            "type": "string"
+                        },
+                        "type": "array",
+                        "title": "Ids"
+                    },
+                    "count": {
+                        "type": "integer",
+                        "title": "Count"
+                    }
+                },
+                "type": "object",
+                "required": [
+                    "ids",
+                    "count"
+                ],
+                "title": "QueryMetadataResponse",
+                "description": "Response model for a metadata-only query.\n\nAttributes:\n    ids (List[str]): Matching item IDs \u2014 ordered by `order_by` when it was\n        set, otherwise an unordered subset.\n    count (int): Number of IDs returned."
+            },
             "QueryRequest": {
                 "properties": {
                     "index_name": {
@@ -2235,7 +2402,8 @@
                                 "type": "null"
                             }
                         ],
-                        "title": "Metadata"
+                        "title": "Metadata",
+                        "description": "Arbitrary JSON object stored alongside the vector. Schemaless \u2014 the index's `metadata_schema` governs how fields are indexed, not what may be stored. Nested objects are addressable by dot-path in filters (`loc.city`); dates have no native type, store them as epoch millis."
                     },
                     "vector": {
                         "anyOf": [
@@ -2483,7 +2651,8 @@
                                 "type": "null"
                             }
                         ],
-                        "title": "Metadata"
+                        "title": "Metadata",
+                        "description": "Arbitrary JSON object stored alongside the vector. Schemaless \u2014 the index's `metadata_schema` governs how fields are indexed, not what may be stored. Nested objects are addressable by dot-path in filters (`loc.city`); dates have no native type, store them as epoch millis."
                     }
                 },
                 "type": "object",
