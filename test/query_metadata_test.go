@@ -86,7 +86,7 @@ func pick(cond bool, a, b string) string {
 }
 
 func evenIDs() []string {
-	var out []string
+	out := make([]string, 0, (qmCount+1)/2)
 	for i := 0; i < qmCount; i += 2 {
 		out = append(out, idFor(i))
 	}
@@ -94,7 +94,7 @@ func evenIDs() []string {
 }
 
 func oddIDs() []string {
-	var out []string
+	out := make([]string, 0, qmCount/2)
 	for i := 1; i < qmCount; i += 2 {
 		out = append(out, idFor(i))
 	}
@@ -143,8 +143,9 @@ func queryIDs(t *testing.T, index *cyborgdb.EncryptedIndex, filters map[string]i
 	if err != nil {
 		t.Fatalf("Query(%v) failed: %v", filters, err)
 	}
-	var ids []string
-	for _, item := range getQueryResultItems(&resp.Results) {
+	items := getQueryResultItems(&resp.Results)
+	ids := make([]string, 0, len(items))
+	for _, item := range items {
 		ids = append(ids, item.Id)
 	}
 	return ids
@@ -219,7 +220,7 @@ func TestQueryMetadataOrderingAndPaging(t *testing.T) {
 	asc := queryMeta(t, index, cyborgdb.QueryMetadataParams{
 		Filters: allRanks, OrderBy: "rank", Ascending: true,
 	})
-	want := []string{}
+	want := make([]string, 0, qmCount)
 	for i := 0; i < qmCount; i++ {
 		want = append(want, idFor(i))
 	}
