@@ -199,6 +199,20 @@ func (c *Client) CreateIndex(
 		req.MetadataSchema = params.MetadataSchema
 	}
 
+	if params.TextFields != nil {
+		req.TextFields = params.TextFields
+	}
+
+	if params.Bm25K1 != nil {
+		k1 := float32(*params.Bm25K1)
+		req.Bm25K1 = *internal.NewNullableFloat32(&k1)
+	}
+
+	if params.Bm25B != nil {
+		b := float32(*params.Bm25B)
+		req.Bm25B = *internal.NewNullableFloat32(&b)
+	}
+
 	_, _, err = c.internal.APIClient.DefaultAPI.CreateIndexV1IndexesCreatePost(ctx).
 		CreateIndexRequest(req).
 		Execute()
