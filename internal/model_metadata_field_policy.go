@@ -17,10 +17,11 @@ import (
 // checks if the MetadataFieldPolicy type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &MetadataFieldPolicy{}
 
-// MetadataFieldPolicy Per-field metadata indexing policy (one entry of `metadata_schema`).  Metadata itself stays schemaless — this is indexing policy, not validation.  Fields omitted from `metadata_schema` inherit the index-everything default.  Attributes:     filterable: Build inverted-index postings for the field, so         filters on it resolve from the index (pre-filter).  When         `false`, the field is still stored and still filterable, but         a filter referencing it forces the dense forward-blob         post-filter path — cheaper writes, slower filtered queries.     pattern: Additionally build the field's regex dictionary, which         makes `$regex` / `$contains` resolvable from the index.         Requires `filterable=true`.
+// MetadataFieldPolicy Per-field metadata indexing policy (one entry of `metadata_schema`).  Metadata itself stays schemaless — this is indexing policy, not validation.  Fields omitted from `metadata_schema` inherit the index-everything default.  Attributes:     filterable: Build inverted-index postings for the field, so         filters on it resolve from the index (pre-filter).  When         `false`, the field is still stored and still filterable, but         a filter referencing it forces the dense forward-blob         post-filter path — cheaper writes, slower filtered queries.     pattern: Additionally build the field's regex dictionary, which         makes `$regex` / `$contains` resolvable from the index.         Requires `filterable=true`.     full_text: Route the field's string value through the BM25         analyzer instead of exact-match indexing.  This is what makes         the field searchable by `query_metadata(text=...)` and hybrid         `query(text=...)`.  A field is either analyzed or exact-match         indexed, so `full_text=true` is incompatible with both         `pattern=true` and an explicit `filterable=true`, and implies         `filterable=false`.
 type MetadataFieldPolicy struct {
 	Filterable *bool `json:"filterable,omitempty"`
 	Pattern *bool `json:"pattern,omitempty"`
+	FullText *bool `json:"full_text,omitempty"`
 }
 
 // NewMetadataFieldPolicy instantiates a new MetadataFieldPolicy object
@@ -33,6 +34,8 @@ func NewMetadataFieldPolicy() *MetadataFieldPolicy {
 	this.Filterable = &filterable
 	var pattern bool = false
 	this.Pattern = &pattern
+	var fullText bool = false
+	this.FullText = &fullText
 	return &this
 }
 
@@ -45,6 +48,8 @@ func NewMetadataFieldPolicyWithDefaults() *MetadataFieldPolicy {
 	this.Filterable = &filterable
 	var pattern bool = false
 	this.Pattern = &pattern
+	var fullText bool = false
+	this.FullText = &fullText
 	return &this
 }
 
@@ -112,6 +117,38 @@ func (o *MetadataFieldPolicy) SetPattern(v bool) {
 	o.Pattern = &v
 }
 
+// GetFullText returns the FullText field value if set, zero value otherwise.
+func (o *MetadataFieldPolicy) GetFullText() bool {
+	if o == nil || IsNil(o.FullText) {
+		var ret bool
+		return ret
+	}
+	return *o.FullText
+}
+
+// GetFullTextOk returns a tuple with the FullText field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *MetadataFieldPolicy) GetFullTextOk() (*bool, bool) {
+	if o == nil || IsNil(o.FullText) {
+		return nil, false
+	}
+	return o.FullText, true
+}
+
+// HasFullText returns a boolean if a field has been set.
+func (o *MetadataFieldPolicy) HasFullText() bool {
+	if o != nil && !IsNil(o.FullText) {
+		return true
+	}
+
+	return false
+}
+
+// SetFullText gets a reference to the given bool and assigns it to the FullText field.
+func (o *MetadataFieldPolicy) SetFullText(v bool) {
+	o.FullText = &v
+}
+
 func (o MetadataFieldPolicy) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -127,6 +164,9 @@ func (o MetadataFieldPolicy) ToMap() (map[string]interface{}, error) {
 	}
 	if !IsNil(o.Pattern) {
 		toSerialize["pattern"] = o.Pattern
+	}
+	if !IsNil(o.FullText) {
+		toSerialize["full_text"] = o.FullText
 	}
 	return toSerialize, nil
 }

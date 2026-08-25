@@ -129,6 +129,46 @@ func nullableQueryOpts(topK int32, nProbes *int32, greedy *bool) (internal.Nulla
 	return nTopK, nNProbes, nGreedy
 }
 
+// hybridNullables holds the BM25/hybrid text-leg knobs converted into the
+// Nullable/slice wire types shared by QueryRequest, BatchQueryRequest, and
+// BinaryQueryRequest. Each unset knob stays at its Nullable zero value, which
+// serializes as "field omitted" — so an index without full-text fields keeps
+// seeing text-free requests.
+type hybridNullables struct {
+	Text             internal.NullableString
+	TextFields       []string
+	TextFieldWeights []float32
+	RequireAllTerms  internal.NullableBool
+	Alpha            internal.NullableFloat32
+	RrfK             internal.NullableFloat32
+	WindowMult       internal.NullableInt32
+}
+
+// buildHybrid converts the optional hybrid text-leg knobs (shared by
+// QueryParams and BinaryQueryParams) into their wire form. Alpha/RrfK/Bm25 are
+// float64 in the public API for ergonomics but float32 on the wire.
+func buildHybrid(text *string, textFields []string, textFieldWeights []float32, requireAllTerms *bool, alpha, rrfK *float64, windowMult *int32) hybridNullables {
+	h := hybridNullables{TextFields: textFields, TextFieldWeights: textFieldWeights}
+	if text != nil {
+		h.Text = *internal.NewNullableString(text)
+	}
+	if requireAllTerms != nil {
+		h.RequireAllTerms = *internal.NewNullableBool(requireAllTerms)
+	}
+	if alpha != nil {
+		a := float32(*alpha)
+		h.Alpha = *internal.NewNullableFloat32(&a)
+	}
+	if rrfK != nil {
+		r := float32(*rrfK)
+		h.RrfK = *internal.NewNullableFloat32(&r)
+	}
+	if windowMult != nil {
+		h.WindowMult = *internal.NewNullableInt32(windowMult)
+	}
+	return h
+}
+
 // encodeVectorBatch base64-encodes a batch of equal-length vectors and returns
 // the encoding together with the shared dimension. Ragged batches yield
 // ErrInconsistentDimension (from vectorsToBase64).
@@ -261,6 +301,32 @@ func (e *EncryptedIndex) MetadataSchema(ctx context.Context) (map[string]Metadat
 		schema = map[string]MetadataFieldPolicy{}
 	}
 	return schema, nil
+}
+
+// BM25 returns the BM25 scorer config the index reports back — the K1/B tuning
+// parameters and the AnalyzerVersion — or nil when the index has no full-text
+// field. BM25 is opt-in and derived: an index with at least one FullText field
+// (see CreateIndexParams.TextFields) reports a config; one with none reports
+// nil. Mirrors the Python SDK's bm25 property.
+//
+// Each call queries the describe endpoint for live state.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//
+// Returns:
+//   - *BM25Config: The scorer config, or nil when BM25 is not configured
+//   - error: Any error encountered during the lookup
+func (e *EncryptedIndex) BM25(ctx context.Context) (*BM25Config, error) {
+	resp, err := describeIndex(ctx, e.client, e.indexName, e.indexKeyField())
+	if err != nil {
+		return nil, fmt.Errorf("failed to get index bm25 config: %w", err)
+	}
+	config, ok := resp.GetBm25Ok()
+	if !ok || config == nil {
+		return nil, nil
+	}
+	return config, nil
 }
 
 // CreateUser mints a user API key scoped to this index.
@@ -496,6 +562,8 @@ func (e *EncryptedIndex) Query(ctx context.Context, input QueryInput) (*QueryRes
 
 // queryParams handles standard format queries.
 func (e *EncryptedIndex) queryParams(ctx context.Context, params QueryParams) (*QueryResponse, error) {
+	h := buildHybrid(params.Text, params.TextFields, params.TextFieldWeights, params.RequireAllTerms, params.Alpha, params.RrfK, params.WindowMult)
+
 	// Handle batch queries using BatchQueryRequest (non-binary format)
 	// For binary format with large batches, use QueryBinary() directly
 	if len(params.BatchQueryVectors) > 0 {
@@ -511,6 +579,8 @@ func (e *EncryptedIndex) queryParams(ctx context.Context, params QueryParams) (*
 		if params.RerankMult != nil {
 			batchReq.RerankMult = *internal.NewNullableInt32(params.RerankMult)
 		}
+		batchReq.Text, batchReq.TextFields, batchReq.TextFieldWeights = h.Text, h.TextFields, h.TextFieldWeights
+		batchReq.RequireAllTerms, batchReq.Alpha, batchReq.RrfK, batchReq.WindowMult = h.RequireAllTerms, h.Alpha, h.RrfK, h.WindowMult
 
 		request := internal.Request{
 			BatchQueryRequest: &batchReq,
@@ -542,6 +612,8 @@ func (e *EncryptedIndex) queryParams(ctx context.Context, params QueryParams) (*
 	if params.RerankMult != nil {
 		req.RerankMult = *internal.NewNullableInt32(params.RerankMult)
 	}
+	req.Text, req.TextFields, req.TextFieldWeights = h.Text, h.TextFields, h.TextFieldWeights
+	req.RequireAllTerms, req.Alpha, req.RrfK, req.WindowMult = h.RequireAllTerms, h.Alpha, h.RrfK, h.WindowMult
 
 	request := internal.Request{
 		QueryRequest: &req,
@@ -746,12 +818,18 @@ func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 // Filterable=false field cannot be filtered on. Both return an error — run the
 // same filter through Query with a vector if you need those.
 //
+// Passing params.Text adds a BM25 full-text leg (requires an index with at
+// least one full-text field). Results are then ranked by relevance and each
+// row in the response's Results carries a Score, in descending order; Filters
+// given alongside act as a pre-filter, and OrderBy is not supported with Text.
+//
 // Parameters:
 //   - ctx: Context for cancellation and timeouts
-//   - params: Filters, plus optional TopK / OrderBy / Ascending
+//   - params: Filters, plus optional TopK / OrderBy / Ascending, or the Text
+//     (BM25) knobs
 //
 // Returns:
-//   - *QueryMetadataResponse: Matching IDs and their count
+//   - *QueryMetadataResponse: Matching items (Results), their IDs, and count
 //   - error: Any error encountered, including a filter the index cannot resolve
 //
 // Example:
@@ -780,7 +858,21 @@ func (e *EncryptedIndex) QueryMetadata(ctx context.Context, params QueryMetadata
 		req.TopK = *internal.NewNullableInt32(&params.TopK)
 	}
 	if params.OrderBy != "" {
-		req.OrderBy = *internal.NewNullableString(&params.OrderBy)
+		// order_by is an anyOf(str, {field: 1|-1}); a plain field name is the
+		// string arm, with direction carried by Ascending.
+		orderBy := params.OrderBy
+		req.OrderBy = *internal.NewNullableOrderBy(&internal.OrderBy{String: &orderBy})
+	}
+
+	// BM25 full-text leg: ranks matches by relevance and populates a Score on
+	// each returned row. Unset knobs stay at their Nullable zero value (omitted).
+	if params.Text != nil {
+		req.Text = *internal.NewNullableString(params.Text)
+	}
+	req.TextFields = params.TextFields
+	req.TextFieldWeights = params.TextFieldWeights
+	if params.RequireAllTerms != nil {
+		req.RequireAllTerms = *internal.NewNullableBool(params.RequireAllTerms)
 	}
 
 	result, _, err := e.client.APIClient.DefaultAPI.QueryMetadataV1VectorsQueryMetadataPost(ctx).
@@ -983,6 +1075,9 @@ func (e *EncryptedIndex) queryBinary(ctx context.Context, params BinaryQueryPara
 	}
 
 	req.TopK, req.NProbes, req.Greedy = nullableQueryOpts(params.TopK, params.NProbes, params.Greedy)
+	h := buildHybrid(params.Text, params.TextFields, params.TextFieldWeights, params.RequireAllTerms, params.Alpha, params.RrfK, params.WindowMult)
+	req.Text, req.TextFields, req.TextFieldWeights = h.Text, h.TextFields, h.TextFieldWeights
+	req.RequireAllTerms, req.Alpha, req.RrfK, req.WindowMult = h.RequireAllTerms, h.Alpha, h.RrfK, h.WindowMult
 
 	result, _, err := e.client.APIClient.DefaultAPI.QueryVectorsBinaryV1VectorsQueryBinaryPost(ctx).
 		BinaryQueryRequest(req).
