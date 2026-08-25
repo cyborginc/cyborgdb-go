@@ -360,6 +360,9 @@ func TestBM25HybridQueryAppliesMetadataFilter(t *testing.T) {
 		t.Fatalf("Query failed: %v", err)
 	}
 	items := getQueryResultItems(&resp.Results)
+	if len(items) == 0 {
+		t.Fatal("expected the food doc d3 to survive the pre-filter, got no rows")
+	}
 	for _, item := range items {
 		if item.Id != "d3" {
 			t.Errorf("only food doc d3 may appear, got %s", item.Id)
@@ -415,6 +418,46 @@ func TestBM25HybridQueryVectorCarriesScore(t *testing.T) {
 			t.Errorf("scores not descending: %f > %f", item.GetScore(), prev)
 		}
 		prev = item.GetScore()
+	}
+}
+
+// The batch path forwards the text leg too (encrypted_index.go's
+// BatchQueryRequest branch): every query in the batch comes back hybrid-scored,
+// not distance-ranked.
+func TestBM25BatchHybridQueryCarriesScore(t *testing.T) {
+	index := bm25Index(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	resp, err := index.Query(ctx, cyborgdb.QueryParams{
+		BatchQueryVectors: generateRandomVectors(2, bm25Dim),
+		Text:              strPtr("quantum computing"),
+		TopK:              6,
+	})
+	if err != nil {
+		t.Fatalf("Query failed: %v", err)
+	}
+	batches := getBatchQueryResults(&resp.Results)
+	if len(batches) != 2 {
+		t.Fatalf("expected 2 result sets for a 2-vector batch, got %d", len(batches))
+	}
+	for b, items := range batches {
+		if len(items) == 0 {
+			t.Fatalf("batch %d: expected hybrid results", b)
+		}
+		// Hybrid rows are fused-scored, not distance-ranked, and non-increasing.
+		prev := float32(0)
+		for i, item := range items {
+			if !item.HasScore() {
+				t.Errorf("batch %d row %s missing score", b, item.Id)
+			}
+			if item.HasDistance() {
+				t.Errorf("batch %d hybrid row %s should not carry a distance", b, item.Id)
+			}
+			if i > 0 && item.GetScore() > prev {
+				t.Errorf("batch %d scores not descending: %f > %f", b, item.GetScore(), prev)
+			}
+			prev = item.GetScore()
+		}
 	}
 }
 
