@@ -114,11 +114,22 @@ type QueryMetadataParams struct {
 }
 
 // Storage precision constants for the on-disk rerank-vector dtype.
+//
+// The float tiers store rerank vectors as IEEE floats. The TurboQuant ("tq")
+// tiers quantize each dimension to the given number of bits, trading a small
+// recall/latency cost for large storage savings. The precision is chosen at
+// index creation and is immutable.
 const (
 	// StoragePrecisionFloat32 stores rerank vectors as 32-bit floats (default).
 	StoragePrecisionFloat32 = "float32"
 	// StoragePrecisionFloat16 stores rerank vectors as 16-bit floats, halving disk usage.
 	StoragePrecisionFloat16 = "float16"
+	// StoragePrecisionTQ8 uses TurboQuant with 8 bits per dimension.
+	StoragePrecisionTQ8 = "tq8"
+	// StoragePrecisionTQ6 uses TurboQuant with 6 bits per dimension.
+	StoragePrecisionTQ6 = "tq6"
+	// StoragePrecisionTQ4 uses TurboQuant with 4 bits per dimension. Requires the cosine metric.
+	StoragePrecisionTQ4 = "tq4"
 )
 
 // CreateIndexParams defines the parameters for creating a new encrypted DiskIVF index.
@@ -161,8 +172,11 @@ type CreateIndexParams struct {
 	// This is for metadata purposes and doesn't affect index behavior.
 	EmbeddingModel *string `json:"embedding_model,omitempty"`
 
-	// StoragePrecision selects the on-disk rerank-vector dtype.
-	// Use StoragePrecisionFloat32 (default) or StoragePrecisionFloat16.
+	// StoragePrecision selects the on-disk rerank-vector dtype, chosen at
+	// create time and immutable. Use StoragePrecisionFloat32 (default),
+	// StoragePrecisionFloat16, or a TurboQuant tier (StoragePrecisionTQ8,
+	// StoragePrecisionTQ6, StoragePrecisionTQ4). StoragePrecisionTQ4 requires
+	// the cosine metric.
 	StoragePrecision *string `json:"storage_precision,omitempty"`
 
 	// MetadataSchema is the per-field metadata indexing policy, fixed at
