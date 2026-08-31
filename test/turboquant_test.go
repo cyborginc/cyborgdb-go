@@ -160,8 +160,8 @@ func TestTurboQuantModel(t *testing.T) {
 // TestTurboQuantIntegration exercises each TurboQuant tier end-to-end. Skipped
 // when no CyborgDB service is reachable.
 //
-// One shared, cosine-metric corpus is built once (cosine is required by `tq4`
-// and valid for every other tier). Each tier gets its own index so a failure
+// One shared, normalized corpus is built once and reused across tiers (every
+// tier works with every metric). Each tier gets its own index so a failure
 // names the tier that broke.
 func TestTurboQuantIntegration(t *testing.T) {
 	client := newIsolatedClient(t)
@@ -180,17 +180,16 @@ func TestTurboQuantIntegration(t *testing.T) {
 		ids[i] = strconv.Itoa(i)
 	}
 
-	buildTrainedIndex := func(t *testing.T, precision string) *cyborgdb.EncryptedIndex {
+	buildTrainedIndex := func(t *testing.T, precision, metric string) *cyborgdb.EncryptedIndex {
 		t.Helper()
 		key := generateRandomKey()
-		metric := "cosine"
 		dim := int32(tqDim)
 
 		ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 		defer cancel()
 
 		index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
-			IndexName:        generateUniqueName("tq_" + precision + "_"),
+			IndexName:        generateUniqueName("tq_" + precision + "_" + metric + "_"),
 			IndexKey:         key,
 			Dimension:        &dim,
 			Metric:           &metric,
@@ -284,47 +283,30 @@ func TestTurboQuantIntegration(t *testing.T) {
 
 	t.Run("TQ12Lifecycle", func(t *testing.T) {
 		// tq12 is the least aggressive tier, so it should have the highest recall.
-		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ12)
+		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ12, "cosine")
 		assertSelfRecall(t, index, cyborgdb.StoragePrecisionTQ12, 0.9)
 	})
 
 	t.Run("TQ8Lifecycle", func(t *testing.T) {
-		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ8)
+		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ8, "cosine")
 		assertSelfRecall(t, index, cyborgdb.StoragePrecisionTQ8, 0.9)
 	})
 
 	t.Run("TQ6Lifecycle", func(t *testing.T) {
-		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ6)
+		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ6, "cosine")
 		assertSelfRecall(t, index, cyborgdb.StoragePrecisionTQ6, 0.85)
 	})
 
 	t.Run("TQ4Lifecycle", func(t *testing.T) {
-		// tq4 is the most aggressive tier and is only valid with cosine.
-		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ4)
+		// tq4 is the most aggressive tier.
+		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ4, "cosine")
 		assertSelfRecall(t, index, cyborgdb.StoragePrecisionTQ4, 0.7)
 	})
 
-	t.Run("TQ4RequiresCosineMetric", func(t *testing.T) {
-		// tq4 with a non-cosine metric must be rejected by the service.
-		ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
-		defer cancel()
-
-		key := generateRandomKey()
-		metric := "euclidean"
-		dim := int32(tqDim)
-		precision := cyborgdb.StoragePrecisionTQ4
-
-		index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
-			IndexName:        generateUniqueName("tq4_bad_"),
-			IndexKey:         key,
-			Dimension:        &dim,
-			Metric:           &metric,
-			StoragePrecision: &precision,
-		})
-		if err == nil {
-			_ = index.DeleteIndex(ctx)
-			t.Fatal("expected error creating tq4 index with euclidean metric, got nil")
-		}
+	t.Run("TQ4EuclideanLifecycle", func(t *testing.T) {
+		// tq4 works with every metric, including euclidean.
+		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ4, "euclidean")
+		assertSelfRecall(t, index, cyborgdb.StoragePrecisionTQ4, 0.7)
 	})
 }
 
