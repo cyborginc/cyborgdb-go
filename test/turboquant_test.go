@@ -1,10 +1,10 @@
 // TurboQuant storage precision: the `storage_precision` create-time knob and
-// its three quantized tiers `tq8` / `tq6` / `tq4`.
+// its four quantized tiers `tq12` / `tq8` / `tq6` / `tq4`.
 //
 // `storage_precision` picks the on-disk rerank-vector format, chosen at create
 // and immutable. Alongside the existing `float32` / `float16`, the TurboQuant
-// tiers pack 8 / 6 / 4 bits per dimension, trading a little recall and latency
-// for a large storage saving. `tq4` is only valid with the cosine metric.
+// tiers pack 12 / 8 / 6 / 4 bits per dimension, trading a little recall and
+// latency for a large storage saving. All tiers work with every metric.
 //
 // Two layers of coverage:
 //
@@ -35,8 +35,9 @@ import (
 	"github.com/cyborginc/cyborgdb-go/internal"
 )
 
-// The three quantized tiers this feature adds.
+// The four quantized tiers this feature adds.
 var turboQuantTiers = []string{
+	cyborgdb.StoragePrecisionTQ12,
 	cyborgdb.StoragePrecisionTQ8,
 	cyborgdb.StoragePrecisionTQ6,
 	cyborgdb.StoragePrecisionTQ4,
@@ -46,6 +47,7 @@ var turboQuantTiers = []string{
 var validPrecisions = []string{
 	cyborgdb.StoragePrecisionFloat32,
 	cyborgdb.StoragePrecisionFloat16,
+	cyborgdb.StoragePrecisionTQ12,
 	cyborgdb.StoragePrecisionTQ8,
 	cyborgdb.StoragePrecisionTQ6,
 	cyborgdb.StoragePrecisionTQ4,
@@ -66,6 +68,7 @@ func TestTurboQuantModel(t *testing.T) {
 		cases := map[string]string{
 			cyborgdb.StoragePrecisionFloat32: "float32",
 			cyborgdb.StoragePrecisionFloat16: "float16",
+			cyborgdb.StoragePrecisionTQ12:    "tq12",
 			cyborgdb.StoragePrecisionTQ8:     "tq8",
 			cyborgdb.StoragePrecisionTQ6:     "tq6",
 			cyborgdb.StoragePrecisionTQ4:     "tq4",
@@ -278,6 +281,12 @@ func TestTurboQuantIntegration(t *testing.T) {
 			t.Errorf("%s: self-recall %.2f below %.2f", precision, recall, minRecall)
 		}
 	}
+
+	t.Run("TQ12Lifecycle", func(t *testing.T) {
+		// tq12 is the least aggressive tier, so it should have the highest recall.
+		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ12)
+		assertSelfRecall(t, index, cyborgdb.StoragePrecisionTQ12, 0.9)
+	})
 
 	t.Run("TQ8Lifecycle", func(t *testing.T) {
 		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ8)
