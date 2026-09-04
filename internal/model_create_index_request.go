@@ -19,7 +19,7 @@ import (
 // checks if the CreateIndexRequest type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &CreateIndexRequest{}
 
-// CreateIndexRequest Request model for creating a new encrypted DiskIVF index.  Exactly one of `kms_name` / `index_key` must be supplied; supplying both is rejected with 400.  Attributes:     index_name: The name/identifier of the index.     kms_name: Name of a `kms.registry` entry in the service YAML.         When supplied (and `index_key` is omitted), the service         generates the KEK itself, wraps it under that entry's KMS,         and persists the envelope.     index_key: A 32-byte encryption key as a hex string.  When         supplied (and `kms_name` is omitted), the SDK provides the         KEK directly and the persisted envelope records         `provider=\"none\"`.     dimension (Optional[int]): Dimensionality of the vectors. Auto-detected         from the first upsert if omitted.     embedding_model (Optional[str]): Optional embedding model name.     metric (Optional[str]): Optional distance metric.     storage_precision (Optional[Literal[\"float32\", \"float16\"]]): On-disk         rerank-vector dtype. Defaults to float32 in core.     metadata_schema (Optional[Dict[str, MetadataFieldPolicy]]): Per-field         metadata indexing policy, keyed by field name (dot-path for         nested fields).  Omitted fields are filterable by default         (opt-out posture).  Fixed at create time and immutable.
+// CreateIndexRequest Request model for creating a new encrypted DiskIVF index.  Exactly one of `kms_name` / `index_key` must be supplied; supplying both is rejected with 400.  Attributes:     index_name: The name/identifier of the index.     kms_name: Name of a `kms.registry` entry in the service YAML.         When supplied (and `index_key` is omitted), the service         generates the KEK itself, wraps it under that entry's KMS,         and persists the envelope.     index_key: A 32-byte encryption key as a hex string.  When         supplied (and `kms_name` is omitted), the SDK provides the         KEK directly and the persisted envelope records         `provider=\"none\"`.     dimension (Optional[int]): Dimensionality of the vectors. Auto-detected         from the first upsert if omitted.     embedding_model (Optional[str]): Optional embedding model name.     metric (Optional[str]): Optional distance metric.     storage_precision (Optional[Literal[\"float32\", \"float16\", \"tq12\", \"tq8\", \"tq6\", \"tq4\"]]):         On-disk rerank-vector format, chosen at create and immutable.         Defaults to float32 in core. \"float16\" halves storage at a small         precision cost. The TurboQuant tiers \"tq12\"/\"tq8\"/\"tq6\"/\"tq4\"         (12/8/6/4 bits per dim) trade storage for a small recall/latency         cost, with \"tq4\" the most aggressive (~8x smaller, ~94% recall@100).         All tiers work with every metric.     metadata_schema (Optional[Dict[str, MetadataFieldPolicy]]): Per-field         metadata indexing policy, keyed by field name (dot-path for         nested fields).  Omitted fields are filterable by default         (opt-out posture).  Fixed at create time and immutable.     text_fields (Optional[List[str]]): Shorthand for marking fields         `full_text=true` in `metadata_schema`.  A field listed here is         analyzed by BM25 and becomes searchable by `query(text=...)` /         `query_metadata(text=...)`.  Cannot name a field the schema         already sets `full_text=false`.     bm25_k1 (Optional[float]): BM25 term-frequency saturation (>= 0,         default 1.2 in core).  Requires at least one full_text field.     bm25_b (Optional[float]): BM25 length-normalization strength         (in [0, 1], default 0.75 in core).  Requires at least one         full_text field.  BM25 full-text search is opt-in and derived, not flagged: an index with at least one full_text field supports the `text=...` query legs; an index with none writes no BM25 config at all.
 type CreateIndexRequest struct {
 	// ID name
 	IndexName string `json:"index_name"`
@@ -31,8 +31,14 @@ type CreateIndexRequest struct {
 	EmbeddingModel NullableString `json:"embedding_model,omitempty"`
 	Metric NullableString `json:"metric,omitempty"`
 	StoragePrecision NullableString `json:"storage_precision,omitempty"`
-	// Per-field metadata indexing policy: {\"field\": {\"filterable\": true, \"pattern\": false}}. `filterable` (default true) builds inverted-index postings so filters on the field resolve from the index; `pattern` (default false) also builds the field's regex dictionary, needed for index-resolved `$regex` / `$contains`. Fields not listed are filterable (opt-out posture). Immutable after create.
+	// Per-field metadata indexing policy: {\"field\": {\"filterable\": true, \"pattern\": false, \"full_text\": false}}. `filterable` (default true) builds inverted-index postings so filters on the field resolve from the index; `pattern` (default false) also builds the field's regex dictionary, needed for index-resolved `$regex` / `$contains`; `full_text` (default false) routes the field through the BM25 analyzer to enable full-text search (implies `filterable: false`, and is incompatible with `pattern: true`). Fields not listed are filterable (opt-out posture). Immutable after create.
 	MetadataSchema map[string]MetadataFieldPolicy `json:"metadata_schema,omitempty"`
+	// Fields to index for BM25 full-text search — shorthand for marking them `full_text: true` in `metadata_schema`. Enables `query(text=...)` and `query_metadata(text=...)`.
+	TextFields []string `json:"text_fields,omitempty"`
+	// BM25 term-frequency saturation (>= 0, default 1.2). Requires at least one full_text field.
+	Bm25K1 NullableFloat32 `json:"bm25_k1,omitempty"`
+	// BM25 length-normalization strength (in [0, 1], default 0.75). Requires at least one full_text field.
+	Bm25B NullableFloat32 `json:"bm25_b,omitempty"`
 }
 
 type _CreateIndexRequest CreateIndexRequest
@@ -364,6 +370,123 @@ func (o *CreateIndexRequest) SetMetadataSchema(v map[string]MetadataFieldPolicy)
 	o.MetadataSchema = v
 }
 
+// GetTextFields returns the TextFields field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *CreateIndexRequest) GetTextFields() []string {
+	if o == nil {
+		var ret []string
+		return ret
+	}
+	return o.TextFields
+}
+
+// GetTextFieldsOk returns a tuple with the TextFields field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *CreateIndexRequest) GetTextFieldsOk() ([]string, bool) {
+	if o == nil || IsNil(o.TextFields) {
+		return nil, false
+	}
+	return o.TextFields, true
+}
+
+// HasTextFields returns a boolean if a field has been set.
+func (o *CreateIndexRequest) HasTextFields() bool {
+	if o != nil && !IsNil(o.TextFields) {
+		return true
+	}
+
+	return false
+}
+
+// SetTextFields gets a reference to the given []string and assigns it to the TextFields field.
+func (o *CreateIndexRequest) SetTextFields(v []string) {
+	o.TextFields = v
+}
+
+// GetBm25K1 returns the Bm25K1 field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *CreateIndexRequest) GetBm25K1() float32 {
+	if o == nil || IsNil(o.Bm25K1.Get()) {
+		var ret float32
+		return ret
+	}
+	return *o.Bm25K1.Get()
+}
+
+// GetBm25K1Ok returns a tuple with the Bm25K1 field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *CreateIndexRequest) GetBm25K1Ok() (*float32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.Bm25K1.Get(), o.Bm25K1.IsSet()
+}
+
+// HasBm25K1 returns a boolean if a field has been set.
+func (o *CreateIndexRequest) HasBm25K1() bool {
+	if o != nil && o.Bm25K1.IsSet() {
+		return true
+	}
+
+	return false
+}
+
+// SetBm25K1 gets a reference to the given NullableFloat32 and assigns it to the Bm25K1 field.
+func (o *CreateIndexRequest) SetBm25K1(v float32) {
+	o.Bm25K1.Set(&v)
+}
+// SetBm25K1Nil sets the value for Bm25K1 to be an explicit nil
+func (o *CreateIndexRequest) SetBm25K1Nil() {
+	o.Bm25K1.Set(nil)
+}
+
+// UnsetBm25K1 ensures that no value is present for Bm25K1, not even an explicit nil
+func (o *CreateIndexRequest) UnsetBm25K1() {
+	o.Bm25K1.Unset()
+}
+
+// GetBm25B returns the Bm25B field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *CreateIndexRequest) GetBm25B() float32 {
+	if o == nil || IsNil(o.Bm25B.Get()) {
+		var ret float32
+		return ret
+	}
+	return *o.Bm25B.Get()
+}
+
+// GetBm25BOk returns a tuple with the Bm25B field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *CreateIndexRequest) GetBm25BOk() (*float32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.Bm25B.Get(), o.Bm25B.IsSet()
+}
+
+// HasBm25B returns a boolean if a field has been set.
+func (o *CreateIndexRequest) HasBm25B() bool {
+	if o != nil && o.Bm25B.IsSet() {
+		return true
+	}
+
+	return false
+}
+
+// SetBm25B gets a reference to the given NullableFloat32 and assigns it to the Bm25B field.
+func (o *CreateIndexRequest) SetBm25B(v float32) {
+	o.Bm25B.Set(&v)
+}
+// SetBm25BNil sets the value for Bm25B to be an explicit nil
+func (o *CreateIndexRequest) SetBm25BNil() {
+	o.Bm25B.Set(nil)
+}
+
+// UnsetBm25B ensures that no value is present for Bm25B, not even an explicit nil
+func (o *CreateIndexRequest) UnsetBm25B() {
+	o.Bm25B.Unset()
+}
+
 func (o CreateIndexRequest) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -395,6 +518,15 @@ func (o CreateIndexRequest) ToMap() (map[string]interface{}, error) {
 	}
 	if o.MetadataSchema != nil {
 		toSerialize["metadata_schema"] = o.MetadataSchema
+	}
+	if o.TextFields != nil {
+		toSerialize["text_fields"] = o.TextFields
+	}
+	if o.Bm25K1.IsSet() {
+		toSerialize["bm25_k1"] = o.Bm25K1.Get()
+	}
+	if o.Bm25B.IsSet() {
+		toSerialize["bm25_b"] = o.Bm25B.Get()
 	}
 	return toSerialize, nil
 }

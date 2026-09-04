@@ -52,8 +52,27 @@ type QueryResultItem = internal.QueryResultItem
 type ListIDsResponse = internal.ListIDsResponse
 
 // QueryMetadataResponse represents the response from QueryMetadata operations:
-// the matching item IDs and their count.
+// the matching items (Results), their IDs, and their count.
+//
+// Results holds one MetadataResult row per match. On a text (BM25) query each
+// row carries a relevance Score, in descending order; on a filter-only query
+// each row is just an Id (Score unset). Ids/Count are retained for callers that
+// only read IDs.
 type QueryMetadataResponse = internal.QueryMetadataResponse
+
+// MetadataResult is one row of a QueryMetadata result: the item Id, plus a BM25
+// relevance Score (accessed via GetScore/HasScore) present only on the text
+// path. A filter-only query has nothing to score, so Score is unset there —
+// the same convention Query uses for distance vs. score. Mirrors the Python
+// SDK's MetadataResult.
+type MetadataResult = internal.MetadataResult
+
+// BM25Config is the BM25 scorer config an index reports back via
+// EncryptedIndex.BM25: K1 (term-frequency saturation) and B (length
+// normalization) as supplied at create time or their defaults, plus
+// AnalyzerVersion identifying the tokenizer/stemmer pipeline the corpus was
+// indexed with. Present only for indexes with at least one full-text field.
+type BM25Config = internal.BM25Config
 
 // QueryMetadataParams configures a metadata-only query.
 //
@@ -74,14 +93,45 @@ type QueryMetadataParams struct {
 	// is false, so use QueryMetadataParams{OrderBy: f, Ascending: true} for
 	// ascending order; it is ignored when OrderBy is empty.
 	Ascending bool
+
+	// Text adds a BM25 full-text leg, ranking matches by relevance (requires an
+	// index with at least one full-text field). Results then carry a Score in
+	// descending order, and any Filters act as a pre-filter. OrderBy is not
+	// supported alongside Text. Nil/empty keeps this a filter-only query.
+	Text *string
+
+	// TextFields restricts the text leg to these full-text fields; nil means
+	// all of them. Naming a non-full-text field is rejected by the service.
+	TextFields []string
+
+	// TextFieldWeights are per-field weights on the summed per-field BM25
+	// scores, parallel to the searched fields. Nil means 1.0 each.
+	TextFieldWeights []float32
+
+	// RequireAllTerms requires every query term to match (AND) instead of any
+	// (OR, the default). Nil uses the server default.
+	RequireAllTerms *bool
 }
 
 // Storage precision constants for the on-disk rerank-vector dtype.
+//
+// The float tiers store rerank vectors as IEEE floats. The TurboQuant ("tq")
+// tiers quantize each dimension to the given number of bits, trading a small
+// recall/latency cost for large storage savings. The precision is chosen at
+// index creation and is immutable.
 const (
 	// StoragePrecisionFloat32 stores rerank vectors as 32-bit floats (default).
 	StoragePrecisionFloat32 = "float32"
 	// StoragePrecisionFloat16 stores rerank vectors as 16-bit floats, halving disk usage.
 	StoragePrecisionFloat16 = "float16"
+	// StoragePrecisionTQ12 uses TurboQuant with 12 bits per dimension.
+	StoragePrecisionTQ12 = "tq12"
+	// StoragePrecisionTQ8 uses TurboQuant with 8 bits per dimension.
+	StoragePrecisionTQ8 = "tq8"
+	// StoragePrecisionTQ6 uses TurboQuant with 6 bits per dimension.
+	StoragePrecisionTQ6 = "tq6"
+	// StoragePrecisionTQ4 uses TurboQuant with 4 bits per dimension (~8x smaller, ~94% recall@100).
+	StoragePrecisionTQ4 = "tq4"
 )
 
 // CreateIndexParams defines the parameters for creating a new encrypted DiskIVF index.
@@ -124,8 +174,11 @@ type CreateIndexParams struct {
 	// This is for metadata purposes and doesn't affect index behavior.
 	EmbeddingModel *string `json:"embedding_model,omitempty"`
 
-	// StoragePrecision selects the on-disk rerank-vector dtype.
-	// Use StoragePrecisionFloat32 (default) or StoragePrecisionFloat16.
+	// StoragePrecision selects the on-disk rerank-vector dtype, chosen at
+	// create time and immutable. Use StoragePrecisionFloat32 (default),
+	// StoragePrecisionFloat16, or a TurboQuant tier (StoragePrecisionTQ12,
+	// StoragePrecisionTQ8, StoragePrecisionTQ6, StoragePrecisionTQ4), with TQ4
+	// the most aggressive. All tiers work with every metric.
 	StoragePrecision *string `json:"storage_precision,omitempty"`
 
 	// MetadataSchema is the per-field metadata indexing policy, fixed at
@@ -137,7 +190,26 @@ type CreateIndexParams struct {
 	//	MetadataSchema: map[string]cyborgdb.MetadataFieldPolicy{
 	//		"title": {Filterable: ptr(true), Pattern: ptr(true)},
 	//	}
+	//
+	// A field can also opt into BM25 full-text search with FullText=true (which
+	// implies Filterable=false and is incompatible with Pattern=true); the
+	// TextFields shorthand below marks fields FullText for you.
 	MetadataSchema map[string]MetadataFieldPolicy `json:"metadata_schema,omitempty"`
+
+	// TextFields marks these metadata fields FullText=true — routing their
+	// string values through the BM25 analyzer so they are searchable by
+	// EncryptedIndex.QueryMetadata (Text) and hybrid Query (Text). Shorthand
+	// for the FullText policy in MetadataSchema. BM25 is opt-in: an index with
+	// no full-text field writes no BM25 config at all.
+	TextFields []string `json:"text_fields,omitempty"`
+
+	// Bm25K1 tunes term-frequency saturation for the BM25 scorer (default 1.2).
+	// Requires at least one full-text field. Nil uses the default.
+	Bm25K1 *float64 `json:"bm25_k1,omitempty"`
+
+	// Bm25B tunes length-normalization strength for the BM25 scorer (default
+	// 0.75). Requires at least one full-text field. Nil uses the default.
+	Bm25B *float64 `json:"bm25_b,omitempty"`
 }
 
 // MetadataFieldPolicy is one field's entry in a CreateIndexParams.MetadataSchema:
@@ -244,6 +316,30 @@ type BinaryQueryParams struct {
 	// Include specifies which fields to return in results.
 	// Common values: ["metadata"], ["vector"], ["metadata", "vector"].
 	Include []string
+
+	// Text turns this into a hybrid (BM25 + vector) query against an index with
+	// at least one full-text field. Hybrid results carry a fused Score instead
+	// of a distance. Nil/empty leaves the query text-free (pure vector search).
+	// See QueryParams for the text-leg / fusion knobs below.
+	Text *string
+
+	// TextFields restricts the text leg to these full-text fields; nil means all.
+	TextFields []string
+
+	// TextFieldWeights are per-field weights, parallel to the searched fields.
+	TextFieldWeights []float32
+
+	// RequireAllTerms requires every query term to match (AND vs OR).
+	RequireAllTerms *bool
+
+	// Alpha blends the two legs in [0, 1] (0 = BM25, 1 = vector; default 0.5).
+	Alpha *float64
+
+	// RrfK is the RRF rank-smoothing constant (> 0; default 60).
+	RrfK *float64
+
+	// WindowMult sets per-leg candidate depth as a multiple of TopK (>= 1; default 3).
+	WindowMult *int32
 }
 
 // QueryParams defines the parameters for similarity search queries.
@@ -298,6 +394,36 @@ type QueryParams struct {
 	// Common values: ["metadata"], ["vector"], ["metadata", "vector"].
 	// An empty slice may return only IDs and distances.
 	Include []string `json:"include"`
+
+	// Text turns this into a hybrid (BM25 + vector) query against an index with
+	// at least one full-text field; a query vector is still required. Hybrid
+	// results carry a fused Score (larger = more relevant, descending) instead
+	// of a distance. Nil/empty leaves the query text-free (pure vector search).
+	Text *string `json:"text,omitempty"`
+
+	// TextFields restricts the text leg to these full-text fields; nil means
+	// all of them. Naming a non-full-text field is rejected by the service.
+	TextFields []string `json:"text_fields,omitempty"`
+
+	// TextFieldWeights are per-field weights on the summed per-field BM25
+	// scores, parallel to the searched fields. Nil means 1.0 each.
+	TextFieldWeights []float32 `json:"text_field_weights,omitempty"`
+
+	// RequireAllTerms requires every query term to match (AND) instead of any
+	// (OR, the default). Nil uses the server default.
+	RequireAllTerms *bool `json:"require_all_terms,omitempty"`
+
+	// Alpha blends the two legs in [0, 1]: 0 = pure BM25, 1 = pure vector.
+	// Nil uses the server default (0.5).
+	Alpha *float64 `json:"alpha,omitempty"`
+
+	// RrfK is the RRF rank-smoothing constant (> 0). Nil uses the server
+	// default (60).
+	RrfK *float64 `json:"rrf_k,omitempty"`
+
+	// WindowMult sets per-leg candidate depth as a multiple of TopK (>= 1).
+	// Nil uses the server default (3).
+	WindowMult *int32 `json:"window_mult,omitempty"`
 }
 
 // CreatedUser holds the credentials minted by EncryptedIndex.CreateUser.

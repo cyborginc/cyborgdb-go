@@ -1558,6 +1558,103 @@ func TestEncryptedIndexBinaryUpsertAndQuery(t *testing.T) {
 	})
 }
 
+// Test 15c: EncryptedIndex.QueryMetadata()
+//
+// Contract coverage for the metadata-only read path. Mirrors the Python
+// api-contract check (tests/test_api_contract.py validates query_metadata's
+// signature) and brings the Go contract test to parity with it. The functional
+// behavior — schema enforcement, ordering/paging, the BM25 text leg — lives in
+// query_metadata_test.go; here we pin the API surface only: the exact
+// QueryMetadataParams field set and the response shape.
+func TestEncryptedIndexQueryMetadata(t *testing.T) {
+	t.Run("ParamsExposeExactlyTheDocumentedFields", func(t *testing.T) {
+		// Go equivalent of the Python signature contract: query_metadata takes
+		// exactly filters, top_k, order_by, ascending, text, text_fields,
+		// text_field_weights, require_all_terms — no more, no less. In Go these
+		// are fields on QueryMetadataParams, checked here by reflection so an
+		// openapi regen or hand edit that drops, renames, or adds one fails the
+		// contract (mirrors Python's "no unexpected parameters" assertion).
+		expected := map[string]reflect.Kind{
+			"Filters":          reflect.Map,
+			"TopK":             reflect.Int32,
+			"OrderBy":          reflect.String,
+			"Ascending":        reflect.Bool,
+			"Text":             reflect.Pointer,
+			"TextFields":       reflect.Slice,
+			"TextFieldWeights": reflect.Slice,
+			"RequireAllTerms":  reflect.Pointer,
+		}
+		typ := reflect.TypeOf(cyborgdb.QueryMetadataParams{})
+		if typ.NumField() != len(expected) {
+			t.Errorf("QueryMetadataParams should have exactly %d fields, got %d",
+				len(expected), typ.NumField())
+		}
+		for i := 0; i < typ.NumField(); i++ {
+			field := typ.Field(i)
+			wantKind, ok := expected[field.Name]
+			if !ok {
+				t.Errorf("unexpected field %q on QueryMetadataParams", field.Name)
+				continue
+			}
+			if field.Type.Kind() != wantKind {
+				t.Errorf("field %q: expected kind %v, got %v",
+					field.Name, wantKind, field.Type.Kind())
+			}
+		}
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	t.Run("ReturnObjectWithIDsResultsAndCount", func(t *testing.T) {
+		// testIndex holds IDs 0-14 (metadata on 0-9) and was created without a
+		// MetadataSchema, i.e. default posture where every field is filterable.
+		// A filter-only query returns id-only rows: Ids, Results, and Count must
+		// agree, and with no Text there is nothing to score.
+		resp, err := testIndex.QueryMetadata(ctx, cyborgdb.QueryMetadataParams{
+			Filters: map[string]interface{}{"category": "cat_0"},
+		})
+		if err != nil {
+			t.Fatalf("QueryMetadata failed: %v", err)
+		}
+		if resp == nil {
+			t.Fatal("Response must not be nil")
+		}
+		if resp.Ids == nil {
+			t.Fatal("Ids should not be nil")
+		}
+		if int(resp.Count) != len(resp.Ids) {
+			t.Errorf("Count %d doesn't match Ids length %d", resp.Count, len(resp.Ids))
+		}
+		if len(resp.Results) != len(resp.Ids) {
+			t.Errorf("Results length %d doesn't match Ids length %d",
+				len(resp.Results), len(resp.Ids))
+		}
+		for i, row := range resp.Results {
+			if row.Id == "" {
+				t.Errorf("Result %d: missing Id", i)
+			}
+			if row.HasScore() {
+				t.Errorf("Result %d (Id=%s): filter-only row should have no score", i, row.Id)
+			}
+		}
+	})
+
+	t.Run("EmptyFiltersMatchEverything", func(t *testing.T) {
+		// nil/empty Filters matches all items; the shape invariants still hold.
+		resp, err := testIndex.QueryMetadata(ctx, cyborgdb.QueryMetadataParams{})
+		if err != nil {
+			t.Fatalf("QueryMetadata with empty filters failed: %v", err)
+		}
+		if int(resp.Count) != len(resp.Ids) {
+			t.Errorf("Count %d doesn't match Ids length %d", resp.Count, len(resp.Ids))
+		}
+		if resp.Count == 0 {
+			t.Error("Empty filter should match the upserted items, got count 0")
+		}
+	})
+}
+
 // Test 16: EncryptedIndex.Train()
 func TestEncryptedIndexTrain(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
