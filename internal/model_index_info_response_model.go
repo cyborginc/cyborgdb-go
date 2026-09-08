@@ -19,7 +19,7 @@ import (
 // checks if the IndexInfoResponseModel type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &IndexInfoResponseModel{}
 
-// IndexInfoResponseModel Response model for retrieving information about an index.  Attributes:     index_name (str): The name of the index.     is_trained (bool): Indicates whether the index has been trained.     dimension (int): Dimensionality of the vectors. `0` before the         first upsert when create_index was called without an explicit         dimension (auto-detect).     metric (str): Distance metric (`euclidean`, `cosine`, or         `squared_euclidean`).     n_lists (int): Number of inverted lists in the IVF index. `1`         for untrained indexes.     metadata_schema (Dict[str, MetadataFieldPolicy]): Per-field metadata         indexing overrides recorded at create time. Empty when the         index uses the default index-everything posture.
+// IndexInfoResponseModel Response model for retrieving information about an index.  Attributes:     index_name (str): The name of the index.     is_trained (bool): Indicates whether the index has been trained.     dimension (int): Dimensionality of the vectors. `0` before the         first upsert when create_index was called without an explicit         dimension (auto-detect).     metric (str): Distance metric (`euclidean`, `cosine`, or         `squared_euclidean`).     n_lists (int): Number of inverted lists in the IVF index. `1`         for untrained indexes.     metadata_schema (Dict[str, MetadataFieldPolicy]): Per-field metadata         indexing overrides recorded at create time. Empty when the         index uses the default index-everything posture.     bm25 (Optional[BM25Config]): BM25 scoring config when the index has         at least one full_text field; `None` otherwise.
 type IndexInfoResponseModel struct {
 	IndexName string `json:"index_name"`
 	IsTrained bool `json:"is_trained"`
@@ -27,6 +27,7 @@ type IndexInfoResponseModel struct {
 	Metric string `json:"metric"`
 	NLists int32 `json:"n_lists"`
 	MetadataSchema map[string]MetadataFieldPolicy `json:"metadata_schema,omitempty"`
+	Bm25 NullableBM25Config `json:"bm25,omitempty"`
 }
 
 type _IndexInfoResponseModel IndexInfoResponseModel
@@ -205,6 +206,48 @@ func (o *IndexInfoResponseModel) SetMetadataSchema(v map[string]MetadataFieldPol
 	o.MetadataSchema = v
 }
 
+// GetBm25 returns the Bm25 field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *IndexInfoResponseModel) GetBm25() BM25Config {
+	if o == nil || IsNil(o.Bm25.Get()) {
+		var ret BM25Config
+		return ret
+	}
+	return *o.Bm25.Get()
+}
+
+// GetBm25Ok returns a tuple with the Bm25 field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *IndexInfoResponseModel) GetBm25Ok() (*BM25Config, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.Bm25.Get(), o.Bm25.IsSet()
+}
+
+// HasBm25 returns a boolean if a field has been set.
+func (o *IndexInfoResponseModel) HasBm25() bool {
+	if o != nil && o.Bm25.IsSet() {
+		return true
+	}
+
+	return false
+}
+
+// SetBm25 gets a reference to the given NullableBM25Config and assigns it to the Bm25 field.
+func (o *IndexInfoResponseModel) SetBm25(v BM25Config) {
+	o.Bm25.Set(&v)
+}
+// SetBm25Nil sets the value for Bm25 to be an explicit nil
+func (o *IndexInfoResponseModel) SetBm25Nil() {
+	o.Bm25.Set(nil)
+}
+
+// UnsetBm25 ensures that no value is present for Bm25, not even an explicit nil
+func (o *IndexInfoResponseModel) UnsetBm25() {
+	o.Bm25.Unset()
+}
+
 func (o IndexInfoResponseModel) MarshalJSON() ([]byte, error) {
 	toSerialize,err := o.ToMap()
 	if err != nil {
@@ -222,6 +265,9 @@ func (o IndexInfoResponseModel) ToMap() (map[string]interface{}, error) {
 	toSerialize["n_lists"] = o.NLists
 	if !IsNil(o.MetadataSchema) {
 		toSerialize["metadata_schema"] = o.MetadataSchema
+	}
+	if o.Bm25.IsSet() {
+		toSerialize["bm25"] = o.Bm25.Get()
 	}
 	return toSerialize, nil
 }

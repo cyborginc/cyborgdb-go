@@ -19,8 +19,16 @@ import (
 // checks if the QueryMetadataRequest type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &QueryMetadataRequest{}
 
-// QueryMetadataRequest Request model for a metadata-only query (no query vector).  Inherits:     IndexOperationRequest: Includes `index_name` and `index_key`.  Attributes:     filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like         dictionary. Unlike `/query`, every leaf must be resolvable from         the metadata index — see the field description.     top_k (Optional[int]): Cap on the number of ids returned. `None`         returns every match. Applied AFTER `order_by`.     order_by (Optional[str]): Metadata field to sort the matches by         (post-filter). Unordered when omitted.     ascending (bool): Sort direction when `order_by` is set.
+// QueryMetadataRequest Request model for a metadata query (no query vector), optionally with a BM25 full-text leg.  Inherits:     IndexOperationRequest: Includes `index_name` and `index_key`.     TextSearchParams: `text` and the BM25 field knobs. When `text` is set         the result is ranked by BM25 score; a `filters` given alongside         acts as a pre-filter (the text leg scores only its survivors).         `order_by` is not supported together with `text`.  Attributes:     filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like         dictionary. Unlike `/query`, every leaf must be resolvable from         the metadata index — see the field description.     top_k (Optional[int]): Cap on the number of results returned. `None`         returns every match. Applied AFTER `order_by`.     order_by (Optional[str]): Metadata field to sort the matches by         (post-filter). Unordered when omitted. Not supported with `text`.     ascending (bool): Sort direction when `order_by` is set.
 type QueryMetadataRequest struct {
+	// Query text for a BM25 full-text leg. Requires an index with at least one full_text field. Omitted/empty leaves the query text-free.
+	Text NullableString `json:"text,omitempty"`
+	// full_text fields the text leg searches; omitted means all of them. Naming a non-full_text field raises.
+	TextFields []string `json:"text_fields,omitempty"`
+	// Per-field weights on the summed per-field BM25 scores, parallel to the searched fields. Omitted means 1.0 each.
+	TextFieldWeights []float32 `json:"text_field_weights,omitempty"`
+	// Require every query term to match (AND) instead of any (OR, the default).
+	RequireAllTerms NullableBool `json:"require_all_terms,omitempty"`
 	// ID name
 	IndexName string `json:"index_name"`
 	// 32-byte encryption key as hex string.  Required for SDK-supplied indexes; must be omitted for KMS-backed indexes (the service resolves the KEK via the index's KMSBlob).
@@ -29,9 +37,8 @@ type QueryMetadataRequest struct {
 	Filters map[string]interface{} `json:"filters,omitempty"`
 	// Cap on the number of ids returned; omit for all matches. Applied after `order_by`, so it yields the first N of the sorted result.
 	TopK NullableInt32 `json:"top_k,omitempty"`
-	// Metadata field to sort matches by, applied after filtering. Unordered when omitted. Items missing the field, or holding a non-scalar, sort last.
-	OrderBy NullableString `json:"order_by,omitempty"`
-	// Sort direction when `order_by` is set.
+	OrderBy NullableOrderBy `json:"order_by,omitempty"`
+	// Sort direction when `order_by` is a field name. Ignored when `order_by` is a dict (the dict's sign wins).
 	Ascending *bool `json:"ascending,omitempty"`
 }
 
@@ -57,6 +64,156 @@ func NewQueryMetadataRequestWithDefaults() *QueryMetadataRequest {
 	var ascending bool = true
 	this.Ascending = &ascending
 	return &this
+}
+
+// GetText returns the Text field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *QueryMetadataRequest) GetText() string {
+	if o == nil || IsNil(o.Text.Get()) {
+		var ret string
+		return ret
+	}
+	return *o.Text.Get()
+}
+
+// GetTextOk returns a tuple with the Text field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *QueryMetadataRequest) GetTextOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.Text.Get(), o.Text.IsSet()
+}
+
+// HasText returns a boolean if a field has been set.
+func (o *QueryMetadataRequest) HasText() bool {
+	if o != nil && o.Text.IsSet() {
+		return true
+	}
+
+	return false
+}
+
+// SetText gets a reference to the given NullableString and assigns it to the Text field.
+func (o *QueryMetadataRequest) SetText(v string) {
+	o.Text.Set(&v)
+}
+// SetTextNil sets the value for Text to be an explicit nil
+func (o *QueryMetadataRequest) SetTextNil() {
+	o.Text.Set(nil)
+}
+
+// UnsetText ensures that no value is present for Text, not even an explicit nil
+func (o *QueryMetadataRequest) UnsetText() {
+	o.Text.Unset()
+}
+
+// GetTextFields returns the TextFields field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *QueryMetadataRequest) GetTextFields() []string {
+	if o == nil {
+		var ret []string
+		return ret
+	}
+	return o.TextFields
+}
+
+// GetTextFieldsOk returns a tuple with the TextFields field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *QueryMetadataRequest) GetTextFieldsOk() ([]string, bool) {
+	if o == nil || IsNil(o.TextFields) {
+		return nil, false
+	}
+	return o.TextFields, true
+}
+
+// HasTextFields returns a boolean if a field has been set.
+func (o *QueryMetadataRequest) HasTextFields() bool {
+	if o != nil && !IsNil(o.TextFields) {
+		return true
+	}
+
+	return false
+}
+
+// SetTextFields gets a reference to the given []string and assigns it to the TextFields field.
+func (o *QueryMetadataRequest) SetTextFields(v []string) {
+	o.TextFields = v
+}
+
+// GetTextFieldWeights returns the TextFieldWeights field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *QueryMetadataRequest) GetTextFieldWeights() []float32 {
+	if o == nil {
+		var ret []float32
+		return ret
+	}
+	return o.TextFieldWeights
+}
+
+// GetTextFieldWeightsOk returns a tuple with the TextFieldWeights field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *QueryMetadataRequest) GetTextFieldWeightsOk() ([]float32, bool) {
+	if o == nil || IsNil(o.TextFieldWeights) {
+		return nil, false
+	}
+	return o.TextFieldWeights, true
+}
+
+// HasTextFieldWeights returns a boolean if a field has been set.
+func (o *QueryMetadataRequest) HasTextFieldWeights() bool {
+	if o != nil && !IsNil(o.TextFieldWeights) {
+		return true
+	}
+
+	return false
+}
+
+// SetTextFieldWeights gets a reference to the given []float32 and assigns it to the TextFieldWeights field.
+func (o *QueryMetadataRequest) SetTextFieldWeights(v []float32) {
+	o.TextFieldWeights = v
+}
+
+// GetRequireAllTerms returns the RequireAllTerms field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *QueryMetadataRequest) GetRequireAllTerms() bool {
+	if o == nil || IsNil(o.RequireAllTerms.Get()) {
+		var ret bool
+		return ret
+	}
+	return *o.RequireAllTerms.Get()
+}
+
+// GetRequireAllTermsOk returns a tuple with the RequireAllTerms field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *QueryMetadataRequest) GetRequireAllTermsOk() (*bool, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.RequireAllTerms.Get(), o.RequireAllTerms.IsSet()
+}
+
+// HasRequireAllTerms returns a boolean if a field has been set.
+func (o *QueryMetadataRequest) HasRequireAllTerms() bool {
+	if o != nil && o.RequireAllTerms.IsSet() {
+		return true
+	}
+
+	return false
+}
+
+// SetRequireAllTerms gets a reference to the given NullableBool and assigns it to the RequireAllTerms field.
+func (o *QueryMetadataRequest) SetRequireAllTerms(v bool) {
+	o.RequireAllTerms.Set(&v)
+}
+// SetRequireAllTermsNil sets the value for RequireAllTerms to be an explicit nil
+func (o *QueryMetadataRequest) SetRequireAllTermsNil() {
+	o.RequireAllTerms.Set(nil)
+}
+
+// UnsetRequireAllTerms ensures that no value is present for RequireAllTerms, not even an explicit nil
+func (o *QueryMetadataRequest) UnsetRequireAllTerms() {
+	o.RequireAllTerms.Unset()
 }
 
 // GetIndexName returns the IndexName field value
@@ -201,9 +358,9 @@ func (o *QueryMetadataRequest) UnsetTopK() {
 }
 
 // GetOrderBy returns the OrderBy field value if set, zero value otherwise (both if not set or set to explicit null).
-func (o *QueryMetadataRequest) GetOrderBy() string {
+func (o *QueryMetadataRequest) GetOrderBy() OrderBy {
 	if o == nil || IsNil(o.OrderBy.Get()) {
-		var ret string
+		var ret OrderBy
 		return ret
 	}
 	return *o.OrderBy.Get()
@@ -212,7 +369,7 @@ func (o *QueryMetadataRequest) GetOrderBy() string {
 // GetOrderByOk returns a tuple with the OrderBy field value if set, nil otherwise
 // and a boolean to check if the value has been set.
 // NOTE: If the value is an explicit nil, `nil, true` will be returned
-func (o *QueryMetadataRequest) GetOrderByOk() (*string, bool) {
+func (o *QueryMetadataRequest) GetOrderByOk() (*OrderBy, bool) {
 	if o == nil {
 		return nil, false
 	}
@@ -228,8 +385,8 @@ func (o *QueryMetadataRequest) HasOrderBy() bool {
 	return false
 }
 
-// SetOrderBy gets a reference to the given NullableString and assigns it to the OrderBy field.
-func (o *QueryMetadataRequest) SetOrderBy(v string) {
+// SetOrderBy gets a reference to the given NullableOrderBy and assigns it to the OrderBy field.
+func (o *QueryMetadataRequest) SetOrderBy(v OrderBy) {
 	o.OrderBy.Set(&v)
 }
 // SetOrderByNil sets the value for OrderBy to be an explicit nil
@@ -284,6 +441,18 @@ func (o QueryMetadataRequest) MarshalJSON() ([]byte, error) {
 
 func (o QueryMetadataRequest) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
+	if o.Text.IsSet() {
+		toSerialize["text"] = o.Text.Get()
+	}
+	if o.TextFields != nil {
+		toSerialize["text_fields"] = o.TextFields
+	}
+	if o.TextFieldWeights != nil {
+		toSerialize["text_field_weights"] = o.TextFieldWeights
+	}
+	if o.RequireAllTerms.IsSet() {
+		toSerialize["require_all_terms"] = o.RequireAllTerms.Get()
+	}
 	toSerialize["index_name"] = o.IndexName
 	if o.IndexKey.IsSet() {
 		toSerialize["index_key"] = o.IndexKey.Get()

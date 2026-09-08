@@ -19,8 +19,22 @@ import (
 // checks if the BatchQueryRequest type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &BatchQueryRequest{}
 
-// BatchQueryRequest Request model for batch similarity search.  Inherits:     IndexOperationRequest: Includes `index_name` and `index_key`.  Attributes:     query_vectors (List[List[float]]): List of vectors to search for in batch mode.     top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.     n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.     greedy (Optional[bool]): Whether to use greedy search. Defaults to False.     rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.     filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like         dictionary (see `FILTERS_DESCRIPTION` for the operator set).         Defaults to {}.     include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned).
+// BatchQueryRequest Request model for batch similarity search.  Inherits:     IndexOperationRequest: Includes `index_name` and `index_key`.     HybridQueryParams: `text` and the fusion knobs for hybrid search.  Attributes:     query_vectors (List[List[float]]): List of vectors to search for in batch mode.     top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.     n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.     greedy (Optional[bool]): Whether to use greedy search. Defaults to False.     rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.     filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like         dictionary (see `FILTERS_DESCRIPTION` for the operator set).         Defaults to {}.     include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned).
 type BatchQueryRequest struct {
+	// Query text for a BM25 full-text leg. Requires an index with at least one full_text field. Omitted/empty leaves the query text-free.
+	Text NullableString `json:"text,omitempty"`
+	// full_text fields the text leg searches; omitted means all of them. Naming a non-full_text field raises.
+	TextFields []string `json:"text_fields,omitempty"`
+	// Per-field weights on the summed per-field BM25 scores, parallel to the searched fields. Omitted means 1.0 each.
+	TextFieldWeights []float32 `json:"text_field_weights,omitempty"`
+	// Require every query term to match (AND) instead of any (OR, the default).
+	RequireAllTerms NullableBool `json:"require_all_terms,omitempty"`
+	// Leg blend in [0, 1]: 0 = pure BM25, 1 = pure vector; omitted means 0.5. An exact endpoint skips the dead leg's retrieval.
+	Alpha NullableFloat32 `json:"alpha,omitempty"`
+	// RRF rank-smoothing constant (> 0; omitted means 60). Higher rewards agreement further down each leg's list.
+	RrfK NullableFloat32 `json:"rrf_k,omitempty"`
+	// Per-leg candidate depth as a multiple of top_k (>= 1; omitted means 3), so each leg looks deeper than the final cut.
+	WindowMult NullableInt32 `json:"window_mult,omitempty"`
 	// ID name
 	IndexName string `json:"index_name"`
 	// 32-byte encryption key as hex string.  Required for SDK-supplied indexes; must be omitted for KMS-backed indexes (the service resolves the KEK via the index's KMSBlob).
@@ -54,6 +68,282 @@ func NewBatchQueryRequest(indexName string, queryVectors [][]float32) *BatchQuer
 func NewBatchQueryRequestWithDefaults() *BatchQueryRequest {
 	this := BatchQueryRequest{}
 	return &this
+}
+
+// GetText returns the Text field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *BatchQueryRequest) GetText() string {
+	if o == nil || IsNil(o.Text.Get()) {
+		var ret string
+		return ret
+	}
+	return *o.Text.Get()
+}
+
+// GetTextOk returns a tuple with the Text field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *BatchQueryRequest) GetTextOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.Text.Get(), o.Text.IsSet()
+}
+
+// HasText returns a boolean if a field has been set.
+func (o *BatchQueryRequest) HasText() bool {
+	if o != nil && o.Text.IsSet() {
+		return true
+	}
+
+	return false
+}
+
+// SetText gets a reference to the given NullableString and assigns it to the Text field.
+func (o *BatchQueryRequest) SetText(v string) {
+	o.Text.Set(&v)
+}
+// SetTextNil sets the value for Text to be an explicit nil
+func (o *BatchQueryRequest) SetTextNil() {
+	o.Text.Set(nil)
+}
+
+// UnsetText ensures that no value is present for Text, not even an explicit nil
+func (o *BatchQueryRequest) UnsetText() {
+	o.Text.Unset()
+}
+
+// GetTextFields returns the TextFields field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *BatchQueryRequest) GetTextFields() []string {
+	if o == nil {
+		var ret []string
+		return ret
+	}
+	return o.TextFields
+}
+
+// GetTextFieldsOk returns a tuple with the TextFields field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *BatchQueryRequest) GetTextFieldsOk() ([]string, bool) {
+	if o == nil || IsNil(o.TextFields) {
+		return nil, false
+	}
+	return o.TextFields, true
+}
+
+// HasTextFields returns a boolean if a field has been set.
+func (o *BatchQueryRequest) HasTextFields() bool {
+	if o != nil && !IsNil(o.TextFields) {
+		return true
+	}
+
+	return false
+}
+
+// SetTextFields gets a reference to the given []string and assigns it to the TextFields field.
+func (o *BatchQueryRequest) SetTextFields(v []string) {
+	o.TextFields = v
+}
+
+// GetTextFieldWeights returns the TextFieldWeights field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *BatchQueryRequest) GetTextFieldWeights() []float32 {
+	if o == nil {
+		var ret []float32
+		return ret
+	}
+	return o.TextFieldWeights
+}
+
+// GetTextFieldWeightsOk returns a tuple with the TextFieldWeights field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *BatchQueryRequest) GetTextFieldWeightsOk() ([]float32, bool) {
+	if o == nil || IsNil(o.TextFieldWeights) {
+		return nil, false
+	}
+	return o.TextFieldWeights, true
+}
+
+// HasTextFieldWeights returns a boolean if a field has been set.
+func (o *BatchQueryRequest) HasTextFieldWeights() bool {
+	if o != nil && !IsNil(o.TextFieldWeights) {
+		return true
+	}
+
+	return false
+}
+
+// SetTextFieldWeights gets a reference to the given []float32 and assigns it to the TextFieldWeights field.
+func (o *BatchQueryRequest) SetTextFieldWeights(v []float32) {
+	o.TextFieldWeights = v
+}
+
+// GetRequireAllTerms returns the RequireAllTerms field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *BatchQueryRequest) GetRequireAllTerms() bool {
+	if o == nil || IsNil(o.RequireAllTerms.Get()) {
+		var ret bool
+		return ret
+	}
+	return *o.RequireAllTerms.Get()
+}
+
+// GetRequireAllTermsOk returns a tuple with the RequireAllTerms field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *BatchQueryRequest) GetRequireAllTermsOk() (*bool, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.RequireAllTerms.Get(), o.RequireAllTerms.IsSet()
+}
+
+// HasRequireAllTerms returns a boolean if a field has been set.
+func (o *BatchQueryRequest) HasRequireAllTerms() bool {
+	if o != nil && o.RequireAllTerms.IsSet() {
+		return true
+	}
+
+	return false
+}
+
+// SetRequireAllTerms gets a reference to the given NullableBool and assigns it to the RequireAllTerms field.
+func (o *BatchQueryRequest) SetRequireAllTerms(v bool) {
+	o.RequireAllTerms.Set(&v)
+}
+// SetRequireAllTermsNil sets the value for RequireAllTerms to be an explicit nil
+func (o *BatchQueryRequest) SetRequireAllTermsNil() {
+	o.RequireAllTerms.Set(nil)
+}
+
+// UnsetRequireAllTerms ensures that no value is present for RequireAllTerms, not even an explicit nil
+func (o *BatchQueryRequest) UnsetRequireAllTerms() {
+	o.RequireAllTerms.Unset()
+}
+
+// GetAlpha returns the Alpha field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *BatchQueryRequest) GetAlpha() float32 {
+	if o == nil || IsNil(o.Alpha.Get()) {
+		var ret float32
+		return ret
+	}
+	return *o.Alpha.Get()
+}
+
+// GetAlphaOk returns a tuple with the Alpha field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *BatchQueryRequest) GetAlphaOk() (*float32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.Alpha.Get(), o.Alpha.IsSet()
+}
+
+// HasAlpha returns a boolean if a field has been set.
+func (o *BatchQueryRequest) HasAlpha() bool {
+	if o != nil && o.Alpha.IsSet() {
+		return true
+	}
+
+	return false
+}
+
+// SetAlpha gets a reference to the given NullableFloat32 and assigns it to the Alpha field.
+func (o *BatchQueryRequest) SetAlpha(v float32) {
+	o.Alpha.Set(&v)
+}
+// SetAlphaNil sets the value for Alpha to be an explicit nil
+func (o *BatchQueryRequest) SetAlphaNil() {
+	o.Alpha.Set(nil)
+}
+
+// UnsetAlpha ensures that no value is present for Alpha, not even an explicit nil
+func (o *BatchQueryRequest) UnsetAlpha() {
+	o.Alpha.Unset()
+}
+
+// GetRrfK returns the RrfK field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *BatchQueryRequest) GetRrfK() float32 {
+	if o == nil || IsNil(o.RrfK.Get()) {
+		var ret float32
+		return ret
+	}
+	return *o.RrfK.Get()
+}
+
+// GetRrfKOk returns a tuple with the RrfK field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *BatchQueryRequest) GetRrfKOk() (*float32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.RrfK.Get(), o.RrfK.IsSet()
+}
+
+// HasRrfK returns a boolean if a field has been set.
+func (o *BatchQueryRequest) HasRrfK() bool {
+	if o != nil && o.RrfK.IsSet() {
+		return true
+	}
+
+	return false
+}
+
+// SetRrfK gets a reference to the given NullableFloat32 and assigns it to the RrfK field.
+func (o *BatchQueryRequest) SetRrfK(v float32) {
+	o.RrfK.Set(&v)
+}
+// SetRrfKNil sets the value for RrfK to be an explicit nil
+func (o *BatchQueryRequest) SetRrfKNil() {
+	o.RrfK.Set(nil)
+}
+
+// UnsetRrfK ensures that no value is present for RrfK, not even an explicit nil
+func (o *BatchQueryRequest) UnsetRrfK() {
+	o.RrfK.Unset()
+}
+
+// GetWindowMult returns the WindowMult field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *BatchQueryRequest) GetWindowMult() int32 {
+	if o == nil || IsNil(o.WindowMult.Get()) {
+		var ret int32
+		return ret
+	}
+	return *o.WindowMult.Get()
+}
+
+// GetWindowMultOk returns a tuple with the WindowMult field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *BatchQueryRequest) GetWindowMultOk() (*int32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.WindowMult.Get(), o.WindowMult.IsSet()
+}
+
+// HasWindowMult returns a boolean if a field has been set.
+func (o *BatchQueryRequest) HasWindowMult() bool {
+	if o != nil && o.WindowMult.IsSet() {
+		return true
+	}
+
+	return false
+}
+
+// SetWindowMult gets a reference to the given NullableInt32 and assigns it to the WindowMult field.
+func (o *BatchQueryRequest) SetWindowMult(v int32) {
+	o.WindowMult.Set(&v)
+}
+// SetWindowMultNil sets the value for WindowMult to be an explicit nil
+func (o *BatchQueryRequest) SetWindowMultNil() {
+	o.WindowMult.Set(nil)
+}
+
+// UnsetWindowMult ensures that no value is present for WindowMult, not even an explicit nil
+func (o *BatchQueryRequest) UnsetWindowMult() {
+	o.WindowMult.Unset()
 }
 
 // GetIndexName returns the IndexName field value
@@ -389,6 +679,27 @@ func (o BatchQueryRequest) MarshalJSON() ([]byte, error) {
 
 func (o BatchQueryRequest) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
+	if o.Text.IsSet() {
+		toSerialize["text"] = o.Text.Get()
+	}
+	if o.TextFields != nil {
+		toSerialize["text_fields"] = o.TextFields
+	}
+	if o.TextFieldWeights != nil {
+		toSerialize["text_field_weights"] = o.TextFieldWeights
+	}
+	if o.RequireAllTerms.IsSet() {
+		toSerialize["require_all_terms"] = o.RequireAllTerms.Get()
+	}
+	if o.Alpha.IsSet() {
+		toSerialize["alpha"] = o.Alpha.Get()
+	}
+	if o.RrfK.IsSet() {
+		toSerialize["rrf_k"] = o.RrfK.Get()
+	}
+	if o.WindowMult.IsSet() {
+		toSerialize["window_mult"] = o.WindowMult.Get()
+	}
 	toSerialize["index_name"] = o.IndexName
 	if o.IndexKey.IsSet() {
 		toSerialize["index_key"] = o.IndexKey.Get()

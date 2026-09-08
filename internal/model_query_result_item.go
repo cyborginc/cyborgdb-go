@@ -19,10 +19,11 @@ import (
 // checks if the QueryResultItem type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &QueryResultItem{}
 
-// QueryResultItem Represents a single result from a similarity search.  Attributes:     id (str): The identifier of the retrieved item.     distance (Optional[float]): Distance from the query vector (smaller = more similar).     metadata (Optional[Dict[str, Any]]): Additional metadata for the result.     vector (Optional[List[float]]): The retrieved vector (if included in response).
+// QueryResultItem Represents a single result from a similarity search.  A result carries either `distance` (pure vector query; smaller = more similar) or `score` (hybrid query; the fused BM25 + vector relevance, larger = more relevant) — never both, since a text hit has no vector distance.  Attributes:     id (str): The identifier of the retrieved item.     distance (Optional[float]): Distance from the query vector (smaller = more similar).     score (Optional[float]): Fused relevance score on a hybrid (`text=...`) query (larger = more relevant).     metadata (Optional[Dict[str, Any]]): Additional metadata for the result.     vector (Optional[List[float]]): The retrieved vector (if included in response).
 type QueryResultItem struct {
 	Id string `json:"id"`
 	Distance NullableFloat32 `json:"distance,omitempty"`
+	Score NullableFloat32 `json:"score,omitempty"`
 	// Arbitrary JSON object stored alongside the vector. Schemaless — the index's `metadata_schema` governs how fields are indexed, not what may be stored. Nested objects are addressable by dot-path in filters (`loc.city`); dates have no native type, store them as epoch millis.
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 	Vector []float32 `json:"vector,omitempty"`
@@ -114,6 +115,48 @@ func (o *QueryResultItem) UnsetDistance() {
 	o.Distance.Unset()
 }
 
+// GetScore returns the Score field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *QueryResultItem) GetScore() float32 {
+	if o == nil || IsNil(o.Score.Get()) {
+		var ret float32
+		return ret
+	}
+	return *o.Score.Get()
+}
+
+// GetScoreOk returns a tuple with the Score field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *QueryResultItem) GetScoreOk() (*float32, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.Score.Get(), o.Score.IsSet()
+}
+
+// HasScore returns a boolean if a field has been set.
+func (o *QueryResultItem) HasScore() bool {
+	if o != nil && o.Score.IsSet() {
+		return true
+	}
+
+	return false
+}
+
+// SetScore gets a reference to the given NullableFloat32 and assigns it to the Score field.
+func (o *QueryResultItem) SetScore(v float32) {
+	o.Score.Set(&v)
+}
+// SetScoreNil sets the value for Score to be an explicit nil
+func (o *QueryResultItem) SetScoreNil() {
+	o.Score.Set(nil)
+}
+
+// UnsetScore ensures that no value is present for Score, not even an explicit nil
+func (o *QueryResultItem) UnsetScore() {
+	o.Score.Unset()
+}
+
 // GetMetadata returns the Metadata field value if set, zero value otherwise (both if not set or set to explicit null).
 func (o *QueryResultItem) GetMetadata() map[string]interface{} {
 	if o == nil {
@@ -193,6 +236,9 @@ func (o QueryResultItem) ToMap() (map[string]interface{}, error) {
 	toSerialize["id"] = o.Id
 	if o.Distance.IsSet() {
 		toSerialize["distance"] = o.Distance.Get()
+	}
+	if o.Score.IsSet() {
+		toSerialize["score"] = o.Score.Get()
 	}
 	if o.Metadata != nil {
 		toSerialize["metadata"] = o.Metadata

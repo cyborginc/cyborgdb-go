@@ -19,8 +19,9 @@ import (
 // checks if the QueryMetadataResponse type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &QueryMetadataResponse{}
 
-// QueryMetadataResponse Response model for a metadata-only query.  Attributes:     ids (List[str]): Matching item IDs — ordered by `order_by` when it was         set, otherwise an unordered subset.     count (int): Number of IDs returned.
+// QueryMetadataResponse Response model for a metadata query.  Attributes:     results (List[MetadataResult]): Matching items, using core's row shape         directly. On a `text=...` query each row is `{id, score}` in         descending score order; on a filter-only query each row is `{id}`         (no `score` key — there is nothing to score) following `order_by`         when set, else an unordered subset.     ids (List[str]): Matching item IDs, parallel to `results`. Retained         for backward compatibility with callers that only read IDs.     count (int): Number of items returned.
 type QueryMetadataResponse struct {
+	Results []MetadataResult `json:"results,omitempty"`
 	Ids []string `json:"ids"`
 	Count int32 `json:"count"`
 }
@@ -44,6 +45,38 @@ func NewQueryMetadataResponse(ids []string, count int32) *QueryMetadataResponse 
 func NewQueryMetadataResponseWithDefaults() *QueryMetadataResponse {
 	this := QueryMetadataResponse{}
 	return &this
+}
+
+// GetResults returns the Results field value if set, zero value otherwise.
+func (o *QueryMetadataResponse) GetResults() []MetadataResult {
+	if o == nil || IsNil(o.Results) {
+		var ret []MetadataResult
+		return ret
+	}
+	return o.Results
+}
+
+// GetResultsOk returns a tuple with the Results field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+func (o *QueryMetadataResponse) GetResultsOk() ([]MetadataResult, bool) {
+	if o == nil || IsNil(o.Results) {
+		return nil, false
+	}
+	return o.Results, true
+}
+
+// HasResults returns a boolean if a field has been set.
+func (o *QueryMetadataResponse) HasResults() bool {
+	if o != nil && !IsNil(o.Results) {
+		return true
+	}
+
+	return false
+}
+
+// SetResults gets a reference to the given []MetadataResult and assigns it to the Results field.
+func (o *QueryMetadataResponse) SetResults(v []MetadataResult) {
+	o.Results = v
 }
 
 // GetIds returns the Ids field value
@@ -104,6 +137,9 @@ func (o QueryMetadataResponse) MarshalJSON() ([]byte, error) {
 
 func (o QueryMetadataResponse) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
+	if !IsNil(o.Results) {
+		toSerialize["results"] = o.Results
+	}
 	toSerialize["ids"] = o.Ids
 	toSerialize["count"] = o.Count
 	return toSerialize, nil

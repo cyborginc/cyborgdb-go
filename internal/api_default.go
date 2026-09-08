@@ -2022,10 +2022,12 @@ func (r ApiQueryMetadataV1VectorsQueryMetadataPostRequest) Execute() (*QueryMeta
 /*
 QueryMetadataV1VectorsQueryMetadataPost Query an Encrypted Index by Metadata Only
 
-Find items by metadata alone — no query vector, no distances.
+Find items by metadata alone — no query vector.
 
-Resolves the filter entirely from the encrypted metadata index and returns
-the matching item IDs. Works on untrained indexes.
+With no `text`, resolves the filter entirely from the encrypted metadata
+index and returns the matching items, unscored. With `text`, runs BM25 over
+the index's full_text fields and returns the top matches ranked by score; a
+filter given alongside acts as a pre-filter. Works on untrained indexes.
 
 Because there is no post-filter stage to fall back on, the index's
 `metadata_schema` is enforced here: `$regex` / `$contains` need a `pattern`

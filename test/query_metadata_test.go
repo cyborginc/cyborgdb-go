@@ -182,6 +182,41 @@ func TestQueryMetadataSchemaRoundTrips(t *testing.T) {
 	if hidden.GetFilterable() {
 		t.Errorf("hidden should not be filterable")
 	}
+	// None of these opt into BM25 full-text; the policy now reports full_text
+	// alongside filterable/pattern (see bm25_test.go for the full_text path).
+	for name, policy := range map[string]cyborgdb.MetadataFieldPolicy{"color": color, "shape": shape, "hidden": hidden} {
+		if policy.GetFullText() {
+			t.Errorf("%s should not be a full_text field", name)
+		}
+	}
+}
+
+// TestQueryMetadataRowsAreIDOnlyWithoutText mirrors py
+// test_rows_are_id_dicts_without_score: a filter-only query returns
+// MetadataResult rows carrying only an Id, with no relevance Score (there is
+// nothing to score without Text).
+func TestQueryMetadataRowsAreIDOnlyWithoutText(t *testing.T) {
+	index := qmIndex(t, patternSchema())
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	resp, err := index.QueryMetadata(ctx, cyborgdb.QueryMetadataParams{
+		Filters: map[string]interface{}{"color": "red"},
+	})
+	if err != nil {
+		t.Fatalf("QueryMetadata failed: %v", err)
+	}
+	if len(resp.Results) == 0 {
+		t.Fatal("expected matching rows")
+	}
+	for _, row := range resp.Results {
+		if row.Id == "" {
+			t.Error("row should carry an Id")
+		}
+		if row.HasScore() {
+			t.Errorf("filter-only row %s should have no score", row.Id)
+		}
+	}
 }
 
 func TestQueryMetadataHappyPaths(t *testing.T) {
