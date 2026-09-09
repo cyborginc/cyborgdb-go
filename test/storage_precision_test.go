@@ -1,10 +1,11 @@
-// TurboQuant storage precision: the `storage_precision` create-time knob and
-// its four quantized tiers `tq12` / `tq8` / `tq6` / `tq4`.
+// Storage precision: the `storage_precision` create-time knob and its six tiers
+// `float32` / `float16` / `tq12` / `tq8` / `tq6` / `tq4`.
 //
 // `storage_precision` picks the on-disk rerank-vector format, chosen at create
-// and immutable. Alongside the existing `float32` / `float16`, the TurboQuant
-// tiers pack 12 / 8 / 6 / 4 bits per dimension, trading a little recall and
-// latency for a large storage saving. All tiers work with every metric.
+// and immutable. `float32` / `float16` keep the vectors in full/half float; the
+// four TurboQuant tiers pack 12 / 8 / 6 / 4 bits per dimension, trading a little
+// recall and latency for a large storage saving. All tiers work with every
+// metric.
 //
 // Two layers of coverage:
 //
@@ -43,6 +44,22 @@ var turboQuantTiers = []string{
 	cyborgdb.StoragePrecisionTQ4,
 }
 
+// precisionRecall pairs every valid storage precision with the self-recall
+// floor it should clear end-to-end. The float tiers are effectively exact; the
+// TurboQuant tiers tolerate progressively more quantization loss as the bit
+// budget shrinks. Ordered least-aggressive first so a failure reads naturally.
+var precisionRecall = []struct {
+	precision string
+	minRecall float64
+}{
+	{cyborgdb.StoragePrecisionFloat32, 0.95},
+	{cyborgdb.StoragePrecisionFloat16, 0.95},
+	{cyborgdb.StoragePrecisionTQ12, 0.9},
+	{cyborgdb.StoragePrecisionTQ8, 0.9},
+	{cyborgdb.StoragePrecisionTQ6, 0.85},
+	{cyborgdb.StoragePrecisionTQ4, 0.7},
+}
+
 // Every valid storage precision, including the pre-existing float tiers.
 var validPrecisions = []string{
 	cyborgdb.StoragePrecisionFloat32,
@@ -61,9 +78,9 @@ const (
 	tqNLists     = 8
 )
 
-// TestTurboQuantModel is the model-level contract for `storage_precision` — no
-// service required.
-func TestTurboQuantModel(t *testing.T) {
+// TestStoragePrecisionModel is the model-level contract for `storage_precision`
+// — no service required.
+func TestStoragePrecisionModel(t *testing.T) {
 	t.Run("ConstantsHaveExpectedWireValues", func(t *testing.T) {
 		cases := map[string]string{
 			cyborgdb.StoragePrecisionFloat32: "float32",
@@ -157,13 +174,14 @@ func TestTurboQuantModel(t *testing.T) {
 	})
 }
 
-// TestTurboQuantIntegration exercises each TurboQuant tier end-to-end. Skipped
-// when no CyborgDB service is reachable.
+// TestStoragePrecisionIntegration exercises every storage precision end-to-end
+// — the two float tiers and the four TurboQuant tiers. Skipped when no CyborgDB
+// service is reachable.
 //
-// One shared, normalized corpus is built once and reused across tiers (every
-// tier works with every metric). Each tier gets its own index so a failure
-// names the tier that broke.
-func TestTurboQuantIntegration(t *testing.T) {
+// One shared, normalized corpus is built once and reused across precisions
+// (every precision works with every metric). Each precision gets its own index
+// so a failure names the tier that broke.
+func TestStoragePrecisionIntegration(t *testing.T) {
 	client := newIsolatedClient(t)
 
 	healthCtx, healthCancel := context.WithTimeout(context.Background(), 3*time.Second)
@@ -281,30 +299,19 @@ func TestTurboQuantIntegration(t *testing.T) {
 		}
 	}
 
-	t.Run("TQ12Lifecycle", func(t *testing.T) {
-		// tq12 is the least aggressive tier, so it should have the highest recall.
-		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ12, "cosine")
-		assertSelfRecall(t, index, cyborgdb.StoragePrecisionTQ12, 0.9)
-	})
-
-	t.Run("TQ8Lifecycle", func(t *testing.T) {
-		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ8, "cosine")
-		assertSelfRecall(t, index, cyborgdb.StoragePrecisionTQ8, 0.9)
-	})
-
-	t.Run("TQ6Lifecycle", func(t *testing.T) {
-		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ6, "cosine")
-		assertSelfRecall(t, index, cyborgdb.StoragePrecisionTQ6, 0.85)
-	})
-
-	t.Run("TQ4Lifecycle", func(t *testing.T) {
-		// tq4 is the most aggressive tier.
-		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ4, "cosine")
-		assertSelfRecall(t, index, cyborgdb.StoragePrecisionTQ4, 0.7)
-	})
+	// Every precision completes the full create -> upsert -> train -> query
+	// lifecycle and clears its recall floor. Ordered least-aggressive first.
+	for _, tc := range precisionRecall {
+		tc := tc
+		t.Run(tc.precision+"Lifecycle", func(t *testing.T) {
+			index := buildTrainedIndex(t, tc.precision, "cosine")
+			assertSelfRecall(t, index, tc.precision, tc.minRecall)
+		})
+	}
 
 	t.Run("TQ4EuclideanLifecycle", func(t *testing.T) {
-		// tq4 works with every metric, including euclidean.
+		// storage_precision is orthogonal to the metric; tq4 (the most
+		// aggressive tier) is valid with a non-cosine metric too.
 		index := buildTrainedIndex(t, cyborgdb.StoragePrecisionTQ4, "euclidean")
 		assertSelfRecall(t, index, cyborgdb.StoragePrecisionTQ4, 0.7)
 	})
