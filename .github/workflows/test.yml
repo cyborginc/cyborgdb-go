@@ -152,16 +152,11 @@ jobs:
             exit 1
           fi
 
-          # Run tests based on trigger type
+          # Run the full test suite on every trigger (PRs and main).
           # Note: -race flag removed because it uses 5-10x more memory which causes
           # the server to crash during auto-training with memory exhaustion
-          if [ "${{ github.event_name }}" == "pull_request" ]; then
-            echo "Running quick flow tests for PR..."
-            go test -v -run TestUnitFlow -coverprofile=coverage.txt -covermode=atomic -coverpkg=github.com/cyborginc/cyborgdb-go ./test
-          else
-            echo "Running all tests for main branch..."
-            go test -v -coverprofile=coverage.txt -covermode=atomic -coverpkg=github.com/cyborginc/cyborgdb-go ./test
-          fi
+          echo "Running all tests..."
+          go test -v -coverprofile=coverage.txt -covermode=atomic -coverpkg=github.com/cyborginc/cyborgdb-go ./test
           
           # Stop standard server
           kill $(cat server-standard.pid) || true
