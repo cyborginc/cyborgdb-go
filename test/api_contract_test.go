@@ -1558,7 +1558,7 @@ func TestEncryptedIndexBinaryUpsertAndQuery(t *testing.T) {
 	})
 }
 
-// Test 15c: EncryptedIndex.QueryMetadata()
+// Test 16: EncryptedIndex.QueryMetadata()
 //
 // Contract coverage for the metadata-only read path. Mirrors the Python
 // api-contract check (tests/test_api_contract.py validates query_metadata's
@@ -1655,7 +1655,7 @@ func TestEncryptedIndexQueryMetadata(t *testing.T) {
 	})
 }
 
-// Test 16: EncryptedIndex.Train()
+// Test 17: EncryptedIndex.Train()
 func TestEncryptedIndexTrain(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
@@ -1703,7 +1703,7 @@ func TestEncryptedIndexTrain(t *testing.T) {
 	})
 }
 
-// Test 17: EncryptedIndex.Delete()
+// Test 18: EncryptedIndex.Delete()
 func TestEncryptedIndexDelete(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
@@ -1774,7 +1774,7 @@ func TestEncryptedIndexDelete(t *testing.T) {
 	})
 }
 
-// Test 18: Client.LoadIndex()
+// Test 19: Client.LoadIndex()
 func TestClientLoadIndex(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()
@@ -1817,7 +1817,7 @@ func TestClientLoadIndex(t *testing.T) {
 	})
 }
 
-// Test 19: EncryptedIndex.DeleteIndex()
+// Test 20: EncryptedIndex.DeleteIndex()
 func TestEncryptedIndexDeleteIndex(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
 	defer cancel()

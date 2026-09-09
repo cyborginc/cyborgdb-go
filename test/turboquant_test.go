@@ -204,7 +204,7 @@ func TestTurboQuantIntegration(t *testing.T) {
 			_ = index.DeleteIndex(cleanupCtx)
 		})
 
-		if err := index.UpsertVectors(ctx, ids, vectors, nil); err != nil {
+		if err = index.UpsertVectors(ctx, ids, vectors, nil); err != nil {
 			t.Fatalf("upsert into %s index: %v", precision, err)
 		}
 		time.Sleep(1 * time.Second)
