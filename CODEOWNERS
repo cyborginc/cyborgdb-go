@@ -1,0 +1,7 @@
+# Require Nic and Alex's review on all changes to this public SDK repo's main branch.
+#
+# Added after a PR (cyborgdb-py#126) merged to main with only a PM's approval: the
+# repo's "Push to Main" ruleset already required 1 approving review + code-owner
+# review, but with no CODEOWNERS file the code-owner requirement had nothing to
+# enforce, so any collaborator's approval satisfied it.
+* @dupontcyborg @ahellegit
