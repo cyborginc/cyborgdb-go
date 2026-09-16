@@ -67,7 +67,7 @@ func keyBytesToHex(key []byte) (*string, error) {
 		return nil, nil
 	}
 	if len(key) != KeySize {
-		return nil, fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(key))
+		return nil, newValidationError(fmt.Errorf("%w, got %d", ErrInvalidKeyLength, len(key)))
 	}
 	h := fmt.Sprintf("%x", key)
 	return &h, nil
@@ -85,7 +85,33 @@ func keyBytesToHex(key []byte) (*string, error) {
 //	NewClient(url, apiKey)        // auto-detect verifySSL
 //	NewClient(url, apiKey, false) // force off
 //	NewClient(url, apiKey, true)  // force on
+//
+// parseBaseURL validates the base URL before any client is constructed.
+//
+// url.Parse alone rejects almost nothing: it accepts "", "not-a-url" and
+// "localhost:8080" without error (the last parses as scheme "localhost" with
+// an empty host). Scheme and host are checked explicitly so a typo fails at
+// construction rather than as a confusing DNS error on the first call.
+func parseBaseURL(baseURL string) (*url.URL, error) {
+	u, err := url.Parse(baseURL)
+	if err != nil {
+		return nil, newValidationError(fmt.Errorf("%w: %v", ErrInvalidURL, err))
+	}
+	if u.Scheme != "http" && u.Scheme != "https" {
+		return nil, newValidationError(fmt.Errorf("%w: %q must use the http or https scheme", ErrInvalidURL, baseURL))
+	}
+	if u.Host == "" {
+		return nil, newValidationError(fmt.Errorf("%w: %q has no host", ErrInvalidURL, baseURL))
+	}
+	return u, nil
+}
+
 func NewClient(baseURL, apiKey string, verifySSL ...bool) (*Client, error) {
+	u, err := parseBaseURL(baseURL)
+	if err != nil {
+		return nil, err
+	}
+
 	// Explicit override wins.
 	if len(verifySSL) > 0 {
 		v := verifySSL[0]
@@ -96,10 +122,6 @@ func NewClient(baseURL, apiKey string, verifySSL ...bool) (*Client, error) {
 		return &Client{internal: internalClient}, nil
 	}
 
-	u, err := url.Parse(baseURL)
-	if err != nil {
-		return nil, fmt.Errorf("%w: %v", ErrInvalidURL, err)
-	}
 	v := true
 	if u.Scheme == "http" {
 		v = false
@@ -126,7 +148,13 @@ func NewClient(baseURL, apiKey string, verifySSL ...bool) (*Client, error) {
 //   - []string: Index names (empty slice if none)
 //   - error: Any error encountered
 func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
-	return c.internal.ListIndexes(ctx)
+	// Calls DefaultAPI directly rather than c.internal.ListIndexes: the
+	// internal wrapper discards *APIResponse, and the status code lives there.
+	resp, apiResp, err := c.internal.APIClient.DefaultAPI.ListIndexesV1IndexesListGet(ctx).Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list indexes: %w", translateHTTPError(apiResp, err))
+	}
+	return resp.Indexes, nil
 }
 
 // CreateIndex creates a new encrypted DiskIVF vector index.
@@ -159,7 +187,7 @@ func (c *Client) CreateIndex(
 	params *CreateIndexParams,
 ) (*EncryptedIndex, error) {
 	if len(params.IndexKey) == 0 && params.KmsName == nil {
-		return nil, ErrMissingKeyOrKMS
+		return nil, newValidationError(ErrMissingKeyOrKMS)
 	}
 
 	keyHex, err := keyBytesToHex(params.IndexKey)
@@ -213,11 +241,11 @@ func (c *Client) CreateIndex(
 		req.Bm25B = *internal.NewNullableFloat32(&b)
 	}
 
-	_, _, err = c.internal.APIClient.DefaultAPI.CreateIndexV1IndexesCreatePost(ctx).
+	_, apiResp, err := c.internal.APIClient.DefaultAPI.CreateIndexV1IndexesCreatePost(ctx).
 		CreateIndexRequest(req).
 		Execute()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create index: %w", err)
+		return nil, fmt.Errorf("failed to create index: %w", translateHTTPError(apiResp, err))
 	}
 
 	return &EncryptedIndex{
@@ -275,5 +303,11 @@ func (c *Client) LoadIndex(ctx context.Context, indexName string, indexKey []byt
 //   - map[string]string: Health status from the server
 //   - error: Any error encountered
 func (c *Client) GetHealth(ctx context.Context) (map[string]string, error) {
-	return c.internal.GetHealth(ctx)
+	// Calls DefaultAPI directly rather than c.internal.GetHealth, for the same
+	// reason as ListIndexes.
+	health, apiResp, err := c.internal.APIClient.DefaultAPI.HealthCheckV1HealthGet(ctx).Execute()
+	if err != nil {
+		return nil, fmt.Errorf("health check failed: %w", translateHTTPError(apiResp, err))
+	}
+	return health, nil
 }
