@@ -112,20 +112,15 @@ func NewClient(baseURL, apiKey string, verifySSL ...bool) (*Client, error) {
 		return nil, err
 	}
 
-	// Explicit override wins.
-	if len(verifySSL) > 0 {
-		v := verifySSL[0]
-		internalClient, err := internal.NewClient(baseURL, apiKey, v)
-		if err != nil {
-			return nil, err
-		}
-		return &Client{internal: internalClient}, nil
-	}
-
+	// Explicit override wins; otherwise verify unless this is plain http or
+	// a loopback host.
 	v := true
-	if u.Scheme == "http" {
+	switch {
+	case len(verifySSL) > 0:
+		v = verifySSL[0]
+	case u.Scheme == "http":
 		v = false
-	} else {
+	default:
 		host := u.Hostname()
 		if host == "localhost" || host == "127.0.0.1" {
 			v = false

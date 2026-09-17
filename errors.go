@@ -132,6 +132,8 @@ type TransportError struct{ baseError }
 func (e *TransportError) Retryable() bool { return true }
 
 // compile-time check that every typed error satisfies Error.
+//
+//nolint:errcheck // interface satisfaction assertions, not unchecked error returns
 var (
 	_ Error = (*ValidationError)(nil)
 	_ Error = (*AuthenticationError)(nil)
@@ -173,22 +175,22 @@ func translateHTTPError(resp *http.Response, err error) error {
 	}
 
 	switch code := resp.StatusCode; {
-	case code == 401 || code == 403:
+	case code == http.StatusUnauthorized || code == http.StatusForbidden:
 		base.kind = "authentication error"
 		return &AuthenticationError{base}
-	case code == 404:
+	case code == http.StatusNotFound:
 		base.kind = "not found"
 		return &NotFoundError{base}
-	case code == 409:
+	case code == http.StatusConflict:
 		base.kind = "conflict"
 		return &ConflictError{base}
-	case code == 429:
+	case code == http.StatusTooManyRequests:
 		base.kind = "rate limited"
 		return &RateLimitError{base}
-	case code == 400 || code == 422:
+	case code == http.StatusBadRequest || code == http.StatusUnprocessableEntity:
 		base.kind = "validation error"
 		return &ValidationError{base}
-	case code >= 500:
+	case code >= http.StatusInternalServerError:
 		base.kind = "service error"
 		return &ServiceError{base}
 	default:
