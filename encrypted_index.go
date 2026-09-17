@@ -104,10 +104,10 @@ func (e *EncryptedIndex) indexKeyField() internal.NullableString {
 // error context.
 func describeIndex(ctx context.Context, client *internal.Client, indexName string, key internal.NullableString) (*internal.IndexInfoResponseModel, error) {
 	req := internal.IndexOperationRequest{IndexName: indexName, IndexKey: key}
-	resp, _, err := client.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
+	resp, httpResp, err := client.APIClient.DefaultAPI.GetIndexInfoV1IndexesDescribePost(ctx).
 		IndexOperationRequest(req).
 		Execute()
-	return resp, err
+	return resp, translateHTTPError(httpResp, err)
 }
 
 // nullableQueryOpts converts the optional TopK/NProbes/Greedy query knobs into
@@ -218,9 +218,9 @@ func (e *EncryptedIndex) IsTrained(ctx context.Context) (bool, error) {
 //   - bool: true if the index is currently being trained, false otherwise
 //   - error: Any error encountered during the status check
 func (e *EncryptedIndex) IsTraining(ctx context.Context) (bool, error) {
-	result, _, err := e.client.APIClient.DefaultAPI.GetTrainingStatusV1IndexesTrainingStatusGet(ctx).Execute()
+	result, httpResp, err := e.client.APIClient.DefaultAPI.GetTrainingStatusV1IndexesTrainingStatusGet(ctx).Execute()
 	if err != nil {
-		return false, fmt.Errorf("failed to get training status: %w", err)
+		return false, fmt.Errorf("failed to get training status: %w", translateHTTPError(httpResp, err))
 	}
 
 	for _, idx := range result.TrainingIndexes {
@@ -356,11 +356,11 @@ func (e *EncryptedIndex) CreateUser(ctx context.Context, permissions []string) (
 		Permissions: permissions,
 		IndexKey:    e.indexKeyField(),
 	}
-	resp, _, err := e.client.APIClient.DefaultAPI.CreateUserV1IndexesIndexNameUsersPost(ctx, e.indexName).
+	resp, httpResp, err := e.client.APIClient.DefaultAPI.CreateUserV1IndexesIndexNameUsersPost(ctx, e.indexName).
 		CreateUserRequest(req).
 		Execute()
 	if err != nil {
-		return nil, fmt.Errorf("failed to create user: %w", err)
+		return nil, fmt.Errorf("failed to create user: %w", translateHTTPError(httpResp, err))
 	}
 	return &CreatedUser{UserID: resp.GetUserId(), APIKey: resp.GetApiKey()}, nil
 }
@@ -382,9 +382,9 @@ func (e *EncryptedIndex) ListUsers(ctx context.Context) ([]UserInfo, error) {
 	if e.indexKey != nil {
 		request = request.XIndexKey(*e.indexKey)
 	}
-	resp, _, err := request.Execute()
+	resp, httpResp, err := request.Execute()
 	if err != nil {
-		return nil, fmt.Errorf("failed to list users: %w", err)
+		return nil, fmt.Errorf("failed to list users: %w", translateHTTPError(httpResp, err))
 	}
 	users := make([]UserInfo, 0, len(resp.GetUsers()))
 	for _, u := range resp.GetUsers() {
@@ -457,7 +457,7 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, input UpsertInput) error {
 		return e.upsertBinary(ctx, v)
 	default:
 		// This should never happen due to the sealed interface.
-		return ErrUnsupportedUpsertType
+		return newValidationError(ErrUnsupportedUpsertType)
 	}
 }
 
@@ -468,10 +468,10 @@ func (e *EncryptedIndex) upsertItems(ctx context.Context, items VectorItems) err
 		IndexKey:  e.indexKeyField(),
 		Items:     items,
 	}
-	_, _, err := e.client.APIClient.DefaultAPI.UpsertVectorsV1VectorsUpsertPost(ctx).
+	_, httpResp, err := e.client.APIClient.DefaultAPI.UpsertVectorsV1VectorsUpsertPost(ctx).
 		UpsertRequest(req).
 		Execute()
-	return err
+	return translateHTTPError(httpResp, err)
 }
 
 // UpsertVectors inserts vectors using separate ID and vector arrays.
@@ -556,7 +556,7 @@ func (e *EncryptedIndex) Query(ctx context.Context, input QueryInput) (*QueryRes
 		return e.queryBinary(ctx, v)
 	default:
 		// This should never happen due to the sealed interface.
-		return nil, ErrUnsupportedQueryType
+		return nil, newValidationError(ErrUnsupportedQueryType)
 	}
 }
 
@@ -585,10 +585,10 @@ func (e *EncryptedIndex) queryParams(ctx context.Context, params QueryParams) (*
 		request := internal.Request{
 			BatchQueryRequest: &batchReq,
 		}
-		result, _, err := e.client.APIClient.DefaultAPI.QueryVectorsV1VectorsQueryPost(ctx).
+		result, httpResp, err := e.client.APIClient.DefaultAPI.QueryVectorsV1VectorsQueryPost(ctx).
 			Request(request).
 			Execute()
-		return result, err
+		return result, translateHTTPError(httpResp, err)
 	}
 
 	// Handle single query
@@ -618,10 +618,10 @@ func (e *EncryptedIndex) queryParams(ctx context.Context, params QueryParams) (*
 	request := internal.Request{
 		QueryRequest: &req,
 	}
-	result, _, err := e.client.APIClient.DefaultAPI.QueryVectorsV1VectorsQueryPost(ctx).
+	result, httpResp, err := e.client.APIClient.DefaultAPI.QueryVectorsV1VectorsQueryPost(ctx).
 		Request(request).
 		Execute()
-	return result, err
+	return result, translateHTTPError(httpResp, err)
 }
 
 // Get retrieves specific vectors from the index by their IDs.
@@ -651,11 +651,11 @@ func (e *EncryptedIndex) Get(ctx context.Context, ids []string, include []string
 		Ids:       ids,
 		Include:   include,
 	}
-	result, _, err := e.client.APIClient.DefaultAPI.GetVectorsV1VectorsGetPost(ctx).
+	result, httpResp, err := e.client.APIClient.DefaultAPI.GetVectorsV1VectorsGetPost(ctx).
 		GetRequest(req).
 		Execute()
 	if err != nil {
-		return nil, err
+		return nil, translateHTTPError(httpResp, err)
 	}
 	return result, nil
 }
@@ -683,10 +683,10 @@ func (e *EncryptedIndex) Delete(ctx context.Context, ids []string) error {
 		IndexKey:  e.indexKeyField(),
 		Ids:       ids,
 	}
-	_, _, err := e.client.APIClient.DefaultAPI.DeleteVectorsV1VectorsDeletePost(ctx).
+	_, httpResp, err := e.client.APIClient.DefaultAPI.DeleteVectorsV1VectorsDeletePost(ctx).
 		DeleteRequest(req).
 		Execute()
-	return err
+	return translateHTTPError(httpResp, err)
 }
 
 // Train optimizes the index for better query performance and accuracy.
@@ -748,10 +748,10 @@ func (e *EncryptedIndex) Train(ctx context.Context, params TrainParams) error {
 		req.NLists = *internal.NewNullableInt32(params.NLists)
 	}
 
-	_, _, err := e.client.APIClient.DefaultAPI.TrainIndexV1IndexesTrainPost(ctx).
+	_, httpResp, err := e.client.APIClient.DefaultAPI.TrainIndexV1IndexesTrainPost(ctx).
 		TrainRequest(req).
 		Execute()
-	return err
+	return translateHTTPError(httpResp, err)
 }
 
 // DeleteIndex permanently destroys this index and all its data.
@@ -777,10 +777,10 @@ func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 		IndexName: e.indexName,
 		IndexKey:  e.indexKeyField(),
 	}
-	_, _, err := e.client.APIClient.DefaultAPI.DeleteIndexV1IndexesDeletePost(ctx).
+	_, httpResp, err := e.client.APIClient.DefaultAPI.DeleteIndexV1IndexesDeletePost(ctx).
 		IndexOperationRequest(req).
 		Execute()
-	return err
+	return translateHTTPError(httpResp, err)
 }
 
 // ListIDs retrieves all vector IDs currently stored in the index.
@@ -875,10 +875,10 @@ func (e *EncryptedIndex) QueryMetadata(ctx context.Context, params QueryMetadata
 		req.RequireAllTerms = *internal.NewNullableBool(params.RequireAllTerms)
 	}
 
-	result, _, err := e.client.APIClient.DefaultAPI.QueryMetadataV1VectorsQueryMetadataPost(ctx).
+	result, httpResp, err := e.client.APIClient.DefaultAPI.QueryMetadataV1VectorsQueryMetadataPost(ctx).
 		QueryMetadataRequest(req).
 		Execute()
-	return result, err
+	return result, translateHTTPError(httpResp, err)
 }
 
 func (e *EncryptedIndex) ListIDs(ctx context.Context) (*ListIDsResponse, error) {
@@ -886,10 +886,10 @@ func (e *EncryptedIndex) ListIDs(ctx context.Context) (*ListIDsResponse, error) 
 		IndexName: e.indexName,
 		IndexKey:  e.indexKeyField(),
 	}
-	result, _, err := e.client.APIClient.DefaultAPI.ListIdsV1VectorsListIdsPost(ctx).
+	result, httpResp, err := e.client.APIClient.DefaultAPI.ListIdsV1VectorsListIdsPost(ctx).
 		ListIDsRequest(req).
 		Execute()
-	return result, err
+	return result, translateHTTPError(httpResp, err)
 }
 
 // vectorsToBase64 converts a 2D slice of float32 vectors to a base64-encoded string.
@@ -911,7 +911,7 @@ func vectorsToBase64(vectors [][]float32) (string, error) {
 	// Reject ragged batches before sizing the buffer.
 	for i, vec := range vectors {
 		if len(vec) != dimension {
-			return "", fmt.Errorf("%w: vector %d has dimension %d, expected %d", ErrInconsistentDimension, i, len(vec), dimension)
+			return "", newValidationError(fmt.Errorf("%w: vector %d has dimension %d, expected %d", ErrInconsistentDimension, i, len(vec), dimension))
 		}
 	}
 
@@ -963,19 +963,19 @@ func vectorsToBase64(vectors [][]float32) (string, error) {
 //	err := index.upsertBinary(ctx, params)
 func (e *EncryptedIndex) upsertBinary(ctx context.Context, params BinaryUpsertParams) error {
 	if len(params.IDs) == 0 {
-		return ErrEmptyIDs
+		return newValidationError(ErrEmptyIDs)
 	}
 	if len(params.Vectors) == 0 {
-		return ErrEmptyVectors
+		return newValidationError(ErrEmptyVectors)
 	}
 	if len(params.IDs) != len(params.Vectors) {
-		return fmt.Errorf("%w: got %d IDs and %d vectors", ErrIDsVectorsLengthMismatch, len(params.IDs), len(params.Vectors))
+		return newValidationError(fmt.Errorf("%w: got %d IDs and %d vectors", ErrIDsVectorsLengthMismatch, len(params.IDs), len(params.Vectors)))
 	}
 	if len(params.Metadata) > 0 && len(params.Metadata) != len(params.IDs) {
-		return fmt.Errorf("%w: got %d metadata and %d IDs", ErrMetadataLengthMismatch, len(params.Metadata), len(params.IDs))
+		return newValidationError(fmt.Errorf("%w: got %d metadata and %d IDs", ErrMetadataLengthMismatch, len(params.Metadata), len(params.IDs)))
 	}
 	if len(params.Contents) > 0 && len(params.Contents) != len(params.IDs) {
-		return fmt.Errorf("%w: got %d contents and %d IDs", ErrContentsLengthMismatch, len(params.Contents), len(params.IDs))
+		return newValidationError(fmt.Errorf("%w: got %d contents and %d IDs", ErrContentsLengthMismatch, len(params.Contents), len(params.IDs)))
 	}
 
 	// Encode vectors and read the shared dimension (validates equal lengths)
@@ -1023,10 +1023,10 @@ func (e *EncryptedIndex) upsertBinary(ctx context.Context, params BinaryUpsertPa
 		Batch:     batch,
 	}
 
-	_, _, err = e.client.APIClient.DefaultAPI.UpsertVectorsBinaryV1VectorsUpsertBinaryPost(ctx).
+	_, httpResp, err := e.client.APIClient.DefaultAPI.UpsertVectorsBinaryV1VectorsUpsertBinaryPost(ctx).
 		BinaryUpsertRequest(req).
 		Execute()
-	return err
+	return translateHTTPError(httpResp, err)
 }
 
 // QueryBinary performs similarity search using binary format for query vectors.
@@ -1051,7 +1051,7 @@ func (e *EncryptedIndex) upsertBinary(ctx context.Context, params BinaryUpsertPa
 //	results, err := index.queryBinary(ctx, params)
 func (e *EncryptedIndex) queryBinary(ctx context.Context, params BinaryQueryParams) (*QueryResponse, error) {
 	if len(params.QueryVectors) == 0 {
-		return nil, ErrEmptyQueryVectors
+		return nil, newValidationError(ErrEmptyQueryVectors)
 	}
 
 	// Encode vectors and read the shared dimension (validates equal lengths)
@@ -1079,8 +1079,8 @@ func (e *EncryptedIndex) queryBinary(ctx context.Context, params BinaryQueryPara
 	req.Text, req.TextFields, req.TextFieldWeights = h.Text, h.TextFields, h.TextFieldWeights
 	req.RequireAllTerms, req.Alpha, req.RrfK, req.WindowMult = h.RequireAllTerms, h.Alpha, h.RrfK, h.WindowMult
 
-	result, _, err := e.client.APIClient.DefaultAPI.QueryVectorsBinaryV1VectorsQueryBinaryPost(ctx).
+	result, httpResp, err := e.client.APIClient.DefaultAPI.QueryVectorsBinaryV1VectorsQueryBinaryPost(ctx).
 		BinaryQueryRequest(req).
 		Execute()
-	return result, err
+	return result, translateHTTPError(httpResp, err)
 }
