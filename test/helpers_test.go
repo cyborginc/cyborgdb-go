@@ -68,13 +68,6 @@ func generateTestVectors(count, dimension int) [][]float32 {
 	return vectors
 }
 
-// waitForPropagation waits for operations to propagate
-//
-//nolint:unparam // duration kept as parameter for call-site readability
-func waitForPropagation(duration time.Duration) {
-	time.Sleep(duration)
-}
-
 // visibleIDs returns every id QueryMetadata currently reports, or nil on error
 // — the index may not be queryable for a moment right after creation.
 func visibleIDs(index *cyborgdb.EncryptedIndex) map[string]bool {
@@ -299,8 +292,11 @@ func concUpsertBatch(index *cyborgdb.EncryptedIndex, idPrefix string, count, dim
 // seedIndex upserts seed data from the test goroutine. Calls t.Fatalf on error.
 func seedIndex(t *testing.T, index *cyborgdb.EncryptedIndex, prefix string, count, dimension int) {
 	t.Helper()
-	_, err := concUpsertBatch(index, prefix, count, dimension)
+	ids, err := concUpsertBatch(index, prefix, count, dimension)
 	if err != nil {
 		t.Fatalf("seedIndex failed: %v", err)
 	}
+	// Seeding is not complete until the rows are readable; waiting here saves
+	// every caller a fixed sleep.
+	waitForIDs(t, index, ids)
 }

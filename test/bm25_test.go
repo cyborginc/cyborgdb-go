@@ -117,7 +117,11 @@ func bm25Index(t *testing.T) *cyborgdb.EncryptedIndex {
 	if err := index.Upsert(ctx, items); err != nil {
 		t.Fatalf("Upsert failed: %v", err)
 	}
-	waitForPropagation(2 * time.Second)
+	ids := make([]string, len(bm25Docs))
+	for i, doc := range bm25Docs {
+		ids[i] = doc.id
+	}
+	waitForIDs(t, index, ids)
 	return index
 }
 
@@ -602,7 +606,11 @@ func bm25FilterIndex(t *testing.T) *cyborgdb.EncryptedIndex {
 	if err := index.Upsert(ctx, items); err != nil {
 		t.Fatalf("Upsert failed: %v", err)
 	}
-	waitForPropagation(2 * time.Second)
+	ids := make([]string, len(bm25FilterRows))
+	for i, row := range bm25FilterRows {
+		ids[i] = row.id
+	}
+	waitForIDs(t, index, ids)
 	return index
 }
 
@@ -662,7 +670,6 @@ func bm25NoneIndex(t *testing.T) *cyborgdb.EncryptedIndex {
 	client := newIsolatedClient(t)
 	index, _ := newIsolatedIndex(t, client, "bm25_none", int32(bm25Dim))
 	seedIndex(t, index, "n", 4, bm25Dim)
-	waitForPropagation(2 * time.Second)
 	return index
 }
 

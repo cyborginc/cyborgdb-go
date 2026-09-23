@@ -72,7 +72,7 @@ func qmIndex(t *testing.T, schema map[string]cyborgdb.MetadataFieldPolicy) *cybo
 	if err := index.UpsertVectors(ctx, ids, vectors, metadata); err != nil {
 		t.Fatalf("UpsertVectors failed: %v", err)
 	}
-	waitForPropagation(2 * time.Second)
+	waitForIDs(t, index, ids)
 	return index
 }
 
