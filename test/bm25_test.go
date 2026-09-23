@@ -651,16 +651,44 @@ func TestBM25TextFieldsAndFilterCompose(t *testing.T) {
 	assertSameIDs(t, metaIDs(rows), []string{"a"}, "text_fields + filter compose")
 }
 
-func TestBM25FieldWeightsAcceptedAndRankStable(t *testing.T) {
+func TestBM25FieldWeightsFlipTheTopResult(t *testing.T) {
+	// `a`/`c` match in title only, `b` in body only. 10:1 against 1:10 is a
+	// 100x swing — wider than any term-frequency or field-length difference
+	// here, so the flip does not ride on the per-field BM25 formula.
+	//
+	// Asserting only that the matched set survives re-weighting (the previous
+	// shape of this test) would pass even if the service ignored the weights
+	// outright: weights reorder results, they never filter them.
 	index := bm25FilterIndex(t)
-	// Per-field weights (parallel to the searched fields) are forwarded and
-	// accepted; the matched set is unchanged by re-weighting.
-	rows := queryMetaRows(t, index, cyborgdb.QueryMetadataParams{
-		Text:             strPtr("quantum"),
-		TextFields:       []string{"title", "body"},
-		TextFieldWeights: []float32{2.0, 1.0},
-	})
-	assertSameIDs(t, metaIDs(rows), quantumAnyField, "field weights accepted")
+
+	weighted := func(weights []float32) []string {
+		return metaIDs(queryMetaRows(t, index, cyborgdb.QueryMetadataParams{
+			Text:             strPtr("quantum"),
+			TextFields:       []string{"title", "body"},
+			TextFieldWeights: weights,
+		}))
+	}
+	titleHeavy := weighted([]float32{10.0, 1.0})
+	bodyHeavy := weighted([]float32{1.0, 10.0})
+
+	// Re-weighting reorders; it never filters.
+	assertSameIDs(t, titleHeavy, quantumAnyField, "title-heavy match set")
+	assertSameIDs(t, bodyHeavy, quantumAnyField, "body-heavy match set")
+
+	// The winner changes. If the service ignored the weights both orderings
+	// would be identical, which the set comparison above cannot catch.
+	if len(titleHeavy) == 0 || len(bodyHeavy) == 0 {
+		t.Fatalf("expected matches from both weightings; got %v and %v", titleHeavy, bodyHeavy)
+	}
+	if !isSubset([]string{titleHeavy[0]}, quantumInTitle) {
+		t.Errorf("title-heavy top result was %s, want one of %v", titleHeavy[0], quantumInTitle)
+	}
+	if bodyHeavy[0] != "b" {
+		t.Errorf("body-heavy top result was %s, want b (its only match is in body)", bodyHeavy[0])
+	}
+	if titleHeavy[0] == bodyHeavy[0] {
+		t.Errorf("both weightings ranked %s first; text_field_weights had no effect", titleHeavy[0])
+	}
 }
 
 // -- An index with no full_text field: BM25 is absent, not empty ------- //
