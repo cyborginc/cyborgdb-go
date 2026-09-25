@@ -83,6 +83,57 @@ jobs:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_TOKEN }}
           CYBORGDB_API_KEY: "op://CyborgDB/CyborgDB ${{ needs.compute_version.outputs.env == 'dev' && 'Dev' || needs.compute_version.outputs.env == 'staging' && 'Staging' || 'Prod' }}/CYBORGDB_API_KEY_STANDARD"
 
+      # BYOK creds for the KMS registry slots written by the "Write KMS registry
+      # config" step below (aws-kms-self-test / aws-secrets-self-test). export-env is
+      # false so these AWS creds stay out of the job env and are scoped to the
+      # steps that need them, mirroring cyborgdb-py's test.yml.
+      - name: Load BYOK secrets from 1Password
+        id: byok
+        uses: 1password/load-secrets-action@v5
+        with:
+          export-env: false
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_TOKEN }}
+          BYOK_AWS_ACCESS_KEY_ID: "op://CyborgDB/CyborgDB Dev/BYOK_AWS_ACCESS_KEY_ID"
+          BYOK_AWS_SECRET_ACCESS_KEY: "op://CyborgDB/CyborgDB Dev/BYOK_AWS_SECRET_ACCESS_KEY"
+          CYBORGDB_BYOK_ROLE_ARN: "op://CyborgDB/CyborgDB Dev/CYBORGDB_BYOK_ROLE_ARN"
+          CYBORGDB_BYOK_EXTERNAL_ID: "op://CyborgDB/CyborgDB Dev/CYBORGDB_BYOK_EXTERNAL_ID"
+
+      # The KMS registry the BYOK and RBAC tests need. cyborgdb-service keeps an
+      # equivalent file committed at its repo root, but this repo is public, so
+      # it is generated here instead. Contains no secrets: every sensitive value
+      # is a ${VAR} placeholder the service expands from the env at startup, and
+      # those come from 1Password in the byok step above. The quoted heredoc
+      # delimiter keeps bash from expanding the placeholders.
+      - name: Write KMS registry config
+        run: |
+          set -euo pipefail
+          cat > "${{ runner.temp }}/cyborgdb.yaml" <<'YAML'
+          kms:
+            registry:
+              # BYOK via AWS Secrets Manager — the wrap key lives in Secrets
+              # Manager; service AES-GCM-encrypts each per-index KEK under it.
+              aws-secrets-self-test:
+                provider:    aws
+                key_id:      ${CYBORGDB_SECRETS_KEY_ID:-CYBORGDB_SERVICE_KEY1}
+                region:      ${CYBORGDB_AWS_REGION:-us-east-1}
+                role_arn:    ${CYBORGDB_BYOK_ROLE_ARN}
+                external_id: ${CYBORGDB_BYOK_EXTERNAL_ID}
+                role_session_name: cyborgdb-secrets-self-test
+
+              # BYOK via AWS KMS (HSM) — the wrap key never leaves the HSM;
+              # `kms:Encrypt` returns ciphertext directly.
+              aws-kms-self-test:
+                provider:    aws-kms
+                key_id:      ${CYBORGDB_KMS_KEY_ID:-alias/CYBORGDB_SERVICE_KEY}
+                region:      ${CYBORGDB_AWS_REGION:-us-east-1}
+                role_arn:    ${CYBORGDB_BYOK_ROLE_ARN}
+                external_id: ${CYBORGDB_BYOK_EXTERNAL_ID}
+                role_session_name: cyborgdb-kms-self-test
+          YAML
+          echo "--- generated registry (placeholders unexpanded) ---"
+          cat "${{ runner.temp }}/cyborgdb.yaml"
+
       - name: Load CodeArtifact account ID from 1Password
         if: needs.compute_version.outputs.env != 'prod'
         uses: 1password/load-secrets-action@v5
@@ -115,7 +166,7 @@ jobs:
       - name: Install cyborgdb-service
         run: |
           # For dev/staging, PIP_INDEX_URL points at CodeArtifact (PyPI upstream). For prod, it is unset and pip falls back to PyPI.
-          pip install "cyborgdb-service[embeddings]" --pre
+          pip install "cyborgdb-service[embeddings,kms-aws]" --pre
 
       ## TODO - Add a test for Lite version
 
@@ -125,8 +176,25 @@ jobs:
       #     ...
 
       - name: Test with Standard version
+        id: test-standard
+        env:
+          # KMS slot names test/kms_byok_test.go gates on — they name the
+          # registry slots written by the "Write KMS registry config" step.
+          CYBORGDB_KMS_NAME_REAL: aws-kms-self-test
+          CYBORGDB_KMS_NAME_SM: aws-secrets-self-test
+          # Point the service at that generated registry.
+          CYBORGDB_CONFIG_FILE: ${{ runner.temp }}/cyborgdb.yaml
+          # Static BYOK creds the slots' role_arn/external_id are assumed with.
+          AWS_ACCESS_KEY_ID: ${{ steps.byok.outputs.BYOK_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.byok.outputs.BYOK_AWS_SECRET_ACCESS_KEY }}
+          CYBORGDB_BYOK_ROLE_ARN: ${{ steps.byok.outputs.CYBORGDB_BYOK_ROLE_ARN }}
+          CYBORGDB_BYOK_EXTERNAL_ID: ${{ steps.byok.outputs.CYBORGDB_BYOK_EXTERNAL_ID }}
         run: |
           echo "=== Testing with Standard version ==="
+          # The static BYOK key must not be combined with the OIDC session token
+          # left in the env by the CodeArtifact step — that would assume the
+          # wrong principal when the service reaches KMS / Secrets Manager.
+          unset AWS_SESSION_TOKEN
           # Set up environment for Standard
           export CYBORGDB_API_KEY="${CYBORGDB_API_KEY}"
           export CYBORGDB_DB_TYPE=disk
@@ -160,7 +228,88 @@ jobs:
           
           # Stop standard server
           kill $(cat server-standard.pid) || true
-          
+
+      # RBAC pass. CYBORGDB_SERVICE_ROOT_KEY switches the service from "auth
+      # disabled" to "auth required" for every request, so RBAC cannot share the
+      # service instance above — it needs its own, started with the key. The
+      # licensed CYBORGDB_API_KEY doubles as the root key, so this needs no
+      # additional secret.
+      #
+      # Without this step test/rbac_users_test.go skips on every run: it needs
+      # both a root key and a KMS slot, and neither was ever set here.
+      - name: RBAC tests
+        if: ${{ !cancelled() && steps.test-standard.outcome != 'skipped' }}
+        env:
+          CYBORGDB_SERVICE_ROOT_KEY: ${{ env.CYBORGDB_API_KEY }}
+          # Same registry slots and BYOK credentials as the main test step —
+          # user keys resolve the index KEK server-side, so RBAC only works
+          # against a KMS-backed index.
+          CYBORGDB_KMS_NAME_REAL: aws-kms-self-test
+          CYBORGDB_KMS_NAME_SM: aws-secrets-self-test
+          CYBORGDB_CONFIG_FILE: ${{ runner.temp }}/cyborgdb.yaml
+          AWS_ACCESS_KEY_ID: ${{ steps.byok.outputs.BYOK_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.byok.outputs.BYOK_AWS_SECRET_ACCESS_KEY }}
+          CYBORGDB_BYOK_ROLE_ARN: ${{ steps.byok.outputs.CYBORGDB_BYOK_ROLE_ARN }}
+          CYBORGDB_BYOK_EXTERNAL_ID: ${{ steps.byok.outputs.CYBORGDB_BYOK_EXTERNAL_ID }}
+        run: |
+          set -euo pipefail
+          echo "=== RBAC pass (authentication enabled) ==="
+          unset AWS_SESSION_TOKEN
+
+          # Fail loudly rather than letting the suite skip silently — a skip
+          # here would mean this setup broke and nobody noticed.
+          : "${CYBORGDB_SERVICE_ROOT_KEY:?root key is empty; RBAC tests would skip}"
+          : "${CYBORGDB_KMS_NAME_REAL:?KMS slot is empty; RBAC tests would skip}"
+
+          # Wait for the port to free up after the standard server was killed.
+          for i in {1..15}; do
+            curl -fs http://localhost:8000/v1/health > /dev/null || break
+            sleep 1
+          done
+
+          export CYBORGDB_DB_TYPE=disk
+          export CYBORGDB_SERVICE_LOG_LEVEL=DEBUG
+          export CYBORGDB_BASE_URL=http://localhost:8000
+          # Fresh data directory so this service does not inherit indexes
+          # created while authentication was disabled.
+          export CYBORGDB_DISK_PATH="${RUNNER_TEMP}/cyborgdb-rbac-disk"
+
+          nohup cyborgdb-service > server-rbac.log 2>&1 &
+          echo $! > server-rbac.pid
+
+          # /v1/health is unauthenticated, so it stays a valid readiness probe.
+          for i in {1..30}; do
+            if curl -fs http://localhost:8000/v1/health > /dev/null; then
+              echo "RBAC service is up!"
+              break
+            fi
+            sleep 1
+          done
+          if ! curl -fs http://localhost:8000/v1/health > /dev/null; then
+            echo "RBAC service failed to start"
+            cat server-rbac.log
+            exit 1
+          fi
+
+          # The RBAC suite, plus the auth assertion that is only meaningful
+          # with authentication enabled.
+          go test -v ./test -run 'TestRBAC|TestInvalidAPIKeyRejected'
+
+          kill "$(cat server-rbac.pid)" 2>/dev/null || true
+
+      # Both servers are started with nohup and killed inline on the happy
+      # path; a failing test step exits before its kill line, so this is the
+      # only cleanup that runs on failure. Mirrors cyborgdb-py's test.yml.
+      - name: Kill Server
+        if: always()
+        run: |
+          if [ -f server-standard.pid ]; then
+            kill $(cat server-standard.pid) || true
+          fi
+          if [ -f server-rbac.pid ]; then
+            kill $(cat server-rbac.pid) || true
+          fi
+
       - name: Upload coverage reports
         uses: codecov/codecov-action@v7
         with:
