@@ -5,3 +5,29 @@
 # review, but with no CODEOWNERS file the code-owner requirement had nothing to
 # enforce, so any collaborator's approval satisfied it.
 * @dupontcyborg @ahellegit
+
+# Tests, test tooling, and testing docs: QA (@lubna-khalid) is auto-requested
+# alongside the code owners. Keep this block last: the last matching pattern wins.
+test/                 @dupontcyborg @ahellegit @lubna-khalid
+tests/                @dupontcyborg @ahellegit @lubna-khalid
+__tests__/            @dupontcyborg @ahellegit @lubna-khalid
+testing/              @dupontcyborg @ahellegit @lubna-khalid
+integration_tests/    @dupontcyborg @ahellegit @lubna-khalid
+load_tests/           @dupontcyborg @ahellegit @lubna-khalid
+*_test.go             @dupontcyborg @ahellegit @lubna-khalid
+*_test.py             @dupontcyborg @ahellegit @lubna-khalid
+test_*.py             @dupontcyborg @ahellegit @lubna-khalid
+conftest.py           @dupontcyborg @ahellegit @lubna-khalid
+pytest.ini            @dupontcyborg @ahellegit @lubna-khalid
+*.test.ts             @dupontcyborg @ahellegit @lubna-khalid
+*.test.tsx            @dupontcyborg @ahellegit @lubna-khalid
+*.test.js             @dupontcyborg @ahellegit @lubna-khalid
+*.spec.ts             @dupontcyborg @ahellegit @lubna-khalid
+*.spec.js             @dupontcyborg @ahellegit @lubna-khalid
+jest.config.*         @dupontcyborg @ahellegit @lubna-khalid
+vitest.config.*       @dupontcyborg @ahellegit @lubna-khalid
+playwright.config.*   @dupontcyborg @ahellegit @lubna-khalid
+TESTING.md            @dupontcyborg @ahellegit @lubna-khalid
+*TEST*.md             @dupontcyborg @ahellegit @lubna-khalid
+*Test*.md             @dupontcyborg @ahellegit @lubna-khalid
+*testing*.md          @dupontcyborg @ahellegit @lubna-khalid
