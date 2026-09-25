@@ -745,3 +745,90 @@ func TestBM25MetadataResultShape(t *testing.T) {
 		t.Errorf("scored row: HasScore=%v Score=%v", scored.HasScore(), scored.GetScore())
 	}
 }
+
+// -- metadata field policy defaults ----------------------------------------- //
+//
+// The full_text shorthand the SDK documents. Mirrors py
+// TestMetadataFieldPolicyDefaults. cyborgdb-core#2393 is the Python SDK
+// defaulting filterable=true and always serialising it, so the request carries
+// filterable=true + full_text=true and the service 422s; these assert Go does
+// not do the same.
+
+// policyIndex creates an index with the given schema/sugar and returns it.
+func policyIndex(t *testing.T, apply func(*cyborgdb.CreateIndexParams)) *cyborgdb.EncryptedIndex {
+	t.Helper()
+	client := newIsolatedClient(t)
+	dim := int32(bm25Dim)
+	metric := "euclidean"
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	params := &cyborgdb.CreateIndexParams{
+		IndexName: generateUniqueName("policy_"),
+		IndexKey:  generateRandomKey(),
+		Dimension: &dim,
+		Metric:    &metric,
+	}
+	apply(params)
+	index, err := client.CreateIndex(ctx, params)
+	if err != nil {
+		t.Fatalf("CreateIndex failed: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanCancel()
+		_ = index.DeleteIndex(cleanCtx)
+	})
+	return index
+}
+
+// assertFullTextPolicy checks the field resolved to full_text and nothing else.
+func assertFullTextPolicy(t *testing.T, index *cyborgdb.EncryptedIndex, field string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	schema, err := index.MetadataSchema(ctx)
+	if err != nil {
+		t.Fatalf("MetadataSchema failed: %v", err)
+	}
+	policy, ok := schema[field]
+	if !ok {
+		t.Fatalf("schema has no %q field: %+v", field, schema)
+	}
+	if !policy.GetFullText() {
+		t.Errorf("%s: full_text = false, want true", field)
+	}
+	if policy.GetFilterable() {
+		t.Errorf("%s: filterable = true, want false", field)
+	}
+	if policy.GetPattern() {
+		t.Errorf("%s: pattern = true, want false", field)
+	}
+}
+
+func TestPolicyFullTextAloneIsAccepted(t *testing.T) {
+	index := policyIndex(t, func(p *cyborgdb.CreateIndexParams) {
+		p.MetadataSchema = map[string]cyborgdb.MetadataFieldPolicy{
+			"title": {FullText: boolPtr(true)},
+		}
+	})
+	assertFullTextPolicy(t, index, "title")
+}
+
+func TestPolicyFullTextWithFilterableSpelledOut(t *testing.T) {
+	// The workaround callers need in Python — and the anchor that makes the
+	// test above meaningful rather than a blanket "schemas are broken".
+	index := policyIndex(t, func(p *cyborgdb.CreateIndexParams) {
+		p.MetadataSchema = map[string]cyborgdb.MetadataFieldPolicy{
+			"title": {FullText: boolPtr(true), Filterable: boolPtr(false)},
+		}
+	})
+	assertFullTextPolicy(t, index, "title")
+}
+
+func TestPolicyTextFieldsSugarIsEquivalent(t *testing.T) {
+	index := policyIndex(t, func(p *cyborgdb.CreateIndexParams) {
+		p.TextFields = []string{"title"}
+	})
+	assertFullTextPolicy(t, index, "title")
+}

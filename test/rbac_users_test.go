@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"errors"
 	"os"
 	"reflect"
 	"sort"
@@ -391,5 +392,227 @@ func TestRBACRevokingOneUserLeavesAnotherWorking(t *testing.T) {
 	}
 	if len(getQueryResultItems(&resp.Results)) < 1 {
 		t.Error("expected at least one query result for surviving user")
+	}
+}
+
+// rbacKMSName is the registry slot the RBAC fixture uses, matching
+// rbacRootIndex's own lookup.
+func rbacKMSName() string {
+	if n := os.Getenv("CYBORGDB_KMS_NAME"); n != "" {
+		return n
+	}
+	return os.Getenv("CYBORGDB_KMS_NAME_REAL")
+}
+
+// rbacRootClient builds a client authenticated as the service root.
+func rbacRootClient(t *testing.T) *cyborgdb.Client {
+	t.Helper()
+	client, err := cyborgdb.NewClient(testBaseURL(), os.Getenv("CYBORGDB_SERVICE_ROOT_KEY"))
+	if err != nil {
+		t.Fatalf("Failed to create root client: %v", err)
+	}
+	return client
+}
+
+// rbacTryUserIndex is rbacUserIndex without the fatal: the cross-tenant tests
+// below expect the load itself to be denied, so the error is the result.
+func rbacTryUserIndex(ctx context.Context, apiKey, name string) (*cyborgdb.EncryptedIndex, error) {
+	client, err := cyborgdb.NewClient(testBaseURL(), apiKey)
+	if err != nil {
+		return nil, err
+	}
+	return client.LoadIndex(ctx, name, nil)
+}
+
+func TestRBACDenialsAreCatchableWithOneClause(t *testing.T) {
+	// Regression guard for cyborgdb-core#2398: the paths still fail in
+	// different ways (query denies, LoadIndex 404s), but both surface as a
+	// cyborgdb.Error so a caller needs only one type assertion.
+	index, name := rbacRootIndex(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	out, err := index.CreateUser(ctx, []string{"read"})
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+	revoked := rbacUserIndex(t, out.APIKey, name)
+	if err := index.DeleteUser(ctx, out.UserID); err != nil {
+		t.Fatalf("DeleteUser failed: %v", err)
+	}
+
+	_, queryErr := revoked.Query(ctx, cyborgdb.QueryParams{
+		QueryVector: []float32{0.1, 0.2, 0.3, 0.4}, TopK: 1,
+	})
+	if queryErr == nil {
+		t.Fatal("query with a revoked key should be denied")
+	}
+	var typed cyborgdb.Error
+	if !errors.As(queryErr, &typed) {
+		t.Errorf("query denial is not a cyborgdb.Error: %T", queryErr)
+	}
+
+	_, loadErr := rbacTryUserIndex(ctx, out.APIKey, name)
+	if loadErr == nil {
+		t.Fatal("loading with a revoked key should be denied")
+	}
+	if !errors.As(loadErr, &typed) {
+		t.Errorf("load denial is not a cyborgdb.Error: %T", loadErr)
+	}
+}
+
+func TestRBACRevokeAfterUseDeniesAPreviouslyWorkingKey(t *testing.T) {
+	// The other revocation tests revoke a key that was never used, which
+	// passes trivially. This one uses the key first.
+	index, name := rbacRootIndex(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	out, err := index.CreateUser(ctx, []string{"read"})
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+	userIdx := rbacUserIndex(t, out.APIKey, name)
+
+	resp, err := userIdx.Query(ctx, cyborgdb.QueryParams{
+		QueryVector: []float32{0.1, 0.2, 0.3, 0.4}, TopK: 1,
+	})
+	if err != nil {
+		t.Fatalf("query before revocation failed: %v", err)
+	}
+	if len(getQueryResultItems(&resp.Results)) < 1 {
+		t.Fatal("expected the key to work before revocation")
+	}
+
+	if err := index.DeleteUser(ctx, out.UserID); err != nil {
+		t.Fatalf("DeleteUser failed: %v", err)
+	}
+
+	// A server-side cache outliving the revocation would surface here.
+	if _, err := userIdx.Query(ctx, cyborgdb.QueryParams{
+		QueryVector: []float32{0.1, 0.2, 0.3, 0.4}, TopK: 1,
+	}); err == nil {
+		t.Error("the already-loaded index still answers after revocation")
+	}
+	if _, err := rbacTryUserIndex(ctx, out.APIKey, name); err == nil {
+		t.Error("a freshly loaded index still answers after revocation")
+	}
+}
+
+func TestRBACUserKeyCannotReachAnotherIndex(t *testing.T) {
+	index, _ := rbacRootIndex(t)
+	root := rbacRootClient(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	otherName := generateUniqueName("rbac_other_")
+	dim := int32(rbacDimension)
+	kmsName := rbacKMSName()
+	other, err := root.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+		IndexName: otherName,
+		KmsName:   &kmsName,
+		Dimension: &dim,
+	})
+	if err != nil {
+		t.Fatalf("CreateIndex (other tenant) failed: %v", err)
+	}
+	defer func() {
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanCancel()
+		_ = other.DeleteIndex(cleanCtx)
+	}()
+
+	ids, vectors := rbacSeed()
+	if err := other.UpsertVectors(ctx, ids, vectors, nil); err != nil {
+		t.Fatalf("seeding the other tenant's index failed: %v", err)
+	}
+
+	out, err := index.CreateUser(ctx, []string{"read", "write"})
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+	defer func() { _ = index.DeleteUser(ctx, out.UserID) }()
+
+	// Cross-tenant access must be denied on every path — at load or at use.
+	for _, tc := range []struct {
+		name string
+		call func(*cyborgdb.EncryptedIndex) error
+	}{
+		{"query", func(i *cyborgdb.EncryptedIndex) error {
+			_, err := i.Query(ctx, cyborgdb.QueryParams{
+				QueryVector: []float32{0.1, 0.2, 0.3, 0.4}, TopK: 1,
+			})
+			return err
+		}},
+		{"upsert", func(i *cyborgdb.EncryptedIndex) error {
+			return i.Upsert(ctx, cyborgdb.VectorItems{{
+				Id: "x", Vector: []float32{0.0, 0.0, 0.0, 1.0},
+			}})
+		}},
+		{"get", func(i *cyborgdb.EncryptedIndex) error {
+			_, err := i.Get(ctx, []string{"a"}, []string{"vector"})
+			return err
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			foreign, loadErr := rbacTryUserIndex(ctx, out.APIKey, otherName)
+			if loadErr != nil {
+				return // denied at load, which is the stronger outcome
+			}
+			if err := tc.call(foreign); err == nil {
+				t.Errorf("a user key reached another tenant's index via %s", tc.name)
+			}
+		})
+	}
+}
+
+func TestRBACListIndexesUnderAUserKeyIsScopedOrDenied(t *testing.T) {
+	// SECURITY BUG — fails today. cyborgdb-core#2397: a tenant-scoped key
+	// enumerates every index in the deployment. Data access is correctly
+	// denied (see TestRBACUserKeyCannotReachAnotherIndex), so this discloses
+	// index names rather than contents.
+	index, name := rbacRootIndex(t)
+	root := rbacRootClient(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	defer cancel()
+
+	hiddenName := generateUniqueName("rbac_hidden_")
+	dim := int32(rbacDimension)
+	kmsName := rbacKMSName()
+	hidden, err := root.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+		IndexName: hiddenName,
+		KmsName:   &kmsName,
+		Dimension: &dim,
+	})
+	if err != nil {
+		t.Fatalf("CreateIndex (hidden) failed: %v", err)
+	}
+	defer func() {
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cleanCancel()
+		_ = hidden.DeleteIndex(cleanCtx)
+	}()
+
+	out, err := index.CreateUser(ctx, []string{"read"})
+	if err != nil {
+		t.Fatalf("CreateUser failed: %v", err)
+	}
+	defer func() { _ = index.DeleteUser(ctx, out.UserID) }()
+
+	userClient, err := cyborgdb.NewClient(testBaseURL(), out.APIKey)
+	if err != nil {
+		t.Fatalf("Failed to create user client: %v", err)
+	}
+	listed, err := userClient.ListIndexes(ctx)
+	if err != nil {
+		return // refusing outright is an acceptable contract
+	}
+	for _, got := range listed {
+		if got == hiddenName {
+			t.Errorf("a tenant-scoped key sees another tenant's index %q", hiddenName)
+		}
+		if got != name {
+			t.Errorf("a tenant-scoped key sees %q, which is not its own index", got)
+		}
 	}
 }
