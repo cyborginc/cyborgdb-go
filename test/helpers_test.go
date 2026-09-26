@@ -7,6 +7,7 @@ import (
 	"math"
 	mrand "math/rand"
 	"os"
+	"sort"
 	"testing"
 	"time"
 
@@ -67,11 +68,75 @@ func generateTestVectors(count, dimension int) [][]float32 {
 	return vectors
 }
 
-// waitForPropagation waits for operations to propagate
+// visibleIDs returns every id QueryMetadata currently reports, or nil on error
+// — the index may not be queryable for a moment right after creation.
+func visibleIDs(index *cyborgdb.EncryptedIndex) map[string]bool {
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	resp, err := index.QueryMetadata(ctx, cyborgdb.QueryMetadataParams{})
+	if err != nil {
+		return nil
+	}
+	seen := make(map[string]bool, len(resp.Results))
+	for _, row := range resp.Results {
+		seen[row.Id] = true
+	}
+	return seen
+}
+
+// waitForIDs blocks until every id in expected is visible to QueryMetadata.
 //
-//nolint:unparam // duration kept as parameter for call-site readability
-func waitForPropagation(duration time.Duration) {
-	time.Sleep(duration)
+// Upserts become visible asynchronously. A fixed sleep is the worst of both
+// worlds — flaky on a loaded machine, wasted time on an idle one — so poll for
+// the condition and fail with a useful message if it never arrives. Mirrors py
+// tests/helpers.py wait_for_ids.
+func waitForIDs(t *testing.T, index *cyborgdb.EncryptedIndex, expected []string) {
+	t.Helper()
+	var missing []string
+	ok := pollUntil(propagationTimeout, func() bool {
+		seen := visibleIDs(index)
+		missing = missing[:0]
+		for _, id := range expected {
+			if !seen[id] {
+				missing = append(missing, id)
+			}
+		}
+		return len(missing) == 0
+	})
+	if !ok {
+		sort.Strings(missing)
+		t.Fatalf("upserted ids still not visible after %v; missing %v", propagationTimeout, missing)
+	}
+}
+
+// waitUntilIDsGone blocks until none of gone are visible — the delete-side
+// counterpart to waitForIDs.
+func waitUntilIDsGone(t *testing.T, index *cyborgdb.EncryptedIndex, gone []string) {
+	t.Helper()
+	var remaining []string
+	ok := pollUntil(propagationTimeout, func() bool {
+		seen := visibleIDs(index)
+		remaining = remaining[:0]
+		for _, id := range gone {
+			if seen[id] {
+				remaining = append(remaining, id)
+			}
+		}
+		return len(remaining) == 0
+	})
+	if !ok {
+		sort.Strings(remaining)
+		t.Fatalf("deleted ids still visible after %v: %v", propagationTimeout, remaining)
+	}
+}
+
+// waitForCondition blocks until condition holds, for cases neither id helper
+// expresses. description is what the failure message says was awaited.
+func waitForCondition(t *testing.T, description string, condition func() bool) {
+	t.Helper()
+	if !pollUntil(propagationTimeout, condition) {
+		t.Fatalf("timed out after %v waiting for: %s", propagationTimeout, description)
+	}
 }
 
 // pollUntil polls a condition function at pollInterval until it returns true or timeout is reached.
@@ -91,6 +156,10 @@ func pollUntil(timeout time.Duration, condition func() bool) bool {
 const (
 	pollTimeout  = 10 * time.Second
 	pollInterval = 500 * time.Millisecond
+	// propagationTimeout bounds the id-visibility helpers. Longer than
+	// pollTimeout because a cold index can take a few seconds to serve its
+	// first query; matches py helpers.DEFAULT_TIMEOUT.
+	propagationTimeout = 30 * time.Second
 )
 
 // getQueryResultItems extracts query result items from the Results union type.
@@ -223,8 +292,11 @@ func concUpsertBatch(index *cyborgdb.EncryptedIndex, idPrefix string, count, dim
 // seedIndex upserts seed data from the test goroutine. Calls t.Fatalf on error.
 func seedIndex(t *testing.T, index *cyborgdb.EncryptedIndex, prefix string, count, dimension int) {
 	t.Helper()
-	_, err := concUpsertBatch(index, prefix, count, dimension)
+	ids, err := concUpsertBatch(index, prefix, count, dimension)
 	if err != nil {
 		t.Fatalf("seedIndex failed: %v", err)
 	}
+	// Seeding is not complete until the rows are readable; waiting here saves
+	// every caller a fixed sleep.
+	waitForIDs(t, index, ids)
 }

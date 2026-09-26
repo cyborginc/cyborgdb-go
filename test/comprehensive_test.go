@@ -237,7 +237,7 @@ func TestVectorAndMetadataRoundTrip(t *testing.T) {
 		t.Fatalf("Upsert failed: %v", err)
 	}
 
-	waitForPropagation(2 * time.Second)
+	waitForIDs(t, index, []string{"roundtrip_test"})
 
 	results, err := index.Get(ctx, []string{"roundtrip_test"}, []string{"vector", "metadata"})
 	if err != nil {
@@ -295,7 +295,7 @@ func TestUpsertOverwritePreservesLatestData(t *testing.T) {
 		t.Fatalf("Upsert v1 failed: %v", err)
 	}
 
-	waitForPropagation(2 * time.Second)
+	waitForIDs(t, index, []string{"overwrite_test"})
 
 	// Overwrite with different vector and metadata
 	vecV2 := generateTestVectors(1, 128)[0]
@@ -310,7 +310,15 @@ func TestUpsertOverwritePreservesLatestData(t *testing.T) {
 		t.Fatalf("Upsert v2 failed: %v", err)
 	}
 
-	waitForPropagation(2 * time.Second)
+	// The id is already visible from v1, so poll the value that changed rather
+	// than the id.
+	waitForCondition(t, "overwrite_test reports version 2", func() bool {
+		got, err := index.Get(ctx, []string{"overwrite_test"}, []string{"metadata"})
+		if err != nil || len(got.Results) != 1 {
+			return false
+		}
+		return got.Results[0].Metadata["version"] == float64(2)
+	})
 
 	results, err := index.Get(ctx, []string{"overwrite_test"}, []string{"vector", "metadata"})
 	if err != nil {
@@ -364,7 +372,11 @@ func TestDeleteActuallyRemovesData(t *testing.T) {
 		t.Fatalf("Upsert failed: %v", err)
 	}
 
-	waitForPropagation(2 * time.Second)
+	seeded := make([]string, 10)
+	for i := range seeded {
+		seeded[i] = fmt.Sprintf("del_test_%d", i)
+	}
+	waitForIDs(t, index, seeded)
 
 	// Delete first 5
 	deleteIDs := []string{"del_test_0", "del_test_1", "del_test_2", "del_test_3", "del_test_4"}
@@ -372,7 +384,7 @@ func TestDeleteActuallyRemovesData(t *testing.T) {
 		t.Fatalf("Delete failed: %v", err)
 	}
 
-	waitForPropagation(2 * time.Second)
+	waitUntilIDsGone(t, index, deleteIDs)
 
 	// Get deleted IDs — should return empty results
 	getResp, err := index.Get(ctx, deleteIDs, []string{"vector"})
@@ -502,7 +514,7 @@ func TestWrongKeyCannotAccessData(t *testing.T) {
 		t.Fatalf("Upsert failed: %v", err)
 	}
 
-	waitForPropagation(2 * time.Second)
+	waitForIDs(t, index, []string{"secret_data"})
 
 	// Try to load the same index with a wrong key
 	wrongKey := generateRandomKey()
@@ -528,7 +540,7 @@ func TestGetNonExistentIDs(t *testing.T) {
 		t.Fatalf("Upsert failed: %v", err)
 	}
 
-	waitForPropagation(2 * time.Second)
+	waitForIDs(t, index, []string{"exists"})
 
 	// Get a mix of existing and non-existing IDs
 	resp, err := index.Get(ctx, []string{"exists", "ghost_1", "ghost_2"}, []string{"vector"})
@@ -577,7 +589,11 @@ func TestBoundaryVectorValuesRoundTrip(t *testing.T) {
 		}
 	}
 
-	waitForPropagation(2 * time.Second)
+	boundaryIDs := make([]string, len(testCases))
+	for i := range testCases {
+		boundaryIDs[i] = fmt.Sprintf("boundary_%d", i)
+	}
+	waitForIDs(t, index, boundaryIDs)
 
 	// Verify round-trip
 	for i, tc := range testCases {
@@ -650,7 +666,11 @@ func TestLargeMetadataRoundTrip(t *testing.T) {
 		}
 	}
 
-	waitForPropagation(2 * time.Second)
+	metaIDsSeeded := make([]string, len(testCases))
+	for i := range testCases {
+		metaIDsSeeded[i] = fmt.Sprintf("meta_%d", i)
+	}
+	waitForIDs(t, index, metaIDsSeeded)
 
 	for i, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {

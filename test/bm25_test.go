@@ -117,7 +117,11 @@ func bm25Index(t *testing.T) *cyborgdb.EncryptedIndex {
 	if err := index.Upsert(ctx, items); err != nil {
 		t.Fatalf("Upsert failed: %v", err)
 	}
-	waitForPropagation(2 * time.Second)
+	ids := make([]string, len(bm25Docs))
+	for i, doc := range bm25Docs {
+		ids[i] = doc.id
+	}
+	waitForIDs(t, index, ids)
 	return index
 }
 
@@ -602,7 +606,11 @@ func bm25FilterIndex(t *testing.T) *cyborgdb.EncryptedIndex {
 	if err := index.Upsert(ctx, items); err != nil {
 		t.Fatalf("Upsert failed: %v", err)
 	}
-	waitForPropagation(2 * time.Second)
+	ids := make([]string, len(bm25FilterRows))
+	for i, row := range bm25FilterRows {
+		ids[i] = row.id
+	}
+	waitForIDs(t, index, ids)
 	return index
 }
 
@@ -643,16 +651,44 @@ func TestBM25TextFieldsAndFilterCompose(t *testing.T) {
 	assertSameIDs(t, metaIDs(rows), []string{"a"}, "text_fields + filter compose")
 }
 
-func TestBM25FieldWeightsAcceptedAndRankStable(t *testing.T) {
+func TestBM25FieldWeightsFlipTheTopResult(t *testing.T) {
+	// `a`/`c` match in title only, `b` in body only. 10:1 against 1:10 is a
+	// 100x swing — wider than any term-frequency or field-length difference
+	// here, so the flip does not ride on the per-field BM25 formula.
+	//
+	// Asserting only that the matched set survives re-weighting (the previous
+	// shape of this test) would pass even if the service ignored the weights
+	// outright: weights reorder results, they never filter them.
 	index := bm25FilterIndex(t)
-	// Per-field weights (parallel to the searched fields) are forwarded and
-	// accepted; the matched set is unchanged by re-weighting.
-	rows := queryMetaRows(t, index, cyborgdb.QueryMetadataParams{
-		Text:             strPtr("quantum"),
-		TextFields:       []string{"title", "body"},
-		TextFieldWeights: []float32{2.0, 1.0},
-	})
-	assertSameIDs(t, metaIDs(rows), quantumAnyField, "field weights accepted")
+
+	weighted := func(weights []float32) []string {
+		return metaIDs(queryMetaRows(t, index, cyborgdb.QueryMetadataParams{
+			Text:             strPtr("quantum"),
+			TextFields:       []string{"title", "body"},
+			TextFieldWeights: weights,
+		}))
+	}
+	titleHeavy := weighted([]float32{10.0, 1.0})
+	bodyHeavy := weighted([]float32{1.0, 10.0})
+
+	// Re-weighting reorders; it never filters.
+	assertSameIDs(t, titleHeavy, quantumAnyField, "title-heavy match set")
+	assertSameIDs(t, bodyHeavy, quantumAnyField, "body-heavy match set")
+
+	// The winner changes. If the service ignored the weights both orderings
+	// would be identical, which the set comparison above cannot catch.
+	if len(titleHeavy) == 0 || len(bodyHeavy) == 0 {
+		t.Fatalf("expected matches from both weightings; got %v and %v", titleHeavy, bodyHeavy)
+	}
+	if !isSubset([]string{titleHeavy[0]}, quantumInTitle) {
+		t.Errorf("title-heavy top result was %s, want one of %v", titleHeavy[0], quantumInTitle)
+	}
+	if bodyHeavy[0] != "b" {
+		t.Errorf("body-heavy top result was %s, want b (its only match is in body)", bodyHeavy[0])
+	}
+	if titleHeavy[0] == bodyHeavy[0] {
+		t.Errorf("both weightings ranked %s first; text_field_weights had no effect", titleHeavy[0])
+	}
 }
 
 // -- An index with no full_text field: BM25 is absent, not empty ------- //
@@ -662,7 +698,6 @@ func bm25NoneIndex(t *testing.T) *cyborgdb.EncryptedIndex {
 	client := newIsolatedClient(t)
 	index, _ := newIsolatedIndex(t, client, "bm25_none", int32(bm25Dim))
 	seedIndex(t, index, "n", 4, bm25Dim)
-	waitForPropagation(2 * time.Second)
 	return index
 }
 
@@ -709,4 +744,91 @@ func TestBM25MetadataResultShape(t *testing.T) {
 	if !scored.HasScore() || !approxEqual(scored.GetScore(), 1.5) {
 		t.Errorf("scored row: HasScore=%v Score=%v", scored.HasScore(), scored.GetScore())
 	}
+}
+
+// -- metadata field policy defaults ----------------------------------------- //
+//
+// The full_text shorthand the SDK documents. Mirrors py
+// TestMetadataFieldPolicyDefaults. cyborgdb-core#2393 is the Python SDK
+// defaulting filterable=true and always serializing it, so the request carries
+// filterable=true + full_text=true and the service 422s; these assert Go does
+// not do the same.
+
+// policyIndex creates an index with the given schema/sugar and returns it.
+func policyIndex(t *testing.T, apply func(*cyborgdb.CreateIndexParams)) *cyborgdb.EncryptedIndex {
+	t.Helper()
+	client := newIsolatedClient(t)
+	dim := int32(bm25Dim)
+	metric := "euclidean"
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	params := &cyborgdb.CreateIndexParams{
+		IndexName: generateUniqueName("policy_"),
+		IndexKey:  generateRandomKey(),
+		Dimension: &dim,
+		Metric:    &metric,
+	}
+	apply(params)
+	index, err := client.CreateIndex(ctx, params)
+	if err != nil {
+		t.Fatalf("CreateIndex failed: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanCancel()
+		_ = index.DeleteIndex(cleanCtx)
+	})
+	return index
+}
+
+// assertFullTextPolicy checks the field resolved to full_text and nothing else.
+func assertFullTextPolicy(t *testing.T, index *cyborgdb.EncryptedIndex, field string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	schema, err := index.MetadataSchema(ctx)
+	if err != nil {
+		t.Fatalf("MetadataSchema failed: %v", err)
+	}
+	policy, ok := schema[field]
+	if !ok {
+		t.Fatalf("schema has no %q field: %+v", field, schema)
+	}
+	if !policy.GetFullText() {
+		t.Errorf("%s: full_text = false, want true", field)
+	}
+	if policy.GetFilterable() {
+		t.Errorf("%s: filterable = true, want false", field)
+	}
+	if policy.GetPattern() {
+		t.Errorf("%s: pattern = true, want false", field)
+	}
+}
+
+func TestPolicyFullTextAloneIsAccepted(t *testing.T) {
+	index := policyIndex(t, func(p *cyborgdb.CreateIndexParams) {
+		p.MetadataSchema = map[string]cyborgdb.MetadataFieldPolicy{
+			"title": {FullText: boolPtr(true)},
+		}
+	})
+	assertFullTextPolicy(t, index, "title")
+}
+
+func TestPolicyFullTextWithFilterableSpelledOut(t *testing.T) {
+	// The workaround callers need in Python — and the anchor that makes the
+	// test above meaningful rather than a blanket "schemas are broken".
+	index := policyIndex(t, func(p *cyborgdb.CreateIndexParams) {
+		p.MetadataSchema = map[string]cyborgdb.MetadataFieldPolicy{
+			"title": {FullText: boolPtr(true), Filterable: boolPtr(false)},
+		}
+	})
+	assertFullTextPolicy(t, index, "title")
+}
+
+func TestPolicyTextFieldsSugarIsEquivalent(t *testing.T) {
+	index := policyIndex(t, func(p *cyborgdb.CreateIndexParams) {
+		p.TextFields = []string{"title"}
+	})
+	assertFullTextPolicy(t, index, "title")
 }
