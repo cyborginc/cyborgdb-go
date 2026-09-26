@@ -14,7 +14,7 @@ import (
 // against Go adopting the same shortcut.
 //
 // In-package so the resolved setting can be read off the transport rather than
-// inferred from behaviour. No service required.
+// inferred from behavior. No service required.
 
 // resolvedSkipVerify reports the InsecureSkipVerify the client ended up with.
 func resolvedSkipVerify(t *testing.T, baseURL string, verifySSL ...bool) bool {
@@ -86,10 +86,10 @@ func TestSSLExplicitSettingWins(t *testing.T) {
 		{"https://api.example.com", true, false},
 		{"https://api.example.com", false, true},
 		// Auto-detection is a convenience, not a ceiling: asking for
-		// verification against a local host must be honoured.
+		// verification against a local host must be honored.
 		{"https://localhost:8000", true, false},
 		{"https://127.0.0.1:8000", true, false},
-		// Go honours an explicit value even for a plaintext URL. Python and TS
+		// Go honors an explicit value even for a plaintext URL. Python and TS
 		// force it off first and silently discard the request — noted on
 		// cyborgdb-core#2399 as a divergence to reconcile.
 		{"http://api.example.com", true, false},

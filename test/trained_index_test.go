@@ -23,7 +23,7 @@ import (
 // approximate path at all needs a corpus that size.
 //
 // The corpus is LoadSampleDataset (quickstart-75k): 75,000 vectors, 100
-// queries, and ground-truth neighbours for both the trained and untrained
+// queries, and ground-truth neighbors for both the trained and untrained
 // cases. Building the index takes a couple of minutes, so the fixture is built
 // once and shared, and this file is aimed at the overnight run.
 //

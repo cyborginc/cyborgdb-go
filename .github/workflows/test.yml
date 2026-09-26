@@ -56,7 +56,10 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    needs: [lint, compute_version]
+    # Deliberately not gated on lint: a formatting nit should not stop the
+    # suite from running and reporting. compute_version stays because the test
+    # job reads its `env` output. Both still gate the PR.
+    needs: [compute_version]
     permissions:
       contents: read
       id-token: write

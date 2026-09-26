@@ -9,7 +9,7 @@ import (
 	cyborgdb "github.com/cyborginc/cyborgdb-go"
 )
 
-// BM25 analyzer behaviour, scoring properties, tuning parameters and
+// BM25 analyzer behavior, scoring properties, tuning parameters and
 // lifecycle. Mirrors py tests/test_bm25.py TestBM25Analyzer,
 // TestBM25ScoringProperties, TestBM25TuningParameters and TestBM25Lifecycle.
 //
@@ -312,7 +312,7 @@ func lifecycleIndex(t *testing.T) *cyborgdb.EncryptedIndex {
 }
 
 // BM25 after mutation. Scores depend on corpus-wide statistics (document
-// count, total length) that feed IDF and length normalisation. CEI tests those
+// count, total length) that feed IDF and length normalization. CEI tests those
 // hard at its own layer; nothing checked they are wired through core ->
 // service -> SDK, where stale statistics would skew every score with no error
 // surface.
@@ -386,7 +386,7 @@ func TestBM25ReupsertDoesNotDoubleCount(t *testing.T) {
 	defer cancel()
 
 	// Double-counted corpus statistics would shift IDF and the length
-	// normaliser, moving every score.
+	// normalizer, moving every score.
 	before := textScores(t, index, "alpha")
 
 	// `marker` rides along only to give the poll below something to observe;

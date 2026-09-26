@@ -750,7 +750,7 @@ func TestBM25MetadataResultShape(t *testing.T) {
 //
 // The full_text shorthand the SDK documents. Mirrors py
 // TestMetadataFieldPolicyDefaults. cyborgdb-core#2393 is the Python SDK
-// defaulting filterable=true and always serialising it, so the request carries
+// defaulting filterable=true and always serializing it, so the request carries
 // filterable=true + full_text=true and the service 422s; these assert Go does
 // not do the same.
 

@@ -523,8 +523,8 @@ func TestRBACUserKeyCannotReachAnotherIndex(t *testing.T) {
 	}()
 
 	ids, vectors := rbacSeed()
-	if err := other.UpsertVectors(ctx, ids, vectors, nil); err != nil {
-		t.Fatalf("seeding the other tenant's index failed: %v", err)
+	if seedErr := other.UpsertVectors(ctx, ids, vectors, nil); seedErr != nil {
+		t.Fatalf("seeding the other tenant's index failed: %v", seedErr)
 	}
 
 	out, err := index.CreateUser(ctx, []string{"read", "write"})
