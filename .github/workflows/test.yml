@@ -264,11 +264,25 @@ jobs:
           : "${CYBORGDB_SERVICE_ROOT_KEY:?root key is empty; RBAC tests would skip}"
           : "${CYBORGDB_KMS_NAME_REAL:?KMS slot is empty; RBAC tests would skip}"
 
-          # Wait for the port to free up after the standard server was killed.
+          # Stop the non-RBAC service and wait for the port to free up. The
+          # previous step kills it on its last line, which never runs when the
+          # suite exits non-zero — and this branch expects failing tests, so
+          # that is the normal path. Without this the old auth-disabled service
+          # keeps the port, the health probe below passes against it, and every
+          # user-management call 403s with kind="none".
+          if [ -f server-standard.pid ]; then
+            kill "$(cat server-standard.pid)" 2>/dev/null || true
+            rm -f server-standard.pid
+          fi
+          pkill -f cyborgdb-service 2>/dev/null || true
           for i in {1..15}; do
             curl -fs http://localhost:8000/v1/health > /dev/null || break
             sleep 1
           done
+          if curl -fs http://localhost:8000/v1/health > /dev/null; then
+            echo "port 8000 is still held; refusing to test against the wrong service"
+            exit 1
+          fi
 
           export CYBORGDB_DB_TYPE=disk
           export CYBORGDB_SERVICE_LOG_LEVEL=DEBUG
@@ -290,6 +304,16 @@ jobs:
           done
           if ! curl -fs http://localhost:8000/v1/health > /dev/null; then
             echo "RBAC service failed to start"
+            cat server-rbac.log
+            exit 1
+          fi
+
+          # /v1/health is unauthenticated either way, so it cannot tell this
+          # service from a stale auth-disabled one. An unkeyed call to a guarded
+          # route can: with RBAC on it must be rejected.
+          code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:8000/v1/indexes/list)
+          if [ "$code" != "401" ] && [ "$code" != "403" ]; then
+            echo "expected 401/403 from an unkeyed request, got $code — RBAC is not enabled"
             cat server-rbac.log
             exit 1
           fi
