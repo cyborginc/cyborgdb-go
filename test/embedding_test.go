@@ -39,13 +39,16 @@ var embedCorpus = [][2]string{
 
 // Called directly — the SDK has no wrapper for this endpoint yet.
 func TestEmbeddingModelCatalog(t *testing.T) {
-	req, err := http.NewRequest(http.MethodGet, testBaseURL()+"/v1/embedding-models", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, testBaseURL()+"/v1/embedding-models", nil)
 	if err != nil {
 		t.Fatalf("building the request failed: %v", err)
 	}
 	req.Header.Set("X-API-Key", testAPIKey())
 
-	resp, err := (&http.Client{Timeout: 10 * time.Second}).Do(req)
+	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		t.Fatalf("GET /v1/embedding-models failed: %v", err)
 	}
@@ -201,8 +204,8 @@ func TestEmbeddingRoundTrip(t *testing.T) {
 		item.SetContents(internal.Contents{String: &text})
 		items[i] = item
 	}
-	if err := index.Upsert(ctx, items); err != nil {
-		t.Fatalf("Upsert of text contents failed: %v", err)
+	if upErr := index.Upsert(ctx, items); upErr != nil {
+		t.Fatalf("Upsert of text contents failed: %v", upErr)
 	}
 	waitForIDs(t, index, ids)
 
