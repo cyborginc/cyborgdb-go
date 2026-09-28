@@ -15,6 +15,10 @@ type GetResponse = internal.GetResponseModel
 // VectorItem represents a single vector with ID, vector data, and optional metadata.
 type VectorItem = internal.VectorItem
 
+// Contents is a VectorItem's text or byte contents; set exactly one of String
+// or Bytes. For text, item.SetContentsString(s) is the shorthand.
+type Contents = internal.Contents
+
 // VectorItems is a slice of VectorItem used for type-safe upsert operations.
 type VectorItems []VectorItem
 
@@ -89,10 +93,10 @@ type QueryMetadataParams struct {
 	// OrderBy sorts matches by a metadata field, post-filter. Empty leaves
 	// the result unordered.
 	OrderBy string
-	// Ascending sets the sort direction when OrderBy is set. The zero value
-	// is false, so use QueryMetadataParams{OrderBy: f, Ascending: true} for
-	// ascending order; it is ignored when OrderBy is empty.
-	Ascending bool
+	// Ascending sets the sort direction when OrderBy is set. Nil uses the
+	// service default (ascending); pass cyborgdb.Bool(false) for descending.
+	// It is ignored when OrderBy is empty.
+	Ascending *bool
 
 	// Text adds a BM25 full-text leg, ranking matches by relevance (requires an
 	// index with at least one full-text field). Results then carry a Score in
@@ -309,6 +313,11 @@ type BinaryQueryParams struct {
 
 	// Greedy enables greedy search mode for potentially faster results.
 	Greedy *bool
+
+	// RerankMult is the stage-1 retrieval multiplier for reranking indexes.
+	// Higher values retrieve more candidates before reranking, trading speed
+	// for recall. If not set, the server applies its default (10).
+	RerankMult *int32
 
 	// Filters applies metadata-based filtering to search results.
 	Filters map[string]interface{}
