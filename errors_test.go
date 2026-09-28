@@ -218,3 +218,26 @@ func TestEveryTypeSatisfiesError(t *testing.T) {
 		}
 	}
 }
+
+// TestDecodeFailureOn2xxIsNotAPIError: a 200 whose body fails to decode is not
+// an HTTP failure and must not be reported as one.
+func TestDecodeFailureOn2xxIsNotAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"indexes": not-json`))
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "test-key")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	_, err = client.ListIndexes(context.Background())
+	if err == nil {
+		t.Fatal("expected a decode error, got nil")
+	}
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		t.Errorf("decode failure on HTTP 200 produced %v; want the decode error unchanged", apiErr)
+	}
+}

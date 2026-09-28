@@ -163,7 +163,8 @@ func newValidationError(err error) *ValidationError {
 
 // translateHTTPError converts a generated-client error into a typed error.
 // It returns nil when err is nil, and an *APIError for statuses the taxonomy
-// does not name (other 4xx, and 3xx).
+// does not name (other 4xx, and 3xx). A 2xx that still produced an error — a
+// body that failed to decode — is returned unchanged.
 //
 // The generated client returns the raw *http.Response alongside the error;
 // internal.APIResponse is not used on this path.
@@ -203,9 +204,13 @@ func translateHTTPError(resp *http.Response, err error) error {
 	case code >= http.StatusInternalServerError:
 		base.kind = "service error"
 		return &ServiceError{base}
-	default:
+	case code >= http.StatusMultipleChoices:
 		base.kind = "api error"
 		return &APIError{base}
+	default:
+		// A 2xx whose body failed to decode: not an HTTP failure, so hand the
+		// generated client's error back unchanged.
+		return err
 	}
 }
 
