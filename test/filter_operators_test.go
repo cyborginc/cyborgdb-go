@@ -2,7 +2,6 @@ package test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -300,7 +299,7 @@ func TestFilterNotOperatorIsDocumentedButRejected(t *testing.T) {
 	}
 	want := []string{"o1", "o2", "o4"}
 
-	expectFailure(t, "cyborgdb-core#2395", func() error {
+	expectFailure(t, "cyborgdb-core#2395", func() string {
 		var problems []string
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
@@ -314,9 +313,6 @@ func TestFilterNotOperatorIsDocumentedButRejected(t *testing.T) {
 		} else if !sameIDs(got, want) {
 			problems = append(problems, fmt.Sprintf("$not via Query: got %v, want %v", got, want))
 		}
-		if len(problems) > 0 {
-			return errors.New(strings.Join(problems, "; "))
-		}
-		return nil
+		return strings.Join(problems, "; ")
 	})
 }

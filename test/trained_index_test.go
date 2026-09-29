@@ -357,11 +357,11 @@ func TestTrainedIndexTopKTimesRerankMultCeilingIsEnforced(t *testing.T) {
 	if !strings.Contains(message, "10000") {
 		t.Errorf("the error should state the limit, got: %s", message)
 	}
-	expectFailure(t, "cyborgdb-core#2401", func() error {
+	expectFailure(t, "cyborgdb-core#2401", func() string {
 		if !strings.Contains(message, "rerank_mult") {
-			return fmt.Errorf("the error does not name the parameter responsible: %s", message)
+			return fmt.Sprintf("the error does not name the parameter responsible: %s", message)
 		}
-		return nil
+		return ""
 	})
 }
 

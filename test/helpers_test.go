@@ -153,13 +153,13 @@ func pollUntil(timeout time.Duration, condition func() bool) bool {
 	return false
 }
 
-// expectFailure runs check, which returns the incorrect behaviour it observed
-// or nil. While issue is open the test skips with that description; once check
-// returns nil the test fails, so the wrapper is removed when the fix lands.
-func expectFailure(t *testing.T, issue string, check func() error) {
+// expectFailure runs check, which returns the incorrect behavior it observed,
+// or "". While issue is open the test skips with that description; once check
+// returns "" the test fails, so the wrapper is removed when the fix lands.
+func expectFailure(t *testing.T, issue string, check func() string) {
 	t.Helper()
-	if err := check(); err != nil {
-		t.Skipf("%s: %v", issue, err)
+	if observed := check(); observed != "" {
+		t.Skipf("%s: %s", issue, observed)
 	}
 	t.Fatalf("%s no longer reproduces; remove the expectFailure wrapper", issue)
 }

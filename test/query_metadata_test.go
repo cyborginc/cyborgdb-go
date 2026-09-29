@@ -422,19 +422,19 @@ func TestDatetimeRangeWorks(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	expectFailure(t, "cyborgdb-core#2396", func() error {
+	expectFailure(t, "cyborgdb-core#2396", func() string {
 		resp, err := index.QueryMetadata(ctx, cyborgdb.QueryMetadataParams{
 			Filters: map[string]interface{}{
 				"created": map[string]interface{}{"$gte": datetimePlusDays(5)},
 			},
 		})
 		if err != nil {
-			return fmt.Errorf("range filter on a datetime was rejected: %v", err)
+			return fmt.Sprintf("range filter on a datetime was rejected: %v", err)
 		}
 		if got := metaIDs(resp.Results); !sameIDs(got, []string{"t1", "t2"}) {
-			return fmt.Errorf("range on a datetime: got %v, want [t1 t2]", got)
+			return fmt.Sprintf("range on a datetime: got %v, want [t1 t2]", got)
 		}
-		return nil
+		return ""
 	})
 }
 

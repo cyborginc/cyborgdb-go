@@ -2,7 +2,6 @@ package test
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"math/rand"
 	"reflect"
@@ -360,7 +359,7 @@ func TestIncludeUnknownValuesAreRejected(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	expectFailure(t, "cyborgdb-core#2404", func() error {
+	expectFailure(t, "cyborgdb-core#2404", func() string {
 		var problems []string
 		if _, err := index.Query(ctx, cyborgdb.QueryParams{
 			QueryVector: vector, TopK: 1, Include: []string{"bogus"},
@@ -370,10 +369,7 @@ func TestIncludeUnknownValuesAreRejected(t *testing.T) {
 		if _, err := index.Get(ctx, []string{"only"}, []string{"bogus"}); err == nil {
 			problems = append(problems, "Get accepted an unknown include value")
 		}
-		if len(problems) > 0 {
-			return errors.New(strings.Join(problems, "; "))
-		}
-		return nil
+		return strings.Join(problems, "; ")
 	})
 }
 
