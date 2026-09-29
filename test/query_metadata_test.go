@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"fmt"
 	"reflect"
 	"testing"
 	"time"
@@ -72,7 +73,7 @@ func qmIndex(t *testing.T, schema map[string]cyborgdb.MetadataFieldPolicy) *cybo
 	if err := index.UpsertVectors(ctx, ids, vectors, metadata); err != nil {
 		t.Fatalf("UpsertVectors failed: %v", err)
 	}
-	waitForPropagation(2 * time.Second)
+	waitForIDs(t, index, ids)
 	return index
 }
 
@@ -111,9 +112,13 @@ func sortedSet(ids []string) map[string]bool {
 
 func assertSameIDs(t *testing.T, got, want []string, label string) {
 	t.Helper()
-	if !reflect.DeepEqual(sortedSet(got), sortedSet(want)) {
+	if !sameIDs(got, want) {
 		t.Errorf("%s: got %v, want %v", label, got, want)
 	}
+}
+
+func sameIDs(got, want []string) bool {
+	return reflect.DeepEqual(sortedSet(got), sortedSet(want))
 }
 
 func queryMeta(t *testing.T, index *cyborgdb.EncryptedIndex, params cyborgdb.QueryMetadataParams) []string {
@@ -253,7 +258,7 @@ func TestQueryMetadataOrderingAndPaging(t *testing.T) {
 	allRanks := map[string]interface{}{"rank": map[string]interface{}{"$gte": 0}}
 
 	asc := queryMeta(t, index, cyborgdb.QueryMetadataParams{
-		Filters: allRanks, OrderBy: "rank", Ascending: true,
+		Filters: allRanks, OrderBy: "rank", Ascending: cyborgdb.Bool(true),
 	})
 	want := make([]string, 0, qmCount)
 	for i := 0; i < qmCount; i++ {
@@ -263,8 +268,16 @@ func TestQueryMetadataOrderingAndPaging(t *testing.T) {
 		t.Errorf("ascending: got %v, want %v", asc, want)
 	}
 
+	// Nil Ascending uses the service default, which is ascending — matching
+	// the Python and JS SDKs.
+	if def := queryMeta(t, index, cyborgdb.QueryMetadataParams{
+		Filters: allRanks, OrderBy: "rank",
+	}); !reflect.DeepEqual(def, want) {
+		t.Errorf("default order: got %v, want ascending %v", def, want)
+	}
+
 	desc := queryMeta(t, index, cyborgdb.QueryMetadataParams{
-		Filters: allRanks, OrderBy: "rank", Ascending: false,
+		Filters: allRanks, OrderBy: "rank", Ascending: cyborgdb.Bool(false),
 	})
 	for i, j := 0, len(want)-1; i < j; i, j = i+1, j-1 {
 		want[i], want[j] = want[j], want[i]
@@ -275,7 +288,7 @@ func TestQueryMetadataOrderingAndPaging(t *testing.T) {
 
 	// TopK applies AFTER the sort, so this is the first 2 of the sorted run.
 	if got := (queryMeta(t, index, cyborgdb.QueryMetadataParams{
-		Filters: allRanks, OrderBy: "rank", Ascending: true, TopK: 2,
+		Filters: allRanks, OrderBy: "rank", Ascending: cyborgdb.Bool(true), TopK: 2,
 	})); !reflect.DeepEqual(got, []string{idFor(0), idFor(1)}) {
 		t.Errorf("top_k after sort: got %v", got)
 	}
@@ -328,5 +341,130 @@ func TestQueryMetadataDefaultPosture(t *testing.T) {
 		Filters: map[string]interface{}{"color": map[string]interface{}{"$regex": "^r"}},
 	}); err == nil {
 		t.Error("$regex without a pattern field should be rejected")
+	}
+}
+
+// -- datetime handling ------------------------------------------------------ //
+//
+// Native time.Time values passed as metadata. Core stores epoch millis and
+// supports range filters; encoding/json turns a time.Time into an RFC 3339
+// string, so equality matches but every range comparison fails.
+// Mirrors py TestDatetimeHandling.
+
+var datetimeBase = time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+
+func datetimePlusDays(n int) time.Time {
+	return datetimeBase.AddDate(0, 0, n)
+}
+
+// datetimeIndex seeds t0/t1/t2 ten days apart, carrying each timestamp both as
+// a native time.Time and as epoch millis.
+func datetimeIndex(t *testing.T) *cyborgdb.EncryptedIndex {
+	t.Helper()
+	client := newIsolatedClient(t)
+	dim := int32(8)
+	metric := "euclidean"
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	index, err := client.CreateIndex(ctx, &cyborgdb.CreateIndexParams{
+		IndexName: generateUniqueName("datetime_"),
+		IndexKey:  generateRandomKey(),
+		Dimension: &dim,
+		Metric:    &metric,
+		MetadataSchema: map[string]cyborgdb.MetadataFieldPolicy{
+			"created":    {Filterable: boolPtr(true)},
+			"created_ms": {Filterable: boolPtr(true)},
+		},
+	})
+	if err != nil {
+		t.Fatalf("CreateIndex failed: %v", err)
+	}
+	t.Cleanup(func() {
+		cleanCtx, cleanCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cleanCancel()
+		_ = index.DeleteIndex(cleanCtx)
+	})
+
+	vectors := generateRandomVectors(3, 8)
+	items := make(cyborgdb.VectorItems, 3)
+	ids := make([]string, 3)
+	for i := 0; i < 3; i++ {
+		ids[i] = fmt.Sprintf("t%d", i)
+		stamp := datetimePlusDays(10 * i)
+		items[i] = cyborgdb.VectorItem{
+			Id:     ids[i],
+			Vector: vectors[i],
+			Metadata: map[string]interface{}{
+				"created":    stamp,
+				"created_ms": stamp.UnixMilli(),
+			},
+		}
+	}
+	if err := index.Upsert(ctx, items); err != nil {
+		t.Fatalf("Upsert failed: %v", err)
+	}
+	waitForIDs(t, index, ids)
+	return index
+}
+
+func TestDatetimeEqualityMatches(t *testing.T) {
+	// Survives because it degenerates to string comparison.
+	index := datetimeIndex(t)
+	got := queryMeta(t, index, cyborgdb.QueryMetadataParams{
+		Filters: map[string]interface{}{"created": datetimeBase},
+	})
+	assertSameIDs(t, got, []string{"t0"}, "equality on a datetime")
+}
+
+func TestDatetimeRangeWorks(t *testing.T) {
+	index := datetimeIndex(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	expectFailure(t, "cyborgdb-core#2396", func() string {
+		resp, err := index.QueryMetadata(ctx, cyborgdb.QueryMetadataParams{
+			Filters: map[string]interface{}{
+				"created": map[string]interface{}{"$gte": datetimePlusDays(5)},
+			},
+		})
+		if err != nil {
+			return fmt.Sprintf("range filter on a datetime was rejected: %v", err)
+		}
+		if got := metaIDs(resp.Results); !sameIDs(got, []string{"t1", "t2"}) {
+			return fmt.Sprintf("range on a datetime: got %v, want [t1 t2]", got)
+		}
+		return ""
+	})
+}
+
+func TestDatetimeEpochMillisSupportsRanges(t *testing.T) {
+	// The workaround callers need today.
+	index := datetimeIndex(t)
+	cutoff := datetimePlusDays(5).UnixMilli()
+	got := queryMeta(t, index, cyborgdb.QueryMetadataParams{
+		Filters: map[string]interface{}{
+			"created_ms": map[string]interface{}{"$gte": cutoff},
+		},
+	})
+	assertSameIDs(t, got, []string{"t1", "t2"}, "range on epoch millis")
+}
+
+func TestDatetimeEpochMillisRoundTripsExactly(t *testing.T) {
+	// A float conversion anywhere would corrupt the low digits.
+	index := datetimeIndex(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	resp, err := index.Get(ctx, []string{"t0"}, []string{"metadata"})
+	if err != nil {
+		t.Fatalf("Get failed: %v", err)
+	}
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected one row, got %d", len(resp.Results))
+	}
+	want := float64(datetimeBase.UnixMilli())
+	if got := toFloat(resp.Results[0].Metadata["created_ms"]); got != want {
+		t.Errorf("created_ms round-tripped as %.0f, want %.0f", got, want)
 	}
 }

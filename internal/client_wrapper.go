@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"strings"
 )
 
 // Client wraps the generated APIClient with convenience methods
@@ -29,9 +30,11 @@ func NewClient(baseURL, apiKey string, verifySSL bool) (*Client, error) {
 	cfg.Scheme = parsedURL.Scheme
 	cfg.Host = parsedURL.Host
 
+	// Keep any path prefix (e.g. a reverse-proxy mount at https://host/cyborgdb);
+	// generated operations append "/v1/..." to this URL.
 	cfg.Servers = []ServerConfiguration{
 		{
-			URL:         fmt.Sprintf("%s://%s", parsedURL.Scheme, parsedURL.Host),
+			URL:         fmt.Sprintf("%s://%s%s", parsedURL.Scheme, parsedURL.Host, strings.TrimRight(parsedURL.EscapedPath(), "/")),
 			Description: "CyborgDB API",
 		},
 	}
@@ -73,4 +76,11 @@ func (c *Client) GetHealth(ctx context.Context) (map[string]string, error) {
 		return nil, fmt.Errorf("health check failed: %w", err)
 	}
 	return health, nil
+}
+
+// SetContentsString sets the item's contents to a text string. Contents is an
+// anyOf(bytes, string) wrapper, so this saves callers building one by hand.
+// Kept here, not in the generated model file, so regeneration preserves it.
+func (o *VectorItem) SetContentsString(s string) {
+	o.SetContents(Contents{String: &s})
 }

@@ -586,7 +586,7 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 				Metadata: map[string]interface{}{"type": "auto-embedded", "index": i},
 			}
 			// Set contents for auto-embedding
-			item.SetContents(internal.Contents{String: &sampleTexts[i]})
+			item.SetContentsString(sampleTexts[i])
 			items[i] = item
 			expectedIDs[id] = true
 		}
@@ -1108,14 +1108,26 @@ func TestEncryptedIndexQuery(t *testing.T) {
 
 		resultItems := getQueryResultItems(&results.Results)
 
+		// Both bounds. The upper bound alone passed on an empty result, so the
+		// service could embed nothing, match nothing, and still go green —
+		// auto-embedding is the one thing this test exists to prove.
+		if len(resultItems) == 0 {
+			t.Fatal("auto-embedded query returned no results")
+		}
 		if len(resultItems) > int(topK) {
 			t.Errorf("Result count %d exceeds TopK %d", len(resultItems), topK)
 		}
 
-		// Verify each result has valid ID
+		// Only the three auto-embedded items exist in this index, so every hit
+		// must be one of them — not merely a non-empty id.
+		embedded := map[string]bool{"embed_0": true, "embed_1": true, "embed_2": true}
 		for i, result := range resultItems {
 			if result.Id == "" {
 				t.Errorf("Result %d: missing ID", i)
+				continue
+			}
+			if !embedded[result.Id] {
+				t.Errorf("Result %d: id %q is not one of the auto-embedded items", i, result.Id)
 			}
 		}
 	})
@@ -1578,7 +1590,7 @@ func TestEncryptedIndexQueryMetadata(t *testing.T) {
 			"Filters":          reflect.Map,
 			"TopK":             reflect.Int32,
 			"OrderBy":          reflect.String,
-			"Ascending":        reflect.Bool,
+			"Ascending":        reflect.Pointer,
 			"Text":             reflect.Pointer,
 			"TextFields":       reflect.Slice,
 			"TextFieldWeights": reflect.Slice,

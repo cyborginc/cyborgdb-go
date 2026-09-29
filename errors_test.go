@@ -109,13 +109,22 @@ func TestRetryAfterIsParsed(t *testing.T) {
 	}
 }
 
-// TestUnnamedStatusPassesThrough: a status the taxonomy does not name must not
-// be dressed up as a typed error.
-func TestUnnamedStatusPassesThrough(t *testing.T) {
-	err := errFromStatus(t, 418)
-	var cerr Error
-	if errors.As(err, &cerr) {
-		t.Errorf("HTTP 418 produced typed error %T; it should pass through untyped", cerr)
+// TestUnnamedStatusIsAPIError: a status the taxonomy does not name still comes
+// back as an exported, non-retryable type carrying the status — the Go
+// equivalent of the base CyborgDBError in the Python and JS SDKs.
+func TestUnnamedStatusIsAPIError(t *testing.T) {
+	for _, code := range []int{405, 413, 418} {
+		err := errFromStatus(t, code)
+		var apiErr *APIError
+		if !errors.As(err, &apiErr) {
+			t.Fatalf("HTTP %d produced %T, want *APIError", code, err)
+		}
+		if apiErr.StatusCode() != code {
+			t.Errorf("StatusCode() = %d, want %d", apiErr.StatusCode(), code)
+		}
+		if apiErr.Retryable() {
+			t.Errorf("HTTP %d: Retryable() = true, want false", code)
+		}
 	}
 }
 
@@ -202,9 +211,33 @@ func TestEveryTypeSatisfiesError(t *testing.T) {
 	for _, e := range []any{
 		&ValidationError{}, &AuthenticationError{}, &NotFoundError{},
 		&ConflictError{}, &RateLimitError{}, &ServiceError{}, &TransportError{},
+		&APIError{},
 	} {
 		if _, ok := e.(Error); !ok {
 			t.Errorf("%s does not satisfy cyborgdb.Error", reflect.TypeOf(e))
 		}
+	}
+}
+
+// TestDecodeFailureOn2xxIsNotAPIError: a 200 whose body fails to decode is not
+// an HTTP failure and must not be reported as one.
+func TestDecodeFailureOn2xxIsNotAPIError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{"indexes": not-json`))
+	}))
+	t.Cleanup(srv.Close)
+
+	client, err := NewClient(srv.URL, "test-key")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	_, err = client.ListIndexes(context.Background())
+	if err == nil {
+		t.Fatal("expected a decode error, got nil")
+	}
+	var apiErr *APIError
+	if errors.As(err, &apiErr) {
+		t.Errorf("decode failure on HTTP 200 produced %v; want the decode error unchanged", apiErr)
 	}
 }

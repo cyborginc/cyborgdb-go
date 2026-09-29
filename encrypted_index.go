@@ -410,9 +410,9 @@ func (e *EncryptedIndex) DeleteUser(ctx context.Context, userID string) error {
 	if e.indexKey != nil {
 		request = request.XIndexKey(*e.indexKey)
 	}
-	_, err := request.Execute()
+	httpResp, err := request.Execute()
 	if err != nil {
-		return fmt.Errorf("failed to delete user: %w", err)
+		return fmt.Errorf("failed to delete user: %w", translateHTTPError(httpResp, err))
 	}
 	return nil
 }
@@ -837,7 +837,7 @@ func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 //	res, err := index.QueryMetadata(ctx, cyborgdb.QueryMetadataParams{
 //		Filters:   map[string]interface{}{"title": map[string]interface{}{"$regex": "^intro"}},
 //		OrderBy:   "rank",
-//		Ascending: true,
+//		Ascending: cyborgdb.Bool(false), // nil sorts ascending
 //		TopK:      10,
 //	})
 func (e *EncryptedIndex) QueryMetadata(ctx context.Context, params QueryMetadataParams) (*QueryMetadataResponse, error) {
@@ -850,7 +850,7 @@ func (e *EncryptedIndex) QueryMetadata(ctx context.Context, params QueryMetadata
 		IndexName: e.indexName,
 		IndexKey:  e.indexKeyField(),
 		Filters:   filters,
-		Ascending: &params.Ascending,
+		Ascending: params.Ascending,
 	}
 	// TopK and OrderBy are optional on the wire; sending their zero values
 	// would mean "return nothing" and "sort by the empty field name".
@@ -1075,6 +1075,9 @@ func (e *EncryptedIndex) queryBinary(ctx context.Context, params BinaryQueryPara
 	}
 
 	req.TopK, req.NProbes, req.Greedy = nullableQueryOpts(params.TopK, params.NProbes, params.Greedy)
+	if params.RerankMult != nil {
+		req.RerankMult = *internal.NewNullableInt32(params.RerankMult)
+	}
 	h := buildHybrid(params.Text, params.TextFields, params.TextFieldWeights, params.RequireAllTerms, params.Alpha, params.RrfK, params.WindowMult)
 	req.Text, req.TextFields, req.TextFieldWeights = h.Text, h.TextFields, h.TextFieldWeights
 	req.RequireAllTerms, req.Alpha, req.RrfK, req.WindowMult = h.RequireAllTerms, h.Alpha, h.RrfK, h.WindowMult
