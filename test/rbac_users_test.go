@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"errors"
+	"net/http"
 	"os"
 	"reflect"
 	"sort"
@@ -424,6 +425,15 @@ func rbacTryUserIndex(ctx context.Context, apiKey, name string) (*cyborgdb.Encry
 	return client.LoadIndex(ctx, name, nil)
 }
 
+// rbacStatus is the HTTP status behind err, or 0 when no response came back.
+func rbacStatus(err error) int {
+	var cerr cyborgdb.Error
+	if errors.As(err, &cerr) {
+		return cerr.StatusCode()
+	}
+	return 0
+}
+
 func TestRBACDenialsAreCatchableWithOneClause(t *testing.T) {
 	// Regression guard for cyborgdb-core#2398: the paths still fail in
 	// different ways (query denies, LoadIndex 404s), but both surface as a
@@ -557,10 +567,18 @@ func TestRBACUserKeyCannotReachAnotherIndex(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			foreign, loadErr := rbacTryUserIndex(ctx, out.APIKey, otherName)
 			if loadErr != nil {
-				return // denied at load, which is the stronger outcome
+				// denied at load, which is the stronger outcome
+				if code := rbacStatus(loadErr); code != http.StatusForbidden && code != http.StatusNotFound {
+					t.Fatalf("load: HTTP %d, want 403 or 404: %v", code, loadErr)
+				}
+				return
 			}
-			if err := tc.call(foreign); err == nil {
-				t.Errorf("a user key reached another tenant's index via %s", tc.name)
+			err := tc.call(foreign)
+			if err == nil {
+				t.Fatalf("a user key reached another tenant's index via %s", tc.name)
+			}
+			if code := rbacStatus(err); code != http.StatusForbidden {
+				t.Errorf("%s: HTTP %d, want 403: %v", tc.name, code, err)
 			}
 		})
 	}
@@ -602,7 +620,11 @@ func TestRBACListIndexesUnderAUserKeyIsScopedOrDenied(t *testing.T) {
 	}
 	listed, err := userClient.ListIndexes(ctx)
 	if err != nil {
-		return // refusing outright is an acceptable contract
+		// refusing outright is an acceptable contract
+		if code := rbacStatus(err); code != http.StatusForbidden {
+			t.Errorf("ListIndexes: HTTP %d, want 403: %v", code, err)
+		}
+		return
 	}
 	for _, got := range listed {
 		if got == hiddenName {
