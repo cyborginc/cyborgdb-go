@@ -50,6 +50,9 @@ var (
 	trainedOnce sync.Once
 	trainedShip *trainedFixture
 	trainedErr  string
+	// trainedIndex is set as soon as the index exists, so cleanup can reach it
+	// even when the build fails partway.
+	trainedIndex *cyborgdb.EncryptedIndex
 )
 
 // getTrainedIndex builds the fixture on first use. Every test in this file
@@ -66,14 +69,14 @@ func getTrainedIndex(t *testing.T) *trainedFixture {
 	return trainedShip
 }
 
-// cleanupTrainedIndex deletes the shared index, if a test built it.
+// cleanupTrainedIndex deletes the shared index, if a test created it.
 func cleanupTrainedIndex() {
-	if trainedShip == nil {
+	if trainedIndex == nil {
 		return
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	_ = trainedShip.index.DeleteIndex(ctx)
+	_ = trainedIndex.DeleteIndex(ctx)
 }
 
 // buildTrainedIndex loads the dataset, upserts it in batches, and waits for
@@ -108,6 +111,7 @@ func buildTrainedIndex() (*trainedFixture, string) {
 	if err != nil {
 		return nil, "CreateIndex failed: " + err.Error()
 	}
+	trainedIndex = index
 
 	total := len(data.Ids)
 	for start := 0; start < total; start += trainedUpsertBatch {
