@@ -19,7 +19,6 @@ func TestQueryWithRerankMult(t *testing.T) {
 	client := newIsolatedClient(t)
 	index, _ := newIsolatedIndex(t, client, "rerank", int32(dim))
 	seedIndex(t, index, "rerank", 20, dim)
-	waitForPropagation(2 * time.Second)
 
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
