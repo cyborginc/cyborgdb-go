@@ -102,17 +102,16 @@ func TestLoopbackHostsSkipTLSVerification(t *testing.T) {
 	}
 }
 
-// TestQueryMetadataAscendingOnTheWire: nil Ascending must be omitted so the
-// service default (ascending) applies; an explicit value must be sent.
-func TestQueryMetadataAscendingOnTheWire(t *testing.T) {
+// TestQueryMetadataDescendingOnTheWire: the default must omit ascending so the
+// service default (ascending) applies; Descending must send ascending=false.
+func TestQueryMetadataDescendingOnTheWire(t *testing.T) {
 	for _, tc := range []struct {
-		name      string
-		ascending *bool
-		want      any // nil means the key must be absent
+		name       string
+		descending bool
+		want       any // nil means the key must be absent
 	}{
-		{"nil", nil, nil},
-		{"true", Bool(true), true},
-		{"false", Bool(false), false},
+		{"default", false, nil},
+		{"descending", true, false},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			var body map[string]any
@@ -128,7 +127,7 @@ func TestQueryMetadataAscendingOnTheWire(t *testing.T) {
 			}
 			index := &EncryptedIndex{indexName: "idx", client: client.internal}
 			if _, err := index.QueryMetadata(context.Background(), QueryMetadataParams{
-				OrderBy: "rank", Ascending: tc.ascending,
+				OrderBy: "rank", Descending: tc.descending,
 			}); err != nil {
 				t.Fatalf("QueryMetadata: %v", err)
 			}

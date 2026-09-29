@@ -1586,11 +1586,13 @@ func TestEncryptedIndexQueryMetadata(t *testing.T) {
 		// are fields on QueryMetadataParams, checked here by reflection so an
 		// openapi regen or hand edit that drops, renames, or adds one fails the
 		// contract (mirrors Python's "no unexpected parameters" assertion).
+		// Python's ascending is Descending here so the zero value keeps the
+		// service default (ascending) without a pointer.
 		expected := map[string]reflect.Kind{
 			"Filters":          reflect.Map,
 			"TopK":             reflect.Int32,
 			"OrderBy":          reflect.String,
-			"Ascending":        reflect.Pointer,
+			"Descending":       reflect.Bool,
 			"Text":             reflect.Pointer,
 			"TextFields":       reflect.Slice,
 			"TextFieldWeights": reflect.Slice,

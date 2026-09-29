@@ -258,7 +258,7 @@ func TestQueryMetadataOrderingAndPaging(t *testing.T) {
 	allRanks := map[string]interface{}{"rank": map[string]interface{}{"$gte": 0}}
 
 	asc := queryMeta(t, index, cyborgdb.QueryMetadataParams{
-		Filters: allRanks, OrderBy: "rank", Ascending: cyborgdb.Bool(true),
+		Filters: allRanks, OrderBy: "rank",
 	})
 	want := make([]string, 0, qmCount)
 	for i := 0; i < qmCount; i++ {
@@ -268,16 +268,8 @@ func TestQueryMetadataOrderingAndPaging(t *testing.T) {
 		t.Errorf("ascending: got %v, want %v", asc, want)
 	}
 
-	// Nil Ascending uses the service default, which is ascending — matching
-	// the Python and JS SDKs.
-	if def := queryMeta(t, index, cyborgdb.QueryMetadataParams{
-		Filters: allRanks, OrderBy: "rank",
-	}); !reflect.DeepEqual(def, want) {
-		t.Errorf("default order: got %v, want ascending %v", def, want)
-	}
-
 	desc := queryMeta(t, index, cyborgdb.QueryMetadataParams{
-		Filters: allRanks, OrderBy: "rank", Ascending: cyborgdb.Bool(false),
+		Filters: allRanks, OrderBy: "rank", Descending: true,
 	})
 	for i, j := 0, len(want)-1; i < j; i, j = i+1, j-1 {
 		want[i], want[j] = want[j], want[i]
@@ -288,7 +280,7 @@ func TestQueryMetadataOrderingAndPaging(t *testing.T) {
 
 	// TopK applies AFTER the sort, so this is the first 2 of the sorted run.
 	if got := (queryMeta(t, index, cyborgdb.QueryMetadataParams{
-		Filters: allRanks, OrderBy: "rank", Ascending: cyborgdb.Bool(true), TopK: 2,
+		Filters: allRanks, OrderBy: "rank", TopK: 2,
 	})); !reflect.DeepEqual(got, []string{idFor(0), idFor(1)}) {
 		t.Errorf("top_k after sort: got %v", got)
 	}

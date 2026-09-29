@@ -825,7 +825,7 @@ func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 //
 // Parameters:
 //   - ctx: Context for cancellation and timeouts
-//   - params: Filters, plus optional TopK / OrderBy / Ascending, or the Text
+//   - params: Filters, plus optional TopK / OrderBy / Descending, or the Text
 //     (BM25) knobs
 //
 // Returns:
@@ -835,10 +835,10 @@ func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 // Example:
 //
 //	res, err := index.QueryMetadata(ctx, cyborgdb.QueryMetadataParams{
-//		Filters:   map[string]interface{}{"title": map[string]interface{}{"$regex": "^intro"}},
-//		OrderBy:   "rank",
-//		Ascending: cyborgdb.Bool(false), // nil sorts ascending
-//		TopK:      10,
+//		Filters:    map[string]interface{}{"title": map[string]interface{}{"$regex": "^intro"}},
+//		OrderBy:    "rank",
+//		Descending: true,
+//		TopK:       10,
 //	})
 func (e *EncryptedIndex) QueryMetadata(ctx context.Context, params QueryMetadataParams) (*QueryMetadataResponse, error) {
 	filters := params.Filters
@@ -850,7 +850,10 @@ func (e *EncryptedIndex) QueryMetadata(ctx context.Context, params QueryMetadata
 		IndexName: e.indexName,
 		IndexKey:  e.indexKeyField(),
 		Filters:   filters,
-		Ascending: params.Ascending,
+	}
+	// Only descending is sent; omitting ascending leaves the service default.
+	if params.Descending {
+		req.Ascending = Bool(false)
 	}
 	// TopK and OrderBy are optional on the wire; sending their zero values
 	// would mean "return nothing" and "sort by the empty field name".
@@ -859,7 +862,7 @@ func (e *EncryptedIndex) QueryMetadata(ctx context.Context, params QueryMetadata
 	}
 	if params.OrderBy != "" {
 		// order_by is an anyOf(str, {field: 1|-1}); a plain field name is the
-		// string arm, with direction carried by Ascending.
+		// string arm, with direction carried by ascending.
 		orderBy := params.OrderBy
 		req.OrderBy = *internal.NewNullableOrderBy(&internal.OrderBy{String: &orderBy})
 	}

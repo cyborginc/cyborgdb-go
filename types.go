@@ -93,10 +93,9 @@ type QueryMetadataParams struct {
 	// OrderBy sorts matches by a metadata field, post-filter. Empty leaves
 	// the result unordered.
 	OrderBy string
-	// Ascending sets the sort direction when OrderBy is set. Nil uses the
-	// service default (ascending); pass cyborgdb.Bool(false) for descending.
-	// It is ignored when OrderBy is empty.
-	Ascending *bool
+	// Descending reverses the sort when OrderBy is set; the zero value sorts
+	// ascending. It is ignored when OrderBy is empty.
+	Descending bool
 
 	// Text adds a BM25 full-text leg, ranking matches by relevance (requires an
 	// index with at least one full-text field). Results then carry a Score in
