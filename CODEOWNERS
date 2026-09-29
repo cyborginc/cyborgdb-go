@@ -1,2 +1,27 @@
-# Require Truman and Alex's review on all changes to this public SDK repo's main branch.
 * @truman-cyborg @ahellegit
+
+# Tests, test tooling, and testing docs: QA (@lubna-khalid) is auto-requested
+# alongside the code owners. Keep this block last: the last matching pattern wins.
+test/                 @truman-cyborg @ahellegit @lubna-khalid
+tests/                @truman-cyborg @ahellegit @lubna-khalid
+__tests__/            @truman-cyborg @ahellegit @lubna-khalid
+testing/              @truman-cyborg @ahellegit @lubna-khalid
+integration_tests/    @truman-cyborg @ahellegit @lubna-khalid
+load_tests/           @truman-cyborg @ahellegit @lubna-khalid
+*_test.go             @truman-cyborg @ahellegit @lubna-khalid
+*_test.py             @truman-cyborg @ahellegit @lubna-khalid
+test_*.py             @truman-cyborg @ahellegit @lubna-khalid
+conftest.py           @truman-cyborg @ahellegit @lubna-khalid
+pytest.ini            @truman-cyborg @ahellegit @lubna-khalid
+*.test.ts             @truman-cyborg @ahellegit @lubna-khalid
+*.test.tsx            @truman-cyborg @ahellegit @lubna-khalid
+*.test.js             @truman-cyborg @ahellegit @lubna-khalid
+*.spec.ts             @truman-cyborg @ahellegit @lubna-khalid
+*.spec.js             @truman-cyborg @ahellegit @lubna-khalid
+jest.config.*         @truman-cyborg @ahellegit @lubna-khalid
+vitest.config.*       @truman-cyborg @ahellegit @lubna-khalid
+playwright.config.*   @truman-cyborg @ahellegit @lubna-khalid
+TESTING.md            @truman-cyborg @ahellegit @lubna-khalid
+*TEST*.md             @truman-cyborg @ahellegit @lubna-khalid
+*Test*.md             @truman-cyborg @ahellegit @lubna-khalid
+*testing*.md          @truman-cyborg @ahellegit @lubna-khalid
