@@ -37,6 +37,7 @@ func TestMain(m *testing.M) {
 
 	// Cleanup api contract test resources
 	cleanupAPIContractTests()
+	cleanupTrainedIndex()
 
 	os.Exit(code)
 }

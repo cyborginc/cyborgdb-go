@@ -69,7 +69,7 @@ func operatorCases() []opCase {
 			map[string]interface{}{"color": "green"},
 		}}, []string{"o2"}},
 		// `$not` is deliberately absent — openapi.json documents it, but the
-		// engine rejects it on both read paths. See cyborgdb-core#2395.
+		// engine rejects it on both read paths (cyborgdb-core#2395).
 		{"$regex", map[string]interface{}{"color": map[string]interface{}{"$regex": "^r"}}, []string{"o0", "o3"}},
 		{"$contains", map[string]interface{}{"color": map[string]interface{}{"$contains": "ree"}}, []string{"o1", "o4"}},
 	}
@@ -283,8 +283,7 @@ func TestFilterIntAndFloatAreTheSameKey(t *testing.T) {
 }
 
 func TestFilterNotOperatorIsDocumentedButRejected(t *testing.T) {
-	// KNOWN BUG — fails today. cyborgdb-core#2395: the engine rejects `$not` on
-	// both read paths although openapi.json documents it.
+	// cyborgdb-core#2395
 	index := operatorIndex(t)
 	filters := map[string]interface{}{
 		"color": map[string]interface{}{"$not": map[string]interface{}{"$eq": "red"}},

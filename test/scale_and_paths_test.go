@@ -25,25 +25,22 @@ const (
 	scaleN   = 2000
 )
 
-// Deterministic corpus: every assertion below must be reproducible across runs,
-// so the vectors come from a fixed seed rather than fresh randomness.
-var scaleRNG = rand.New(rand.NewSource(20260918))
-
-// seededVectors draws count vectors of scaleDim from the shared deterministic
-// source.
-func seededVectors(count int) [][]float32 {
+// seededVectors draws count vectors of scaleDim from its own source, so a
+// test's data is the same whether it runs alone or in the full suite.
+func seededVectors(seed int64, count int) [][]float32 {
+	rng := rand.New(rand.NewSource(seed))
 	out := make([][]float32, count)
 	for i := range out {
 		out[i] = make([]float32, scaleDim)
 		for j := range out[i] {
-			out[i][j] = scaleRNG.Float32()
+			out[i][j] = rng.Float32()
 		}
 	}
 	return out
 }
 
 var (
-	scaleVectors = seededVectors(scaleN)
+	scaleVectors = seededVectors(20260918, scaleN)
 	scaleIDs     = paddedIDs("v", scaleN, 5)
 )
 
@@ -157,7 +154,7 @@ func newParityFixture(t *testing.T) *parityFixture {
 	const n = 200
 	f := &parityFixture{
 		ids:     paddedIDs("b", n, 3),
-		vectors: seededVectors(n),
+		vectors: seededVectors(1, n),
 	}
 	f.jsonIndex = newScaleIndex(t, "parity_json_", nil)
 	f.binaryIndex = newScaleIndex(t, "parity_bin_", nil)
@@ -286,7 +283,7 @@ func TestBinaryAndJSONEncodersFilterIdentically(t *testing.T) {
 func includeFixture(t *testing.T) (*cyborgdb.EncryptedIndex, []float32) {
 	t.Helper()
 	index := newScaleIndex(t, "include_", nil)
-	vector := seededVectors(1)[0]
+	vector := seededVectors(2, 1)[0]
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 	item := cyborgdb.VectorItem{
@@ -357,10 +354,7 @@ func TestIncludeGetHonoursVectorAndContents(t *testing.T) {
 }
 
 func TestIncludeUnknownValuesAreRejected(t *testing.T) {
-	// KNOWN BUG — fails today. cyborgdb-core#2404: an unrecognized value is
-	// silently discarded on both methods, so a typo such as "metdata" costs the
-	// caller the field with no error. Unlike the vector/contents question, this
-	// needs no documentation to be wrong.
+	// cyborgdb-core#2404
 	index, vector := includeFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -472,7 +466,7 @@ func seedForTraining(t *testing.T, index *cyborgdb.EncryptedIndex, n int) []stri
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	vectors := seededVectors(n)
+	vectors := seededVectors(3, n)
 	ids := paddedIDs("t", n, 5)
 	items := make(cyborgdb.VectorItems, n)
 	for i, id := range ids {
@@ -506,7 +500,7 @@ func TestTrainingBelowTheMinimumIsASilentNoOp(t *testing.T) {
 		t.Error("an index of 5 vectors must not report as trained")
 	}
 	got := rankedQueryIDs(t, index, cyborgdb.QueryParams{
-		QueryVector: seededVectors(1)[0], TopK: 3,
+		QueryVector: seededVectors(4, 1)[0], TopK: 3,
 	})
 	if !isSubset(got, ids) {
 		t.Errorf("query returned ids outside the seeded set: %v", got)
@@ -532,7 +526,7 @@ func TestMoreListsThanVectorsIsASilentNoOp(t *testing.T) {
 		t.Error("an index of 2 vectors must not report as trained")
 	}
 	got := rankedQueryIDs(t, index, cyborgdb.QueryParams{
-		QueryVector: seededVectors(1)[0], TopK: 2,
+		QueryVector: seededVectors(5, 1)[0], TopK: 2,
 	})
 	assertSameIDs(t, got, ids, "degenerate training still returns both vectors")
 }
@@ -546,7 +540,7 @@ func TestUntrainedIndexStillQueries(t *testing.T) {
 	defer cancel()
 
 	got := rankedQueryIDs(t, index, cyborgdb.QueryParams{
-		QueryVector: seededVectors(1)[0], TopK: 5,
+		QueryVector: seededVectors(6, 1)[0], TopK: 5,
 	})
 	if len(got) != 5 {
 		t.Errorf("got %d rows, want 5", len(got))
@@ -585,7 +579,7 @@ func newPrecisionFixture(t *testing.T) *precisionFixture {
 	f := &precisionFixture{
 		indexes: map[string]*cyborgdb.EncryptedIndex{},
 		ids:     paddedIDs("p", precisionN, 4),
-		vectors: seededVectors(precisionN),
+		vectors: seededVectors(7, precisionN),
 	}
 	f.query = f.vectors[42]
 	f.truth = bruteForceNearest(f.query, f.vectors, f.ids, 10)

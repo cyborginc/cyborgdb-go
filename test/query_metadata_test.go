@@ -406,8 +406,7 @@ func TestDatetimeEqualityMatches(t *testing.T) {
 }
 
 func TestDatetimeRangeWorks(t *testing.T) {
-	// KNOWN BUG — fails today. cyborgdb-core#2396: the RFC 3339 string reaches
-	// the service, which rejects it with "$gte requires a numeric value".
+	// cyborgdb-core#2396
 	index := datetimeIndex(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()

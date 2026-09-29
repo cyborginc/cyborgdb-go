@@ -749,10 +749,9 @@ func TestBM25MetadataResultShape(t *testing.T) {
 // -- metadata field policy defaults ----------------------------------------- //
 //
 // The full_text shorthand the SDK documents. Mirrors py
-// TestMetadataFieldPolicyDefaults. cyborgdb-core#2393 is the Python SDK
-// defaulting filterable=true and always serializing it, so the request carries
-// filterable=true + full_text=true and the service 422s; these assert Go does
-// not do the same.
+// TestMetadataFieldPolicyDefaults. Declaring a field full_text alone should be
+// enough, without spelling out the other flags (cyborgdb-core#2393); these
+// assert Go accepts it.
 
 // policyIndex creates an index with the given schema/sugar and returns it.
 func policyIndex(t *testing.T, apply func(*cyborgdb.CreateIndexParams)) *cyborgdb.EncryptedIndex {

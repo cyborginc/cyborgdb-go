@@ -227,7 +227,7 @@ jobs:
           # Note: -race flag removed because it uses 5-10x more memory which causes
           # the server to crash during auto-training with memory exhaustion
           echo "Running all tests..."
-          go test -v -coverprofile=coverage.txt -covermode=atomic -coverpkg=github.com/cyborginc/cyborgdb-go ./test
+          go test -v -coverprofile=coverage.txt -covermode=atomic -coverpkg=github.com/cyborginc/cyborgdb-go . ./test
           
           # Stop standard server
           kill $(cat server-standard.pid) || true

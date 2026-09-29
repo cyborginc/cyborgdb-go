@@ -66,6 +66,16 @@ func getTrainedIndex(t *testing.T) *trainedFixture {
 	return trainedShip
 }
 
+// cleanupTrainedIndex deletes the shared index, if a test built it.
+func cleanupTrainedIndex() {
+	if trainedShip == nil {
+		return
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	_ = trainedShip.index.DeleteIndex(ctx)
+}
+
 // buildTrainedIndex loads the dataset, upserts it in batches, and waits for
 // the background trainer to finish. Returns a message instead of a fixture on
 // failure so every test reports the same cause.
@@ -342,10 +352,7 @@ func TestTrainedIndexTopKTimesRerankMultCeilingIsEnforced(t *testing.T) {
 	if !strings.Contains(message, "10000") {
 		t.Errorf("the error should state the limit, got: %s", message)
 	}
-	// KNOWN BUG — this assertion fails today. cyborgdb-core#2401: the message
-	// says "top_k exceeds kMaxTopK" even though top_k=5000 is itself under the
-	// limit; it is the product with rerank_mult that breaches it. A caller
-	// reducing top_k to 2500 still fails.
+	// cyborgdb-core#2401
 	if !strings.Contains(message, "rerank_mult") {
 		t.Errorf("the error should name the parameter responsible, got: %s", message)
 	}
@@ -397,7 +404,7 @@ func TestTrainedIndexExampleFiltersAllResolve(t *testing.T) {
 				t.Fatalf("%s matched nothing", example.Name)
 			}
 			for _, item := range items {
-				if !metadataMatchesFilter(item.Metadata, example.Filter) {
+				if !metadataMatchesFilter(t, item.Metadata, example.Filter) {
 					t.Errorf("%s does not satisfy %v (metadata %v)",
 						item.Id, example.Filter, item.Metadata)
 				}
@@ -408,7 +415,8 @@ func TestTrainedIndexExampleFiltersAllResolve(t *testing.T) {
 
 // metadataMatchesFilter evaluates the dataset's example filters locally, as an
 // oracle against the service's own answer.
-func metadataMatchesFilter(metadata, filters map[string]interface{}) bool {
+func metadataMatchesFilter(t *testing.T, metadata, filters map[string]interface{}) bool {
+	t.Helper()
 	for field, condition := range filters {
 		value := metadata[field]
 		cond, isOperator := condition.(map[string]interface{})
@@ -457,6 +465,8 @@ func metadataMatchesFilter(metadata, filters map[string]interface{}) bool {
 				if !matched {
 					return false
 				}
+			default:
+				t.Fatalf("metadataMatchesFilter does not handle operator %q", op)
 			}
 		}
 	}

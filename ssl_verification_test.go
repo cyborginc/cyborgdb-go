@@ -9,9 +9,9 @@ import (
 //
 // Ported from cyborgdb-py tests/test_ssl_verification.py. Go resolves the host
 // with url.Parse and compares Hostname() exactly, where the Python and TS SDKs
-// use a substring match over the whole URL — see cyborgdb-core#2399. The
-// lookalike cases below pass here and fail there; they are a regression guard
-// against Go adopting the same shortcut.
+// use a substring match over the whole URL (cyborgdb-core#2399). The lookalike
+// cases below pass here and fail there; they are a regression guard against
+// Go adopting the same shortcut.
 //
 // In-package so the resolved setting can be read off the transport rather than
 // inferred from behavior. No service required.
@@ -60,8 +60,8 @@ func TestSSLHttpNeverVerifies(t *testing.T) {
 func TestSSLLookalikeHostsStillVerify(t *testing.T) {
 	// Each of these contains "localhost" or "127.0.0.1" as a substring but is
 	// not a local host. Every one is a domain an attacker could register, or a
-	// legitimate production URL. cyborgdb-core#2399 is the same case failing in
-	// the Python and TS SDKs.
+	// legitimate production URL. The same cases currently fail in the TS SDK; see
+	// cyborgdb-core#2399.
 	for _, url := range []string{
 		"https://localhost.evil.com",
 		"https://127.0.0.1.evil.com",

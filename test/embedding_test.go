@@ -15,13 +15,13 @@ import (
 // Built-in text embedding (cyborgdb-embed).
 //
 // cyborgdb-core now embeds in C++ via cyborgdb-embed rather than calling
-// sentence-transformers from Python (cyborgdb-core#2422). cyborgdb-service#271
-// is the service half: it drops the sentence-transformers gate, adds
-// GET /v1/embedding-models, and maps core's EmbeddingModelUnavailable to 503
-// instead of letting it fall through as a 500.
+// sentence-transformers from Python (cyborgdb-core#2422). The service half
+// drops the sentence-transformers gate, adds GET /v1/embedding-models, and
+// maps an unavailable model to 503 rather than letting it fall through as a
+// 500.
 //
-// These fail until cyborgdb-service#271 merges. They assert the contract that
-// PR's own tests assert, so they double as the SDK-side check that it landed.
+// These assert the contract the service change defines, so they double as the
+// SDK-side check that it landed.
 // Mirrors py tests/test_embedding.py.
 
 const (

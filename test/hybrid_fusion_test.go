@@ -57,7 +57,8 @@ func hybridIndex(t *testing.T) *cyborgdb.EncryptedIndex {
 		IndexKey:  generateRandomKey(),
 		Dimension: &dim,
 		Metric:    &metric,
-		// filterable spelled out because of cyborgdb-core#2393.
+		// filterable spelled out: the full_text-only shorthand is not accepted
+		// by every SDK yet (cyborgdb-core#2393).
 		MetadataSchema: map[string]cyborgdb.MetadataFieldPolicy{
 			"title":  {FullText: boolPtr(true), Filterable: boolPtr(false)},
 			"body":   {FullText: boolPtr(true), Filterable: boolPtr(false)},

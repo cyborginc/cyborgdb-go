@@ -567,10 +567,7 @@ func TestRBACUserKeyCannotReachAnotherIndex(t *testing.T) {
 }
 
 func TestRBACListIndexesUnderAUserKeyIsScopedOrDenied(t *testing.T) {
-	// SECURITY BUG — fails today. cyborgdb-core#2397: a tenant-scoped key
-	// enumerates every index in the deployment. Data access is correctly
-	// denied (see TestRBACUserKeyCannotReachAnotherIndex), so this discloses
-	// index names rather than contents.
+	// cyborgdb-core#2397
 	index, name := rbacRootIndex(t)
 	root := rbacRootClient(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
