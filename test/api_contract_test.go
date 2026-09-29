@@ -586,7 +586,7 @@ func TestEncryptedIndexUpsert(t *testing.T) {
 				Metadata: map[string]interface{}{"type": "auto-embedded", "index": i},
 			}
 			// Set contents for auto-embedding
-			item.SetContents(internal.Contents{String: &sampleTexts[i]})
+			item.SetContentsString(sampleTexts[i])
 			items[i] = item
 			expectedIDs[id] = true
 		}
@@ -1590,7 +1590,7 @@ func TestEncryptedIndexQueryMetadata(t *testing.T) {
 			"Filters":          reflect.Map,
 			"TopK":             reflect.Int32,
 			"OrderBy":          reflect.String,
-			"Ascending":        reflect.Bool,
+			"Ascending":        reflect.Pointer,
 			"Text":             reflect.Pointer,
 			"TextFields":       reflect.Slice,
 			"TextFieldWeights": reflect.Slice,

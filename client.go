@@ -25,6 +25,8 @@ var (
 	// ErrMissingKeyOrKMS is returned when CreateIndex is called with neither
 	// IndexKey nor KmsName set.
 	ErrMissingKeyOrKMS = fmt.Errorf("create_index requires IndexKey, KmsName, or both")
+	// ErrNilParams is returned when CreateIndex is called with nil params.
+	ErrNilParams = fmt.Errorf("params must not be nil")
 )
 
 // Client provides a high-level interface to the CyborgDB API (parallels the TypeScript SDK).
@@ -73,19 +75,6 @@ func keyBytesToHex(key []byte) (*string, error) {
 	return &h, nil
 }
 
-// NewClient constructs a new CyborgDB client.
-//
-// If verifySSL is omitted, behavior matches the TS SDK:
-//   - "http://" URLs -> verifySSL = false
-//   - localhost / 127.0.0.1 -> verifySSL = false
-//   - otherwise -> verifySSL = true
-//
-// Usage:
-//
-//	NewClient(url, apiKey)        // auto-detect verifySSL
-//	NewClient(url, apiKey, false) // force off
-//	NewClient(url, apiKey, true)  // force on
-//
 // parseBaseURL validates the base URL before any client is constructed.
 //
 // url.Parse alone rejects almost nothing: it accepts "", "not-a-url" and
@@ -106,6 +95,18 @@ func parseBaseURL(baseURL string) (*url.URL, error) {
 	return u, nil
 }
 
+// NewClient constructs a new CyborgDB client.
+//
+// If verifySSL is omitted, behavior matches the TS SDK:
+//   - "http://" URLs -> verifySSL = false
+//   - loopback hosts (localhost, 127.0.0.1, ::1) -> verifySSL = false
+//   - otherwise -> verifySSL = true
+//
+// Usage:
+//
+//	NewClient(url, apiKey)        // auto-detect verifySSL
+//	NewClient(url, apiKey, false) // force off
+//	NewClient(url, apiKey, true)  // force on
 func NewClient(baseURL, apiKey string, verifySSL ...bool) (*Client, error) {
 	u, err := parseBaseURL(baseURL)
 	if err != nil {
@@ -122,7 +123,7 @@ func NewClient(baseURL, apiKey string, verifySSL ...bool) (*Client, error) {
 		v = false
 	default:
 		host := u.Hostname()
-		if host == "localhost" || host == "127.0.0.1" {
+		if host == "localhost" || host == "127.0.0.1" || host == "::1" {
 			v = false
 		}
 	}
@@ -172,7 +173,8 @@ func (c *Client) ListIndexes(ctx context.Context) ([]string, error) {
 //
 // Returns:
 //   - *EncryptedIndex: Handle for vector operations
-//   - error: Any error encountered (ErrMissingKeyOrKMS if neither is set;
+//   - error: Any error encountered (ErrNilParams if params is nil;
+//     ErrMissingKeyOrKMS if neither is set;
 //     ErrInvalidKeyLength if IndexKey is set but not 32 bytes)
 //
 // Note: Store the encryption key securely; it cannot be recovered if lost.
@@ -181,6 +183,9 @@ func (c *Client) CreateIndex(
 	ctx context.Context,
 	params *CreateIndexParams,
 ) (*EncryptedIndex, error) {
+	if params == nil {
+		return nil, newValidationError(ErrNilParams)
+	}
 	if len(params.IndexKey) == 0 && params.KmsName == nil {
 		return nil, newValidationError(ErrMissingKeyOrKMS)
 	}
