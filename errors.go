@@ -131,6 +131,15 @@ type TransportError struct{ baseError }
 // Retryable reports true, for idempotent calls.
 func (e *TransportError) Retryable() bool { return true }
 
+// APIError is returned for HTTP statuses the other types do not name (405,
+// 413, and any other 4xx or 3xx), matching the base CyborgDBError that the
+// Python and JS SDKs raise for them. Inspect StatusCode for the status.
+type APIError struct{ baseError }
+
+// Retryable reports false: an unrecognized status gives no reason to expect a
+// retry to succeed.
+func (e *APIError) Retryable() bool { return false }
+
 // compile-time check that every typed error satisfies Error.
 //
 //nolint:errcheck // interface satisfaction assertions, not unchecked error returns
@@ -142,6 +151,7 @@ var (
 	_ Error = (*RateLimitError)(nil)
 	_ Error = (*ServiceError)(nil)
 	_ Error = (*TransportError)(nil)
+	_ Error = (*APIError)(nil)
 )
 
 // newValidationError builds a pre-flight ValidationError around one of the
@@ -152,8 +162,9 @@ func newValidationError(err error) *ValidationError {
 }
 
 // translateHTTPError converts a generated-client error into a typed error.
-// It returns nil when err is nil, and returns err unchanged for statuses the
-// taxonomy does not name (other 4xx, and 3xx).
+// It returns nil when err is nil, and an *APIError for statuses the taxonomy
+// does not name (other 4xx, and 3xx). A 2xx that still produced an error — a
+// body that failed to decode — is returned unchanged.
 //
 // The generated client returns the raw *http.Response alongside the error;
 // internal.APIResponse is not used on this path.
@@ -193,8 +204,12 @@ func translateHTTPError(resp *http.Response, err error) error {
 	case code >= http.StatusInternalServerError:
 		base.kind = "service error"
 		return &ServiceError{base}
+	case code >= http.StatusMultipleChoices:
+		base.kind = "api error"
+		return &APIError{base}
 	default:
-		// Not named by the taxonomy — hand the original error back unchanged.
+		// A 2xx whose body failed to decode: not an HTTP failure, so hand the
+		// generated client's error back unchanged.
 		return err
 	}
 }
