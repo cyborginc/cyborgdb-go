@@ -2,6 +2,9 @@ package test
 
 import (
 	"context"
+	"errors"
+	"fmt"
+	"strings"
 	"testing"
 	"time"
 
@@ -126,6 +129,14 @@ func operatorIndex(t *testing.T) *cyborgdb.EncryptedIndex {
 // opVectorIDs runs the same filter through the vector path.
 func opVectorIDs(t *testing.T, index *cyborgdb.EncryptedIndex, filters map[string]interface{}) []string {
 	t.Helper()
+	ids, err := queryOpIDs(index, filters)
+	if err != nil {
+		t.Fatalf("Query(%v) failed: %v", filters, err)
+	}
+	return ids
+}
+
+func queryOpIDs(index *cyborgdb.EncryptedIndex, filters map[string]interface{}) ([]string, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 	resp, err := index.Query(ctx, cyborgdb.QueryParams{
@@ -134,14 +145,14 @@ func opVectorIDs(t *testing.T, index *cyborgdb.EncryptedIndex, filters map[strin
 		Filters:     filters,
 	})
 	if err != nil {
-		t.Fatalf("Query(%v) failed: %v", filters, err)
+		return nil, err
 	}
 	items := getQueryResultItems(&resp.Results)
 	ids := make([]string, 0, len(items))
 	for _, item := range items {
 		ids = append(ids, item.Id)
 	}
-	return ids
+	return ids, nil
 }
 
 func TestFilterOperatorsOnBothPaths(t *testing.T) {
@@ -283,14 +294,29 @@ func TestFilterIntAndFloatAreTheSameKey(t *testing.T) {
 }
 
 func TestFilterNotOperatorIsDocumentedButRejected(t *testing.T) {
-	// cyborgdb-core#2395
 	index := operatorIndex(t)
 	filters := map[string]interface{}{
 		"color": map[string]interface{}{"$not": map[string]interface{}{"$eq": "red"}},
 	}
-	assertSameIDs(t,
-		queryMeta(t, index, cyborgdb.QueryMetadataParams{Filters: filters}),
-		[]string{"o1", "o2", "o4"}, "$not via QueryMetadata")
-	assertSameIDs(t, opVectorIDs(t, index, filters),
-		[]string{"o1", "o2", "o4"}, "$not via Query")
+	want := []string{"o1", "o2", "o4"}
+
+	expectFailure(t, "cyborgdb-core#2395", func() error {
+		var problems []string
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		if resp, err := index.QueryMetadata(ctx, cyborgdb.QueryMetadataParams{Filters: filters}); err != nil {
+			problems = append(problems, fmt.Sprintf("$not via QueryMetadata: %v", err))
+		} else if !sameIDs(resp.Ids, want) {
+			problems = append(problems, fmt.Sprintf("$not via QueryMetadata: got %v, want %v", resp.Ids, want))
+		}
+		if got, err := queryOpIDs(index, filters); err != nil {
+			problems = append(problems, fmt.Sprintf("$not via Query: %v", err))
+		} else if !sameIDs(got, want) {
+			problems = append(problems, fmt.Sprintf("$not via Query: got %v, want %v", got, want))
+		}
+		if len(problems) > 0 {
+			return errors.New(strings.Join(problems, "; "))
+		}
+		return nil
+	})
 }

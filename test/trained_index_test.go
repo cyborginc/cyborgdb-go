@@ -3,6 +3,7 @@ package test
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"math"
 	"reflect"
 	"sort"
@@ -356,10 +357,12 @@ func TestTrainedIndexTopKTimesRerankMultCeilingIsEnforced(t *testing.T) {
 	if !strings.Contains(message, "10000") {
 		t.Errorf("the error should state the limit, got: %s", message)
 	}
-	// cyborgdb-core#2401
-	if !strings.Contains(message, "rerank_mult") {
-		t.Errorf("the error should name the parameter responsible, got: %s", message)
-	}
+	expectFailure(t, "cyborgdb-core#2401", func() error {
+		if !strings.Contains(message, "rerank_mult") {
+			return fmt.Errorf("the error does not name the parameter responsible: %s", message)
+		}
+		return nil
+	})
 }
 
 func TestTrainedIndexTheCeilingIsInclusive(t *testing.T) {

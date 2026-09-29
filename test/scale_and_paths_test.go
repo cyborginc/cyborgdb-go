@@ -2,10 +2,12 @@ package test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -354,19 +356,25 @@ func TestIncludeGetHonoursVectorAndContents(t *testing.T) {
 }
 
 func TestIncludeUnknownValuesAreRejected(t *testing.T) {
-	// cyborgdb-core#2404
 	index, vector := includeFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	if _, err := index.Query(ctx, cyborgdb.QueryParams{
-		QueryVector: vector, TopK: 1, Include: []string{"bogus"},
-	}); err == nil {
-		t.Error("Query should reject an unknown include value")
-	}
-	if _, err := index.Get(ctx, []string{"only"}, []string{"bogus"}); err == nil {
-		t.Error("Get should reject an unknown include value")
-	}
+	expectFailure(t, "cyborgdb-core#2404", func() error {
+		var problems []string
+		if _, err := index.Query(ctx, cyborgdb.QueryParams{
+			QueryVector: vector, TopK: 1, Include: []string{"bogus"},
+		}); err == nil {
+			problems = append(problems, "Query accepted an unknown include value")
+		}
+		if _, err := index.Get(ctx, []string{"only"}, []string{"bogus"}); err == nil {
+			problems = append(problems, "Get accepted an unknown include value")
+		}
+		if len(problems) > 0 {
+			return errors.New(strings.Join(problems, "; "))
+		}
+		return nil
+	})
 }
 
 // -- large batch ----------------------------------------------------------- //

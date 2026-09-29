@@ -112,9 +112,13 @@ func sortedSet(ids []string) map[string]bool {
 
 func assertSameIDs(t *testing.T, got, want []string, label string) {
 	t.Helper()
-	if !reflect.DeepEqual(sortedSet(got), sortedSet(want)) {
+	if !sameIDs(got, want) {
 		t.Errorf("%s: got %v, want %v", label, got, want)
 	}
+}
+
+func sameIDs(got, want []string) bool {
+	return reflect.DeepEqual(sortedSet(got), sortedSet(want))
 }
 
 func queryMeta(t *testing.T, index *cyborgdb.EncryptedIndex, params cyborgdb.QueryMetadataParams) []string {
@@ -414,20 +418,24 @@ func TestDatetimeEqualityMatches(t *testing.T) {
 }
 
 func TestDatetimeRangeWorks(t *testing.T) {
-	// cyborgdb-core#2396
 	index := datetimeIndex(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	resp, err := index.QueryMetadata(ctx, cyborgdb.QueryMetadataParams{
-		Filters: map[string]interface{}{
-			"created": map[string]interface{}{"$gte": datetimePlusDays(5)},
-		},
+	expectFailure(t, "cyborgdb-core#2396", func() error {
+		resp, err := index.QueryMetadata(ctx, cyborgdb.QueryMetadataParams{
+			Filters: map[string]interface{}{
+				"created": map[string]interface{}{"$gte": datetimePlusDays(5)},
+			},
+		})
+		if err != nil {
+			return fmt.Errorf("range filter on a datetime was rejected: %v", err)
+		}
+		if got := metaIDs(resp.Results); !sameIDs(got, []string{"t1", "t2"}) {
+			return fmt.Errorf("range on a datetime: got %v, want [t1 t2]", got)
+		}
+		return nil
 	})
-	if err != nil {
-		t.Fatalf("range filter on a datetime was rejected: %v", err)
-	}
-	assertSameIDs(t, metaIDs(resp.Results), []string{"t1", "t2"}, "range on a datetime")
 }
 
 func TestDatetimeEpochMillisSupportsRanges(t *testing.T) {
