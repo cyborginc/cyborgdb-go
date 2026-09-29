@@ -585,7 +585,6 @@ func TestRBACUserKeyCannotReachAnotherIndex(t *testing.T) {
 }
 
 func TestRBACListIndexesUnderAUserKeyIsScopedOrDenied(t *testing.T) {
-	// cyborgdb-core#2397
 	index, name := rbacRootIndex(t)
 	root := rbacRootClient(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
