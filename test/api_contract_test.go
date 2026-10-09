@@ -1486,7 +1486,7 @@ func TestEncryptedIndexBinaryUpsertAndQuery(t *testing.T) {
 		params := cyborgdb.BinaryQueryParams{
 			QueryVectors: [][]float32{testVectors[0]},
 			TopK:         topK,
-			Include:      []string{"metadata"},
+			Include:      []string{"metadata", "vector"},
 		}
 
 		results, err := testIndex.Query(ctx, params)
