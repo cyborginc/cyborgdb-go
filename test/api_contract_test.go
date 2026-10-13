@@ -1486,7 +1486,7 @@ func TestEncryptedIndexBinaryUpsertAndQuery(t *testing.T) {
 		params := cyborgdb.BinaryQueryParams{
 			QueryVectors: [][]float32{testVectors[0]},
 			TopK:         topK,
-			Include:      []string{"metadata", "vector"},
+			Include:      []string{"metadata"},
 		}
 
 		results, err := testIndex.Query(ctx, params)
@@ -1508,10 +1508,6 @@ func TestEncryptedIndexBinaryUpsertAndQuery(t *testing.T) {
 		for i, result := range resultItems {
 			if result.Id == "" {
 				t.Errorf("Result %d: missing ID", i)
-			}
-			// Vector should be included
-			if len(result.Vector) == 0 {
-				t.Logf("Result %d: vector not returned despite include=['vector'] - may be expected based on server config", i)
 			}
 		}
 	})

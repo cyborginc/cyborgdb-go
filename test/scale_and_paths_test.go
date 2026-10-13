@@ -2,6 +2,7 @@ package test
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math/rand"
 	"reflect"
@@ -333,8 +334,7 @@ func TestIncludeSupportedValuesAreHonoured(t *testing.T) {
 }
 
 func TestIncludeGetHonoursVectorAndContents(t *testing.T) {
-	// The asymmetry in cyborgdb-core#2404: these work on Get and are discarded
-	// on Query. Asserted here only for Get, where the contract is documented.
+	// Valid on Get but rejected by Query (cyborgdb-core#2404).
 	index, _ := includeFixture(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
@@ -359,18 +359,25 @@ func TestIncludeUnknownValuesAreRejected(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
 
-	expectFailure(t, "cyborgdb-core#2404", func() string {
-		var problems []string
-		if _, err := index.Query(ctx, cyborgdb.QueryParams{
-			QueryVector: vector, TopK: 1, Include: []string{"bogus"},
-		}); err == nil {
-			problems = append(problems, "Query accepted an unknown include value")
-		}
-		if _, err := index.Get(ctx, []string{"only"}, []string{"bogus"}); err == nil {
-			problems = append(problems, "Get accepted an unknown include value")
-		}
-		return strings.Join(problems, "; ")
+	// A typo such as "metdata" must fail loudly rather than silently cost the
+	// caller the field (cyborgdb-core#2404).
+	_, err := index.Query(ctx, cyborgdb.QueryParams{
+		QueryVector: vector, TopK: 1, Include: []string{"bogus"},
 	})
+	assertIncludeRejected(t, "Query", err)
+	_, err = index.Get(ctx, []string{"only"}, []string{"bogus"})
+	assertIncludeRejected(t, "Get", err)
+}
+
+func assertIncludeRejected(t *testing.T, method string, err error) {
+	t.Helper()
+	var verr *cyborgdb.ValidationError
+	if !errors.As(err, &verr) {
+		t.Fatalf("%s with include=[bogus]: want ValidationError, got %v", method, err)
+	}
+	if !strings.Contains(verr.Detail(), "bogus") {
+		t.Errorf("%s error should name the bad value, got %q", method, verr.Detail())
+	}
 }
 
 // -- large batch ----------------------------------------------------------- //
