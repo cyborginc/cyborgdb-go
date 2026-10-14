@@ -12,7 +12,7 @@ Name | Type | Description | Notes
 **NProbes** | Pointer to **NullableInt32** |  | [optional] 
 **Greedy** | Pointer to **NullableBool** |  | [optional] 
 **Filters** | Pointer to **map[string]interface{}** |  | [optional] 
-**Include** | Pointer to **[]string** |  | [optional] [default to [distance, metadata]]
+**Include** | Pointer to **[]string** |  | [optional] [default to []]
 
 ## Methods
 

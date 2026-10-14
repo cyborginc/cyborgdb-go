@@ -177,7 +177,7 @@ queryParams := cyborgdb.QueryParams{
     NProbes:     &nProbes,
     Greedy:      &greedy,
     Filters:     complexFilter,
-    Include:     []string{"distance", "metadata", "contents"},
+    Include:     []string{"distance", "metadata"},
 }
 results, err := index.Query(context.Background(), queryParams)
 ```
