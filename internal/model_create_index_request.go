@@ -28,7 +28,7 @@ type CreateIndexRequest struct {
 	// 32-byte encryption key as hex string.  Mutually exclusive with kms_name — when supplied, the SDK provides the KEK directly and the index is persisted as `provider=none`.
 	IndexKey NullableString `json:"index_key,omitempty"`
 	Dimension NullableInt32 `json:"dimension,omitempty"`
-	// Index KEK (hex) for SDK-supplied indexes; omit for KMS-backed.
+	// Text embedding model that turns `contents` and `query_contents` into vectors. Must be one of the models listed by `GET /embedding-models`; the bare name (e.g. `all-MiniLM-L6-v2`) is accepted, in any case. Sets the index dimension; a `dimension` that disagrees with the model returns 400.
 	EmbeddingModel NullableString `json:"embedding_model,omitempty"`
 	Metric NullableString `json:"metric,omitempty"`
 	StoragePrecision NullableString `json:"storage_precision,omitempty"`
