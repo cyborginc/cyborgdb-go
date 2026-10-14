@@ -297,7 +297,7 @@ type BinaryUpsertParams struct {
 //   - NProbes: Number of IVF lists to probe (optional)
 //   - Greedy: Enable greedy search mode (optional)
 //   - Filters: Metadata filters to apply (optional)
-//   - Include: Fields to include in response (optional)
+//   - Include: Fields to include in response: "distance", "metadata" (optional)
 type BinaryQueryParams struct {
 	// QueryVectors contains the query vectors as a 2D slice.
 	// Shape should be [n_queries][dimension].
@@ -323,7 +323,8 @@ type BinaryQueryParams struct {
 	Filters map[string]interface{}
 
 	// Include specifies which fields to return in results.
-	// Common values: ["metadata"], ["vector"], ["metadata", "vector"].
+	// Allowed values: "distance", "metadata". Any other value is rejected by
+	// the server with a 422. Nil or empty returns only IDs.
 	Include []string
 
 	// Text turns this into a hybrid (BM25 + vector) query against an index with
@@ -360,8 +361,8 @@ type BinaryQueryParams struct {
 //   - Vector query: Provide QueryVector for single query or BatchQueryVectors for batch
 //   - Content query: Provide QueryContents for text-based search (if supported)
 //
-// Required fields: TopK, Include.
-// Optional fields: NProbes, Greedy, Filters (and one query input).
+// Required fields: TopK.
+// Optional fields: NProbes, Greedy, Filters, Include (and one query input).
 type QueryParams struct {
 	// QueryVector contains the query vector for single vector similarity search.
 	// Mutually exclusive with BatchQueryVectors and QueryContents.
@@ -399,9 +400,9 @@ type QueryParams struct {
 	// Exact filter syntax depends on server implementation.
 	Filters map[string]interface{} `json:"filters,omitempty"`
 
-	// Include specifies which fields to return in results (required).
-	// Common values: ["metadata"], ["vector"], ["metadata", "vector"].
-	// An empty slice may return only IDs and distances.
+	// Include specifies which fields to return in results.
+	// Allowed values: "distance", "metadata". Any other value is rejected by
+	// the server with a 422. Nil or empty returns only IDs.
 	Include []string `json:"include"`
 
 	// Text turns this into a hybrid (BM25 + vector) query against an index with
