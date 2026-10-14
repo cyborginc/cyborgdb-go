@@ -3,7 +3,7 @@
   "info": {
     "title": "CyborgDB Service",
     "description": "REST API for CyborgDB: The Confidential Vector Database",
-    "version": "0.17.1.dev16"
+    "version": "0.18.0"
   },
   "paths": {
     "/v1/health": {
@@ -32,7 +32,7 @@
     "/v1/indexes/list": {
       "get": {
         "summary": "List Encrypted Indexes",
-        "description": "List all available indexes.",
+        "description": "List all available indexes. Requires an admin (root) key: a per-user key is\nscoped to the indexes it was granted and must not enumerate the others.",
         "operationId": "list_indexes_v1_indexes_list_get",
         "responses": {
           "200": {
@@ -76,7 +76,7 @@
     "/v1/indexes/create": {
       "post": {
         "summary": "Create Encrypted Index",
-        "description": "Create a new encrypted index with the provided configuration.\n\nExactly one of `kms_name` / `index_key` must be set; supplying\nboth is rejected with 400.\n\n  * `kms_name` set — service generates a random KEK, wraps it via\n    the named registry slot's KMS, persists the envelope, and uses\n    the plaintext KEK as `index_key` on the core call.  CEI\n    generates the DEK and wraps it under that KEK internally.\n  * `index_key` set — SDK-supplied KEK; envelope persisted with\n    `provider=\"none\"`.  The SDK must re-supply `index_key` on\n    every subsequent request for this index.",
+        "description": "Create a new encrypted index with the provided configuration.\n\nExactly one of `kms_name` / `index_key` must be set; supplying\nboth is rejected with 400.\n\n  * `kms_name` set \u2014 service generates a random KEK, wraps it via\n    the named registry slot's KMS, persists the envelope, and uses\n    the plaintext KEK as `index_key` on the core call.  CEI\n    generates the DEK and wraps it under that KEK internally.\n  * `index_key` set \u2014 SDK-supplied KEK; envelope persisted with\n    `provider=\"none\"`.  The SDK must re-supply `index_key` on\n    every subsequent request for this index.",
         "operationId": "create_index_v1_indexes_create_post",
         "requestBody": {
           "content": {
@@ -362,7 +362,7 @@
     "/v1/indexes/training-status": {
       "get": {
         "summary": "Get Training Status",
-        "description": "Get the current training status including indexes being trained\nand the auto-train configuration.\n\nReturns:\n    dict: Training status information including:\n        - training_indexes: List of index names currently being trained\n        - retrain_threshold: Vector-count floor before the first training",
+        "description": "Get the current training status including indexes being trained\nand the auto-train configuration. Requires an admin (root) key.\n\nReturns:\n    dict: Training status information including:\n        - training_indexes: List of index names currently being trained\n        - retrain_threshold: Vector-count floor before the first training",
         "operationId": "get_training_status_v1_indexes_training_status_get",
         "responses": {
           "200": {
@@ -395,7 +395,12 @@
               }
             }
           }
-        }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
       }
     },
     "/v1/vectors/upsert": {
@@ -793,7 +798,7 @@
     "/v1/vectors/query_metadata": {
       "post": {
         "summary": "Query an Encrypted Index by Metadata Only",
-        "description": "Find items by metadata alone — no query vector.\n\nWith no `text`, resolves the filter entirely from the encrypted metadata\nindex and returns the matching items, unscored. With `text`, runs BM25 over\nthe index's full_text fields and returns the top matches ranked by score; a\nfilter given alongside acts as a pre-filter. Works on untrained indexes.\n\nBecause there is no post-filter stage to fall back on, the index's\n`metadata_schema` is enforced here: `$regex` / `$contains` need a `pattern`\nfield, and a `filterable: false` field cannot be filtered on. Both come back\nas 400 with the reason. `/query` with a vector has no such restriction.",
+        "description": "Find items by metadata alone \u2014 no query vector.\n\nWith no `text`, resolves the filter entirely from the encrypted metadata\nindex and returns the matching items, unscored. With `text`, runs BM25 over\nthe index's full_text fields and returns the top matches ranked by score; a\nfilter given alongside acts as a pre-filter. Works on untrained indexes.\n\nBecause there is no post-filter stage to fall back on, the index's\n`metadata_schema` is enforced here: `$regex` / `$contains` need a `pattern`\nfield, and a `filterable: false` field cannot be filtered on. Both come back\nas 400 with the reason. `/query` with a vector has no such restriction.",
         "operationId": "query_metadata_v1_vectors_query_metadata_post",
         "requestBody": {
           "content": {
@@ -837,7 +842,7 @@
             }
           },
           "400": {
-            "description": "Filter references a field the metadata index cannot resolve — a `$regex`/`$contains` on a non-`pattern` field, a `filterable: false` field, or an unsupported operator",
+            "description": "Filter references a field the metadata index cannot resolve \u2014 a `$regex`/`$contains` on a non-`pattern` field, a `filterable: false` field, or an unsupported operator",
             "content": {
               "application/json": {
                 "schema": {
@@ -975,7 +980,7 @@
     "/v1/indexes/{index_name}/users": {
       "post": {
         "summary": "Create a user for an index",
-        "description": "Mint a user API key with the given permissions, scoped to this index.\n\nThe api_key is returned once and never stored — only the user holds it.",
+        "description": "Mint a user API key with the given permissions, scoped to this index.\n\nThe api_key is returned once and never stored \u2014 only the user holds it.",
         "operationId": "create_user_v1_indexes__index_name__users_post",
         "security": [
           {
@@ -1240,6 +1245,50 @@
           }
         }
       }
+    },
+    "/v1/embedding-models": {
+      "get": {
+        "summary": "List Supported Embedding Models",
+        "description": "List the text embedding models accepted by `embedding_model` on index\ncreate. Reads core's model table; nothing is downloaded.",
+        "operationId": "list_embedding_models_v1_embedding_models_get",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmbeddingModelListResponseModel"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Permission denied from license issue",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Unexpected server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponseModel"
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "APIKeyHeader": []
+          }
+        ]
+      }
     }
   },
   "components": {
@@ -1330,6 +1379,19 @@
             "title": "Require All Terms",
             "description": "Require every query term to match (AND) instead of any (OR, the default)."
           },
+          "include": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "distance",
+                "metadata"
+              ]
+            },
+            "type": "array",
+            "title": "Include",
+            "description": "Extra fields to return with each result: `distance`, `metadata`. Defaults to `[]` (IDs only). Any other value is a 422; to retrieve contents or vectors, call `/get` with the result IDs.",
+            "default": []
+          },
           "alpha": {
             "anyOf": [
               {
@@ -1352,7 +1414,7 @@
               }
             ],
             "title": "Rrf K",
-            "description": "RRF rank-smoothing constant (\u003E 0; omitted means 60). Higher rewards agreement further down each leg's list."
+            "description": "RRF rank-smoothing constant (> 0; omitted means 60). Higher rewards agreement further down each leg's list."
           },
           "window_mult": {
             "anyOf": [
@@ -1364,7 +1426,7 @@
               }
             ],
             "title": "Window Mult",
-            "description": "Per-leg candidate depth as a multiple of top_k (\u003E= 1; omitted means 3), so each leg looks deeper than the final cut."
+            "description": "Per-leg candidate depth as a multiple of top_k (>= 1; omitted means 3), so each leg looks deeper than the final cut."
           },
           "index_name": {
             "type": "string",
@@ -1448,15 +1510,7 @@
               }
             ],
             "title": "Filters",
-            "description": "Metadata filters as a JSON object. Operators: `$eq`, `$ne`, `$in`, `$nin`, `$exists`, `$gt`, `$gte`, `$lt`, `$lte`, `$regex`, `$contains`, combined with `$and` / `$or` / `$nor` / `$not`. Filtering works on any metadata field; the index's `metadata_schema` only decides how a filter is resolved — fields marked `filterable` (the default) are answered from the inverted index, and `$regex` / `$contains` are answered from the regex dictionary on `pattern` fields. Anything else falls back to a post-filter over the decrypted metadata, which is correct but slower. Dates have no native type: store and filter them as epoch milliseconds."
-          },
-          "include": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Include",
-            "default": []
+            "description": "Metadata filters as a JSON object. Operators: `$eq`, `$ne`, `$in`, `$nin`, `$exists`, `$gt`, `$gte`, `$lt`, `$lte`, `$regex`, `$contains`, combined with `$and` / `$or` / `$nor` / `$not`. Filtering works on any metadata field; the index's `metadata_schema` only decides how a filter is resolved \u2014 fields marked `filterable` (the default) are answered from the inverted index, and `$regex` / `$contains` are answered from the regex dictionary on `pattern` fields. Anything else falls back to a post-filter over the decrypted metadata, which is correct but slower. Dates have no native type: store and filter them as epoch milliseconds."
           }
         },
         "type": "object",
@@ -1465,7 +1519,7 @@
           "query_vectors"
         ],
         "title": "BatchQueryRequest",
-        "description": "Request model for batch similarity search.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n    HybridQueryParams: `text` and the fusion knobs for hybrid search.\n\nAttributes:\n    query_vectors (List[List[float]]): List of vectors to search for in batch mode.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.\n    filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like\n        dictionary (see `FILTERS_DESCRIPTION` for the operator set).\n        Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned)."
+        "description": "Request model for batch similarity search.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n    HybridQueryParams: `text` and the fusion knobs for hybrid search.\n\nAttributes:\n    query_vectors (List[List[float]]): List of vectors to search for in batch mode.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.\n    filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like\n        dictionary (see `FILTERS_DESCRIPTION` for the operator set).\n        Defaults to {}.\n    include (List[str]): Extra result fields, any of `distance`,\n        `metadata`. Defaults to `[]` (only IDs). Other values are a 422."
       },
       "BinaryQueryBatch": {
         "properties": {
@@ -1542,6 +1596,19 @@
             "title": "Require All Terms",
             "description": "Require every query term to match (AND) instead of any (OR, the default)."
           },
+          "include": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "distance",
+                "metadata"
+              ]
+            },
+            "type": "array",
+            "title": "Include",
+            "description": "Extra fields to return with each result: `distance`, `metadata`. Defaults to `[]` (IDs only). Any other value is a 422; to retrieve contents or vectors, call `/get` with the result IDs.",
+            "default": []
+          },
           "alpha": {
             "anyOf": [
               {
@@ -1564,7 +1631,7 @@
               }
             ],
             "title": "Rrf K",
-            "description": "RRF rank-smoothing constant (\u003E 0; omitted means 60). Higher rewards agreement further down each leg's list."
+            "description": "RRF rank-smoothing constant (> 0; omitted means 60). Higher rewards agreement further down each leg's list."
           },
           "window_mult": {
             "anyOf": [
@@ -1576,7 +1643,7 @@
               }
             ],
             "title": "Window Mult",
-            "description": "Per-leg candidate depth as a multiple of top_k (\u003E= 1; omitted means 3), so each leg looks deeper than the final cut."
+            "description": "Per-leg candidate depth as a multiple of top_k (>= 1; omitted means 3), so each leg looks deeper than the final cut."
           },
           "index_name": {
             "type": "string",
@@ -1653,15 +1720,7 @@
               }
             ],
             "title": "Filters",
-            "description": "Metadata filters as a JSON object. Operators: `$eq`, `$ne`, `$in`, `$nin`, `$exists`, `$gt`, `$gte`, `$lt`, `$lte`, `$regex`, `$contains`, combined with `$and` / `$or` / `$nor` / `$not`. Filtering works on any metadata field; the index's `metadata_schema` only decides how a filter is resolved — fields marked `filterable` (the default) are answered from the inverted index, and `$regex` / `$contains` are answered from the regex dictionary on `pattern` fields. Anything else falls back to a post-filter over the decrypted metadata, which is correct but slower. Dates have no native type: store and filter them as epoch milliseconds."
-          },
-          "include": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Include",
-            "default": []
+            "description": "Metadata filters as a JSON object. Operators: `$eq`, `$ne`, `$in`, `$nin`, `$exists`, `$gt`, `$gte`, `$lt`, `$lte`, `$regex`, `$contains`, combined with `$and` / `$or` / `$nor` / `$not`. Filtering works on any metadata field; the index's `metadata_schema` only decides how a filter is resolved \u2014 fields marked `filterable` (the default) are answered from the inverted index, and `$regex` / `$contains` are answered from the regex dictionary on `pattern` fields. Anything else falls back to a post-filter over the decrypted metadata, which is correct but slower. Dates have no native type: store and filter them as epoch milliseconds."
           }
         },
         "type": "object",
@@ -1670,7 +1729,7 @@
           "batch"
         ],
         "title": "BinaryQueryRequest",
-        "description": "Request model for batch similarity search using binary format.\n\nThis is more efficient than BatchQueryRequest for large batches as vectors\nare sent as base64-encoded binary data instead of JSON arrays.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n    HybridQueryParams: `text` and the fusion knobs for hybrid search.\n\nAttributes:\n    batch (BinaryQueryBatch): The batch of query vectors in binary format.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.\n    filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like\n        dictionary (see `FILTERS_DESCRIPTION` for the operator set).\n        Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned)."
+        "description": "Request model for batch similarity search using binary format.\n\nThis is more efficient than BatchQueryRequest for large batches as vectors\nare sent as base64-encoded binary data instead of JSON arrays.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n    HybridQueryParams: `text` and the fusion knobs for hybrid search.\n\nAttributes:\n    batch (BinaryQueryBatch): The batch of query vectors in binary format.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.\n    filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like\n        dictionary (see `FILTERS_DESCRIPTION` for the operator set).\n        Defaults to {}.\n    include (List[str]): Extra result fields, any of `distance`,\n        `metadata`. Defaults to `[]` (only IDs). Other values are a 422."
       },
       "BinaryUpsertRequest": {
         "properties": {
@@ -1794,7 +1853,7 @@
               }
             ],
             "title": "Kms Name",
-            "description": "Name of a kms.registry entry in the service YAML. Mutually exclusive with index_key — when supplied, the service wraps a fresh KEK via that KMS and persists the envelope."
+            "description": "Name of a kms.registry entry in the service YAML. Mutually exclusive with index_key \u2014 when supplied, the service wraps a fresh KEK via that KMS and persists the envelope."
           },
           "index_key": {
             "anyOf": [
@@ -1806,7 +1865,7 @@
               }
             ],
             "title": "Index Key",
-            "description": "32-byte encryption key as hex string.  Mutually exclusive with kms_name — when supplied, the SDK provides the KEK directly and the index is persisted as `provider=none`."
+            "description": "32-byte encryption key as hex string.  Mutually exclusive with kms_name \u2014 when supplied, the SDK provides the KEK directly and the index is persisted as `provider=none`."
           },
           "dimension": {
             "anyOf": [
@@ -1828,7 +1887,11 @@
                 "type": "null"
               }
             ],
-            "title": "Embedding Model"
+            "title": "Embedding Model",
+            "description": "Text embedding model that turns `contents` and `query_contents` into vectors. Must be one of the models listed by `GET /embedding-models`; the bare name is accepted, in any case. Sets the index dimension; a `dimension` that disagrees with the model returns 400.",
+            "examples": [
+              "all-MiniLM-L6-v2"
+            ]
           },
           "metric": {
             "anyOf": [
@@ -1896,7 +1959,7 @@
               }
             ],
             "title": "Text Fields",
-            "description": "Fields to index for BM25 full-text search — shorthand for marking them `full_text: true` in `metadata_schema`. Enables `query(text=...)` and `query_metadata(text=...)`.",
+            "description": "Fields to index for BM25 full-text search \u2014 shorthand for marking them `full_text: true` in `metadata_schema`. Enables `query(text=...)` and `query_metadata(text=...)`.",
             "examples": [
               [
                 "title",
@@ -1914,7 +1977,7 @@
               }
             ],
             "title": "Bm25 K1",
-            "description": "BM25 term-frequency saturation (\u003E= 0, default 1.2). Requires at least one full_text field."
+            "description": "BM25 term-frequency saturation (>= 0, default 1.2). Requires at least one full_text field."
           },
           "bm25_b": {
             "anyOf": [
@@ -1934,7 +1997,7 @@
           "index_name"
         ],
         "title": "CreateIndexRequest",
-        "description": "Request model for creating a new encrypted DiskIVF index.\n\nExactly one of `kms_name` / `index_key` must be supplied; supplying\nboth is rejected with 400.\n\nAttributes:\n    index_name: The name/identifier of the index.\n    kms_name: Name of a `kms.registry` entry in the service YAML.\n        When supplied (and `index_key` is omitted), the service\n        generates the KEK itself, wraps it under that entry's KMS,\n        and persists the envelope.\n    index_key: A 32-byte encryption key as a hex string.  When\n        supplied (and `kms_name` is omitted), the SDK provides the\n        KEK directly and the persisted envelope records\n        `provider=\"none\"`.\n    dimension (Optional[int]): Dimensionality of the vectors. Auto-detected\n        from the first upsert if omitted.\n    embedding_model (Optional[str]): Optional embedding model name.\n    metric (Optional[str]): Optional distance metric.\n    storage_precision (Optional[Literal[\"float32\", \"float16\", \"tq12\", \"tq8\", \"tq6\", \"tq4\"]]):\n        On-disk rerank-vector format, chosen at create and immutable.\n        Defaults to float32 in core. \"float16\" halves storage at a small\n        precision cost. The TurboQuant tiers \"tq12\"/\"tq8\"/\"tq6\"/\"tq4\"\n        (12/8/6/4 bits per dim) trade storage for a small recall/latency\n        cost, with \"tq4\" the most aggressive (~8x smaller, ~94% recall@100).\n        All tiers work with every metric.\n    metadata_schema (Optional[Dict[str, MetadataFieldPolicy]]): Per-field\n        metadata indexing policy, keyed by field name (dot-path for\n        nested fields).  Omitted fields are filterable by default\n        (opt-out posture).  Fixed at create time and immutable.\n    text_fields (Optional[List[str]]): Shorthand for marking fields\n        `full_text=true` in `metadata_schema`.  A field listed here is\n        analyzed by BM25 and becomes searchable by `query(text=...)` /\n        `query_metadata(text=...)`.  Cannot name a field the schema\n        already sets `full_text=false`.\n    bm25_k1 (Optional[float]): BM25 term-frequency saturation (\u003E= 0,\n        default 1.2 in core).  Requires at least one full_text field.\n    bm25_b (Optional[float]): BM25 length-normalization strength\n        (in [0, 1], default 0.75 in core).  Requires at least one\n        full_text field.\n\nBM25 full-text search is opt-in and derived, not flagged: an index\nwith at least one full_text field supports the `text=...` query legs;\nan index with none writes no BM25 config at all."
+        "description": "Request model for creating a new encrypted DiskIVF index.\n\nExactly one of `kms_name` / `index_key` must be supplied; supplying\nboth is rejected with 400.\n\nAttributes:\n    index_name: The name/identifier of the index.\n    kms_name: Name of a `kms.registry` entry in the service YAML.\n        When supplied (and `index_key` is omitted), the service\n        generates the KEK itself, wraps it under that entry's KMS,\n        and persists the envelope.\n    index_key: A 32-byte encryption key as a hex string.  When\n        supplied (and `kms_name` is omitted), the SDK provides the\n        KEK directly and the persisted envelope records\n        `provider=\"none\"`.\n    dimension (Optional[int]): Dimensionality of the vectors. Auto-detected\n        from the first upsert if omitted. With `embedding_model`, it\n        defaults to the model's dimension and must match it if given.\n    embedding_model (Optional[str]): Text embedding model that turns\n        `contents` and `query_contents` into vectors. Must be one of the\n        models listed by `GET /embedding-models`; the bare name (e.g.\n        `all-MiniLM-L6-v2`) is accepted, in any case. An unsupported name,\n        or a `dimension` that disagrees with the model, returns 400.\n    metric (Optional[str]): Optional distance metric.\n    storage_precision (Optional[Literal[\"float32\", \"float16\", \"tq12\", \"tq8\", \"tq6\", \"tq4\"]]):\n        On-disk rerank-vector format, chosen at create and immutable.\n        Defaults to float32 in core. \"float16\" halves storage at a small\n        precision cost. The TurboQuant tiers \"tq12\"/\"tq8\"/\"tq6\"/\"tq4\"\n        (12/8/6/4 bits per dim) trade storage for a small recall/latency\n        cost, with \"tq4\" the most aggressive (~8x smaller, ~94% recall@100).\n        All tiers work with every metric.\n    metadata_schema (Optional[Dict[str, MetadataFieldPolicy]]): Per-field\n        metadata indexing policy, keyed by field name (dot-path for\n        nested fields).  Omitted fields are filterable by default\n        (opt-out posture).  Fixed at create time and immutable.\n    text_fields (Optional[List[str]]): Shorthand for marking fields\n        `full_text=true` in `metadata_schema`.  A field listed here is\n        analyzed by BM25 and becomes searchable by `query(text=...)` /\n        `query_metadata(text=...)`.  Cannot name a field the schema\n        already sets `full_text=false`.\n    bm25_k1 (Optional[float]): BM25 term-frequency saturation (>= 0,\n        default 1.2 in core).  Requires at least one full_text field.\n    bm25_b (Optional[float]): BM25 length-normalization strength\n        (in [0, 1], default 0.75 in core).  Requires at least one\n        full_text field.\n\nBM25 full-text search is opt-in and derived, not flagged: an index\nwith at least one full_text field supports the `text=...` query legs;\nan index with none writes no BM25 config at all."
       },
       "CreateUserRequest": {
         "properties": {
@@ -1963,7 +2026,7 @@
           "permissions"
         ],
         "title": "CreateUserRequest",
-        "description": "Request model for minting a user API key scoped to one index.\n\nAttributes:\n    permissions (List[str]): Subset of {\"read\", \"write\"}; at least one.\n    index_key (Optional[str]): Index KEK (hex) for SDK-supplied indexes.\n        Omit for KMS-backed indexes — the service resolves the KEK server-side."
+        "description": "Request model for minting a user API key scoped to one index.\n\nAttributes:\n    permissions (List[str]): Subset of {\"read\", \"write\"}; at least one.\n    index_key (Optional[str]): Index KEK (hex) for SDK-supplied indexes.\n        Omit for KMS-backed indexes \u2014 the service resolves the KEK server-side."
       },
       "CreateUserResponse": {
         "properties": {
@@ -2019,6 +2082,47 @@
         "title": "DeleteRequest",
         "description": "Request model for deleting vectors from the encrypted index.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    ids (List[str]): List of vector item IDs to be deleted."
       },
+      "EmbeddingModelInfo": {
+        "properties": {
+          "name": {
+            "type": "string",
+            "title": "Name"
+          },
+          "dimension": {
+            "type": "integer",
+            "title": "Dimension"
+          },
+          "max_seq_length": {
+            "type": "integer",
+            "title": "Max Seq Length"
+          }
+        },
+        "type": "object",
+        "required": [
+          "name",
+          "dimension",
+          "max_seq_length"
+        ],
+        "title": "EmbeddingModelInfo",
+        "description": "A text embedding model the service can use for `embedding_model`.\n\nAttributes:\n    name (str): Canonical model name. The bare name (without the\n        organization prefix) is also accepted, in any case.\n    dimension (int): Length of each embedding; indexes created with this\n        model use it as their dimension.\n    max_seq_length (int): Longest input, in tokens, before truncation."
+      },
+      "EmbeddingModelListResponseModel": {
+        "properties": {
+          "models": {
+            "items": {
+              "$ref": "#/components/schemas/EmbeddingModelInfo"
+            },
+            "type": "array",
+            "title": "Models"
+          }
+        },
+        "type": "object",
+        "required": [
+          "models"
+        ],
+        "title": "EmbeddingModelListResponseModel",
+        "description": "Response model for listing supported embedding models.\n\nAttributes:\n    models (List[EmbeddingModelInfo]): Supported models."
+      },
       "ErrorResponseModel": {
         "properties": {
           "status_code": {
@@ -2066,10 +2170,16 @@
           },
           "include": {
             "items": {
-              "type": "string"
+              "type": "string",
+              "enum": [
+                "vector",
+                "contents",
+                "metadata"
+              ]
             },
             "type": "array",
             "title": "Include",
+            "description": "Fields to return with each item: `vector`, `contents`, `metadata`. Defaults to all three. Any other value is a 422.",
             "default": [
               "vector",
               "contents",
@@ -2083,7 +2193,7 @@
           "ids"
         ],
         "title": "GetRequest",
-        "description": "Request model for retrieving specific vectors from the index.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    ids (List[str]): List of vector item IDs to retrieve.\n    include (List[str]): List of fields to include in the response.\n        Defaults to `[\"vector\", \"contents\", \"metadata\"]`."
+        "description": "Request model for retrieving specific vectors from the index.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n\nAttributes:\n    ids (List[str]): List of vector item IDs to retrieve.\n    include (List[str]): List of fields to include in the response:\n        any of `vector`, `contents`, `metadata`. Defaults to all three.\n        Other values are a 422."
       },
       "GetResponseModel": {
         "properties": {
@@ -2119,7 +2229,7 @@
               }
             ],
             "title": "Metadata",
-            "description": "Arbitrary JSON object stored alongside the vector. Schemaless — the index's `metadata_schema` governs how fields are indexed, not what may be stored. Nested objects are addressable by dot-path in filters (`loc.city`); dates have no native type, store them as epoch millis."
+            "description": "Arbitrary JSON object stored alongside the vector. Schemaless \u2014 the index's `metadata_schema` governs how fields are indexed, not what may be stored. Nested objects are addressable by dot-path in filters (`loc.city`); dates have no native type, store them as epoch millis."
           },
           "contents": {
             "anyOf": [
@@ -2196,9 +2306,7 @@
             },
             "type": "object",
             "title": "Metadata Schema",
-            "default": {
-
-            }
+            "default": {}
           },
           "bm25": {
             "anyOf": [
@@ -2264,7 +2372,7 @@
           "index_name"
         ],
         "title": "IndexOperationRequest",
-        "description": "Request model for performing operations on an existing index (e.g., delete, describe).\n\nExactly one of two paths applies on every request:\n  * `index_key` is supplied — the SDK-supplied KEK for an index\n    whose stored envelope records `provider=\"none\"`.  The service\n    validates it against the cached hash.\n  * `index_key` is omitted — the index must be KMS-backed.  The\n    service reads the `KMSBlob` snapshot, resolves the KEK via\n    the named KMS (cached by the `kek_cache` TTL), and uses that.\n\nAttributes:\n    index_name (str): The name/identifier of the index.\n    index_key (str, optional): 32-byte encryption key as hex string.\n        Required for SDK-supplied indexes (envelope `provider=\"none\"`);\n        must be omitted for KMS-backed indexes."
+        "description": "Request model for performing operations on an existing index (e.g., delete, describe).\n\nExactly one of two paths applies on every request:\n  * `index_key` is supplied \u2014 the SDK-supplied KEK for an index\n    whose stored envelope records `provider=\"none\"`.  The service\n    validates it against the cached hash.\n  * `index_key` is omitted \u2014 the index must be KMS-backed.  The\n    service reads the `KMSBlob` snapshot, resolves the KEK via\n    the named KMS (cached by the `kek_cache` TTL), and uses that.\n\nAttributes:\n    index_name (str): The name/identifier of the index.\n    index_key (str, optional): 32-byte encryption key as hex string.\n        Required for SDK-supplied indexes (envelope `provider=\"none\"`);\n        must be omitted for KMS-backed indexes."
       },
       "IndexTrainingStatusResponseModel": {
         "properties": {
@@ -2312,9 +2420,7 @@
             "additionalProperties": true,
             "type": "object",
             "title": "Global Training",
-            "default": {
-
-            }
+            "default": {}
           }
         },
         "type": "object",
@@ -2412,7 +2518,7 @@
         "additionalProperties": false,
         "type": "object",
         "title": "MetadataFieldPolicy",
-        "description": "Per-field metadata indexing policy (one entry of `metadata_schema`).\n\nMetadata itself stays schemaless — this is indexing policy, not\nvalidation.  Fields omitted from `metadata_schema` inherit the\nindex-everything default.\n\nAttributes:\n    filterable: Build inverted-index postings for the field, so\n        filters on it resolve from the index (pre-filter).  When\n        `false`, the field is still stored and still filterable, but\n        a filter referencing it forces the dense forward-blob\n        post-filter path — cheaper writes, slower filtered queries.\n    pattern: Additionally build the field's regex dictionary, which\n        makes `$regex` / `$contains` resolvable from the index.\n        Requires `filterable=true`.\n    full_text: Route the field's string value through the BM25\n        analyzer instead of exact-match indexing.  This is what makes\n        the field searchable by `query_metadata(text=...)` and hybrid\n        `query(text=...)`.  A field is either analyzed or exact-match\n        indexed, so `full_text=true` is incompatible with both\n        `pattern=true` and an explicit `filterable=true`, and implies\n        `filterable=false`."
+        "description": "Per-field metadata indexing policy (one entry of `metadata_schema`).\n\nMetadata itself stays schemaless \u2014 this is indexing policy, not\nvalidation.  Fields omitted from `metadata_schema` inherit the\nindex-everything default.\n\nAttributes:\n    filterable: Build inverted-index postings for the field, so\n        filters on it resolve from the index (pre-filter).  When\n        `false`, the field is still stored and still filterable, but\n        a filter referencing it forces the dense forward-blob\n        post-filter path \u2014 cheaper writes, slower filtered queries.\n    pattern: Additionally build the field's regex dictionary, which\n        makes `$regex` / `$contains` resolvable from the index.\n        Requires `filterable=true`.\n    full_text: Route the field's string value through the BM25\n        analyzer instead of exact-match indexing.  This is what makes\n        the field searchable by `query_metadata(text=...)` and hybrid\n        `query(text=...)`.  A field is either analyzed or exact-match\n        indexed, so `full_text=true` is incompatible with both\n        `pattern=true` and an explicit `filterable=true`, and implies\n        `filterable=false`."
       },
       "MetadataResult": {
         "properties": {
@@ -2430,7 +2536,7 @@
           "id"
         ],
         "title": "MetadataResult",
-        "description": "One row of a ``query_metadata`` result: the item id, plus a BM25 score when there is one.\n\n``score`` is present only on the text path. A filter-only query has nothing to score, so the\nkey is absent rather than ``None`` — the same rule ``query()`` follows for ``distance`` and\n``score``. Callers do not branch in practice: whoever passed ``text`` knows the key is there.\n\nSplit across two TypedDicts because that is how a per-key optional is expressed before\n``typing.NotRequired`` (3.11); the package supports 3.10, and inheriting with ``total=False``\nkeeps ``id`` required while making ``score`` optional — one result type, no union.\n``typing_extensions``' TypedDict is preferred when installed (see the import above) so that\npydantic consumers can use this type in models on Python \u003C 3.12, but it is not a dependency.\n\nNote the package ships no ``py.typed`` marker, so this reaches editors reading the source but\nnot a consumer's mypy/pyright — see the plan's v2 note."
+        "description": "One row of a ``query_metadata`` result: the item id, plus a BM25 score when there is one.\n\n``score`` is present only on the text path. A filter-only query has nothing to score, so the\nkey is absent rather than ``None`` \u2014 the same rule ``query()`` follows for ``distance`` and\n``score``. Callers do not branch in practice: whoever passed ``text`` knows the key is there.\n\nSplit across two TypedDicts because that is how a per-key optional is expressed before\n``typing.NotRequired`` (3.11); the package supports 3.10, and inheriting with ``total=False``\nkeeps ``id`` required while making ``score`` optional \u2014 one result type, no union.\n``typing_extensions``' TypedDict is preferred when installed (see the import above) so that\npydantic consumers can use this type in models on Python < 3.12, but it is not a dependency.\n\nNote the package ships no ``py.typed`` marker, so this reaches editors reading the source but\nnot a consumer's mypy/pyright \u2014 see the plan's v2 note."
       },
       "QueryMetadataRequest": {
         "properties": {
@@ -2516,7 +2622,7 @@
               }
             ],
             "title": "Filters",
-            "description": "Metadata filters as a JSON object; empty matches everything. Same operators as `/query` EXCEPT `$type`, and with one important difference: this endpoint resolves the filter entirely from the metadata index, with no post-filter fallback, so the index's `metadata_schema` is enforced. `$regex` / `$contains` require a `pattern` field, and a field declared `filterable: false` cannot be filtered on at all — both raise 400. Use `/query` with a vector for those. Nested dot-paths (`loc.city`) are supported."
+            "description": "Metadata filters as a JSON object; empty matches everything. Same operators as `/query` EXCEPT `$type`, and with one important difference: this endpoint resolves the filter entirely from the metadata index, with no post-filter fallback, so the index's `metadata_schema` is enforced. `$regex` / `$contains` require a `pattern` field, and a field declared `filterable: false` cannot be filtered on at all \u2014 both raise 400. Use `/query` with a vector for those. Nested dot-paths (`loc.city`) are supported."
           },
           "top_k": {
             "anyOf": [
@@ -2560,7 +2666,7 @@
           "index_name"
         ],
         "title": "QueryMetadataRequest",
-        "description": "Request model for a metadata query (no query vector), optionally with a\nBM25 full-text leg.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n    TextSearchParams: `text` and the BM25 field knobs. When `text` is set\n        the result is ranked by BM25 score; a `filters` given alongside\n        acts as a pre-filter (the text leg scores only its survivors).\n        `order_by` is not supported together with `text`.\n\nAttributes:\n    filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like\n        dictionary. Unlike `/query`, every leaf must be resolvable from\n        the metadata index — see the field description.\n    top_k (Optional[int]): Cap on the number of results returned. `None`\n        returns every match. Applied AFTER `order_by`.\n    order_by (Optional[str]): Metadata field to sort the matches by\n        (post-filter). Unordered when omitted. Not supported with `text`.\n    ascending (bool): Sort direction when `order_by` is set."
+        "description": "Request model for a metadata query (no query vector), optionally with a\nBM25 full-text leg.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n    TextSearchParams: `text` and the BM25 field knobs. When `text` is set\n        the result is ranked by BM25 score; a `filters` given alongside\n        acts as a pre-filter (the text leg scores only its survivors).\n        `order_by` is not supported together with `text`.\n\nAttributes:\n    filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like\n        dictionary. Unlike `/query`, every leaf must be resolvable from\n        the metadata index \u2014 see the field description.\n    top_k (Optional[int]): Cap on the number of results returned. `None`\n        returns every match. Applied AFTER `order_by`.\n    order_by (Optional[str]): Metadata field to sort the matches by\n        (post-filter). Unordered when omitted. Not supported with `text`.\n    ascending (bool): Sort direction when `order_by` is set."
       },
       "QueryMetadataResponse": {
         "properties": {
@@ -2590,7 +2696,7 @@
           "count"
         ],
         "title": "QueryMetadataResponse",
-        "description": "Response model for a metadata query.\n\nAttributes:\n    results (List[MetadataResult]): Matching items, using core's row shape\n        directly. On a `text=...` query each row is `{id, score}` in\n        descending score order; on a filter-only query each row is `{id}`\n        (no `score` key — there is nothing to score) following `order_by`\n        when set, else an unordered subset.\n    ids (List[str]): Matching item IDs, parallel to `results`. Retained\n        for backward compatibility with callers that only read IDs.\n    count (int): Number of items returned."
+        "description": "Response model for a metadata query.\n\nAttributes:\n    results (List[MetadataResult]): Matching items, using core's row shape\n        directly. On a `text=...` query each row is `{id, score}` in\n        descending score order; on a filter-only query each row is `{id}`\n        (no `score` key \u2014 there is nothing to score) following `order_by`\n        when set, else an unordered subset.\n    ids (List[str]): Matching item IDs, parallel to `results`. Retained\n        for backward compatibility with callers that only read IDs.\n    count (int): Number of items returned."
       },
       "QueryRequest": {
         "properties": {
@@ -2648,6 +2754,19 @@
             "title": "Require All Terms",
             "description": "Require every query term to match (AND) instead of any (OR, the default)."
           },
+          "include": {
+            "items": {
+              "type": "string",
+              "enum": [
+                "distance",
+                "metadata"
+              ]
+            },
+            "type": "array",
+            "title": "Include",
+            "description": "Extra fields to return with each result: `distance`, `metadata`. Defaults to `[]` (IDs only). Any other value is a 422; to retrieve contents or vectors, call `/get` with the result IDs.",
+            "default": []
+          },
           "alpha": {
             "anyOf": [
               {
@@ -2670,7 +2789,7 @@
               }
             ],
             "title": "Rrf K",
-            "description": "RRF rank-smoothing constant (\u003E 0; omitted means 60). Higher rewards agreement further down each leg's list."
+            "description": "RRF rank-smoothing constant (> 0; omitted means 60). Higher rewards agreement further down each leg's list."
           },
           "window_mult": {
             "anyOf": [
@@ -2682,7 +2801,7 @@
               }
             ],
             "title": "Window Mult",
-            "description": "Per-leg candidate depth as a multiple of top_k (\u003E= 1; omitted means 3), so each leg looks deeper than the final cut."
+            "description": "Per-leg candidate depth as a multiple of top_k (>= 1; omitted means 3), so each leg looks deeper than the final cut."
           },
           "index_name": {
             "type": "string",
@@ -2781,15 +2900,7 @@
               }
             ],
             "title": "Filters",
-            "description": "Metadata filters as a JSON object. Operators: `$eq`, `$ne`, `$in`, `$nin`, `$exists`, `$gt`, `$gte`, `$lt`, `$lte`, `$regex`, `$contains`, combined with `$and` / `$or` / `$nor` / `$not`. Filtering works on any metadata field; the index's `metadata_schema` only decides how a filter is resolved — fields marked `filterable` (the default) are answered from the inverted index, and `$regex` / `$contains` are answered from the regex dictionary on `pattern` fields. Anything else falls back to a post-filter over the decrypted metadata, which is correct but slower. Dates have no native type: store and filter them as epoch milliseconds."
-          },
-          "include": {
-            "items": {
-              "type": "string"
-            },
-            "type": "array",
-            "title": "Include",
-            "default": []
+            "description": "Metadata filters as a JSON object. Operators: `$eq`, `$ne`, `$in`, `$nin`, `$exists`, `$gt`, `$gte`, `$lt`, `$lte`, `$regex`, `$contains`, combined with `$and` / `$or` / `$nor` / `$not`. Filtering works on any metadata field; the index's `metadata_schema` only decides how a filter is resolved \u2014 fields marked `filterable` (the default) are answered from the inverted index, and `$regex` / `$contains` are answered from the regex dictionary on `pattern` fields. Anything else falls back to a post-filter over the decrypted metadata, which is correct but slower. Dates have no native type: store and filter them as epoch milliseconds."
           }
         },
         "type": "object",
@@ -2797,7 +2908,7 @@
           "index_name"
         ],
         "title": "QueryRequest",
-        "description": "Request model for performing a similarity search in the encrypted index.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n    HybridQueryParams: `text` and the fusion knobs that turn this into a\n        hybrid (BM25 + vector) query. A query vector is still required\n        even when `text` is set.\n\nAttributes:\n    query_vectors (Optional[List[float]]): The vector used for the similarity search.\n    query_contents (Optional[str]): Text-based content used for semantic search.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.\n    filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like\n        dictionary (see `FILTERS_DESCRIPTION` for the operator set).\n        Defaults to {}.\n    include (List[str]): List of additional fields to include in the response. Defaults to `[]` (only IDs are returned)."
+        "description": "Request model for performing a similarity search in the encrypted index.\n\nInherits:\n    IndexOperationRequest: Includes `index_name` and `index_key`.\n    HybridQueryParams: `text` and the fusion knobs that turn this into a\n        hybrid (BM25 + vector) query. A query vector is still required\n        even when `text` is set.\n\nAttributes:\n    query_vectors (Optional[List[float]]): The vector used for the similarity search.\n    query_contents (Optional[str]): Text-based content used for semantic search.\n    top_k (Optional[int]): Number of nearest neighbors to return for each query. Defaults to 100.\n    n_probes (Optional[int]): Number of lists to probe during the query. Defaults to auto.\n    greedy (Optional[bool]): Whether to use greedy search. Defaults to False.\n    rerank_mult (Optional[int]): Multiplier for stage 1 retrieval in reranking indexes. Defaults to 10.\n    filters (Optional[Dict[str, Any]]): Metadata filters as a JSON-like\n        dictionary (see `FILTERS_DESCRIPTION` for the operator set).\n        Defaults to {}.\n    include (List[str]): Extra result fields, any of `distance`,\n        `metadata`. Defaults to `[]` (only IDs). Other values are a 422."
       },
       "QueryResponse": {
         "properties": {
@@ -2868,7 +2979,7 @@
               }
             ],
             "title": "Metadata",
-            "description": "Arbitrary JSON object stored alongside the vector. Schemaless — the index's `metadata_schema` governs how fields are indexed, not what may be stored. Nested objects are addressable by dot-path in filters (`loc.city`); dates have no native type, store them as epoch millis."
+            "description": "Arbitrary JSON object stored alongside the vector. Schemaless \u2014 the index's `metadata_schema` governs how fields are indexed, not what may be stored. Nested objects are addressable by dot-path in filters (`loc.city`); dates have no native type, store them as epoch millis."
           },
           "vector": {
             "anyOf": [
@@ -2890,7 +3001,7 @@
           "id"
         ],
         "title": "QueryResultItem",
-        "description": "Represents a single result from a similarity search.\n\nA result carries either `distance` (pure vector query; smaller = more\nsimilar) or `score` (hybrid query; the fused BM25 + vector relevance,\nlarger = more relevant) — never both, since a text hit has no vector\ndistance.\n\nAttributes:\n    id (str): The identifier of the retrieved item.\n    distance (Optional[float]): Distance from the query vector (smaller = more similar).\n    score (Optional[float]): Fused relevance score on a hybrid (`text=...`) query (larger = more relevant).\n    metadata (Optional[Dict[str, Any]]): Additional metadata for the result.\n    vector (Optional[List[float]]): The retrieved vector (if included in response)."
+        "description": "Represents a single result from a similarity search.\n\nA result carries either `distance` (pure vector query; smaller = more\nsimilar) or `score` (hybrid query; the fused BM25 + vector relevance,\nlarger = more relevant) \u2014 never both, since a text hit has no vector\ndistance.\n\nAttributes:\n    id (str): The identifier of the retrieved item.\n    distance (Optional[float]): Distance from the query vector (smaller = more similar).\n    score (Optional[float]): Fused relevance score on a hybrid (`text=...`) query (larger = more relevant).\n    metadata (Optional[Dict[str, Any]]): Additional metadata for the result.\n    vector (Optional[List[float]]): The retrieved vector (if included in response)."
       },
       "TrainRequest": {
         "properties": {
@@ -3117,7 +3228,7 @@
               }
             ],
             "title": "Metadata",
-            "description": "Arbitrary JSON object stored alongside the vector. Schemaless — the index's `metadata_schema` governs how fields are indexed, not what may be stored. Nested objects are addressable by dot-path in filters (`loc.city`); dates have no native type, store them as epoch millis."
+            "description": "Arbitrary JSON object stored alongside the vector. Schemaless \u2014 the index's `metadata_schema` governs how fields are indexed, not what may be stored. Nested objects are addressable by dot-path in filters (`loc.city`); dates have no native type, store them as epoch millis."
           }
         },
         "type": "object",
