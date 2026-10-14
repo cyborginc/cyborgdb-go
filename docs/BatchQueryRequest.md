@@ -11,7 +11,7 @@ Name | Type | Description | Notes
 **NProbes** | Pointer to **NullableInt32** |  | [optional] 
 **Greedy** | Pointer to **NullableBool** |  | [optional] 
 **Filters** | Pointer to **map[string]interface{}** |  | [optional] 
-**Include** | Pointer to **[]string** |  | [optional] [default to []]
+**Include** | Pointer to **[]string** | Extra fields to return with each result: `distance`, `metadata`. Empty returns IDs only. Any other value is a 422; to retrieve contents or vectors, call Get with the result IDs. | [optional] [default to []]
 
 ## Methods
 

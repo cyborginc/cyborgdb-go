@@ -7,7 +7,7 @@ Name | Type | Description | Notes
 **IndexKey** | **string** | 32-byte encryption key as hex string | 
 **IndexName** | **string** | ID name | 
 **Ids** | **[]string** |  | 
-**Include** | Pointer to **[]string** |  | [optional] [default to [vector, contents, metadata]]
+**Include** | Pointer to **[]string** | Fields to return with each item: `vector`, `contents`, `metadata`. Any other value is a 422. | [optional] [default to [vector, contents, metadata]]
 
 ## Methods
 
