@@ -633,7 +633,9 @@ func (e *EncryptedIndex) queryParams(ctx context.Context, params QueryParams) (*
 // Parameters:
 //   - ctx: Context for cancellation and timeouts
 //   - ids: Slice of vector IDs to retrieve
-//   - include: Fields to include in response ("vector", "metadata", or both)
+//   - include: Fields to include in response. Allowed values: "vector",
+//     "contents", "metadata". Any other value is rejected by the server with
+//     a 422. Nil returns all three; an empty, non-nil slice returns only IDs.
 //
 // Returns:
 //   - *GetResponse: Retrieved vectors with requested fields
