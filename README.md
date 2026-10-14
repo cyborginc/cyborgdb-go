@@ -15,7 +15,7 @@
 
 The **CyborgDB Go SDK** is the Go client for [CyborgDB](https://www.cyborg.co) — the vector database that stays encrypted even while it's searching. Run similarity search directly on encrypted data with client-side keys; only the result of a query is ever decrypted, never the index. Built with Go's type system and `context` support for services and microservices.
 
-This SDK talks to [`cyborgdb-service`](https://hub.docker.com/r/cyborginc/cyborgdb-service), which you self-host in your own VPC or on-prem and run alongside your app. Install and start it separately. See our [docs](https://docs.cyborg.co) for more info.
+This SDK talks to `cyborgdb-service`, which you self-host alongside your app. The [Quickstart](https://docs.cyborg.co/quickstart) starts the service and reaches a first query in a few minutes.
 
 ## Key Features
 
@@ -33,7 +33,7 @@ To get started in minutes, check out our [Quickstart Guide](https://docs.cyborg.
 
 ### Installation
 
-1. Install `cyborgdb-service`
+1. Install [cyborgdb-service](https://hub.docker.com/r/cyborginc/cyborgdb-service) — the [Docker quickstart](https://docs.cyborg.co/versions/latest/service/guides/intro/quickstart-docker) walks through it:
 
 ```bash
 # Pull the CyborgDB Service image
