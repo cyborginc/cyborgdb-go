@@ -19,10 +19,14 @@ import (
 // checks if the IndexInfoResponseModel type satisfies the MappedNullable interface at compile time
 var _ MappedNullable = &IndexInfoResponseModel{}
 
-// IndexInfoResponseModel Response model for retrieving information about an index.  Attributes:     index_name (str): The name of the index.     is_trained (bool): Indicates whether the index has been trained.     dimension (int): Dimensionality of the vectors. `0` before the         first upsert when create_index was called without an explicit         dimension (auto-detect).     metric (str): Distance metric (`euclidean`, `cosine`, or         `squared_euclidean`).     n_lists (int): Number of inverted lists in the IVF index. `1`         for untrained indexes.     metadata_schema (Dict[str, MetadataFieldPolicy]): Per-field metadata         indexing overrides recorded at create time. Empty when the         index uses the default index-everything posture.     bm25 (Optional[BM25Config]): BM25 scoring config when the index has         at least one full_text field; `None` otherwise.
+// IndexInfoResponseModel Response model for retrieving information about an index.  Attributes:     index_name (str): The name of the index.     is_trained (bool): Indicates whether the index has been trained.     dimension (int): Dimensionality of the vectors. `0` before the         first upsert when create_index was called without an explicit         dimension (auto-detect).     metric (str): Distance metric (`euclidean`, `cosine`, or         `squared_euclidean`).     n_lists (int): Number of inverted lists in the IVF index. `1`         for untrained indexes.     metadata_schema (Dict[str, MetadataFieldPolicy]): Per-field metadata         indexing overrides recorded at create time. Empty when the         index uses the default index-everything posture.     bm25 (Optional[BM25Config]): BM25 scoring config when the index has         at least one full_text field; `None` otherwise.     index_type (str): Index type, for example `disk_ivf`.     training_state (Literal[\"untrained\", \"training\", \"trained\"]): Index         lifecycle state as reported by the core. `training` means a train         is running now; an index waiting in the service's training queue         still reports its current state (`untrained` or `trained`).     embedding_model (Optional[str]): Name of the embedding model the         index was created with; `None` when it has none.     storage_precision (StoragePrecision): On-disk rerank-vector format         the index was created with (`float32` when create_index didn't         set one).
 type IndexInfoResponseModel struct {
 	IndexName string `json:"index_name"`
 	IsTrained bool `json:"is_trained"`
+	IndexType string `json:"index_type"`
+	TrainingState string `json:"training_state"`
+	EmbeddingModel NullableString `json:"embedding_model,omitempty"`
+	StoragePrecision string `json:"storage_precision"`
 	Dimension int32 `json:"dimension"`
 	Metric string `json:"metric"`
 	NLists int32 `json:"n_lists"`
@@ -36,10 +40,13 @@ type _IndexInfoResponseModel IndexInfoResponseModel
 // This constructor will assign default values to properties that have it defined,
 // and makes sure properties required by API are set, but the set of arguments
 // will change when the set of required properties is changed
-func NewIndexInfoResponseModel(indexName string, isTrained bool, dimension int32, metric string, nLists int32) *IndexInfoResponseModel {
+func NewIndexInfoResponseModel(indexName string, isTrained bool, indexType string, trainingState string, storagePrecision string, dimension int32, metric string, nLists int32) *IndexInfoResponseModel {
 	this := IndexInfoResponseModel{}
 	this.IndexName = indexName
 	this.IsTrained = isTrained
+	this.IndexType = indexType
+	this.TrainingState = trainingState
+	this.StoragePrecision = storagePrecision
 	this.Dimension = dimension
 	this.Metric = metric
 	this.NLists = nLists
@@ -100,6 +107,120 @@ func (o *IndexInfoResponseModel) GetIsTrainedOk() (*bool, bool) {
 // SetIsTrained sets field value
 func (o *IndexInfoResponseModel) SetIsTrained(v bool) {
 	o.IsTrained = v
+}
+
+// GetIndexType returns the IndexType field value
+func (o *IndexInfoResponseModel) GetIndexType() string {
+	if o == nil {
+		var ret string
+		return ret
+	}
+
+	return o.IndexType
+}
+
+// GetIndexTypeOk returns a tuple with the IndexType field value
+// and a boolean to check if the value has been set.
+func (o *IndexInfoResponseModel) GetIndexTypeOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.IndexType, true
+}
+
+// SetIndexType sets field value
+func (o *IndexInfoResponseModel) SetIndexType(v string) {
+	o.IndexType = v
+}
+
+// GetTrainingState returns the TrainingState field value
+func (o *IndexInfoResponseModel) GetTrainingState() string {
+	if o == nil {
+		var ret string
+		return ret
+	}
+
+	return o.TrainingState
+}
+
+// GetTrainingStateOk returns a tuple with the TrainingState field value
+// and a boolean to check if the value has been set.
+func (o *IndexInfoResponseModel) GetTrainingStateOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.TrainingState, true
+}
+
+// SetTrainingState sets field value
+func (o *IndexInfoResponseModel) SetTrainingState(v string) {
+	o.TrainingState = v
+}
+
+// GetEmbeddingModel returns the EmbeddingModel field value if set, zero value otherwise (both if not set or set to explicit null).
+func (o *IndexInfoResponseModel) GetEmbeddingModel() string {
+	if o == nil || IsNil(o.EmbeddingModel.Get()) {
+		var ret string
+		return ret
+	}
+	return *o.EmbeddingModel.Get()
+}
+
+// GetEmbeddingModelOk returns a tuple with the EmbeddingModel field value if set, nil otherwise
+// and a boolean to check if the value has been set.
+// NOTE: If the value is an explicit nil, `nil, true` will be returned
+func (o *IndexInfoResponseModel) GetEmbeddingModelOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return o.EmbeddingModel.Get(), o.EmbeddingModel.IsSet()
+}
+
+// HasEmbeddingModel returns a boolean if a field has been set.
+func (o *IndexInfoResponseModel) HasEmbeddingModel() bool {
+	if o != nil && o.EmbeddingModel.IsSet() {
+		return true
+	}
+
+	return false
+}
+
+// SetEmbeddingModel gets a reference to the given NullableString and assigns it to the EmbeddingModel field.
+func (o *IndexInfoResponseModel) SetEmbeddingModel(v string) {
+	o.EmbeddingModel.Set(&v)
+}
+// SetEmbeddingModelNil sets the value for EmbeddingModel to be an explicit nil
+func (o *IndexInfoResponseModel) SetEmbeddingModelNil() {
+	o.EmbeddingModel.Set(nil)
+}
+
+// UnsetEmbeddingModel ensures that no value is present for EmbeddingModel, not even an explicit nil
+func (o *IndexInfoResponseModel) UnsetEmbeddingModel() {
+	o.EmbeddingModel.Unset()
+}
+
+// GetStoragePrecision returns the StoragePrecision field value
+func (o *IndexInfoResponseModel) GetStoragePrecision() string {
+	if o == nil {
+		var ret string
+		return ret
+	}
+
+	return o.StoragePrecision
+}
+
+// GetStoragePrecisionOk returns a tuple with the StoragePrecision field value
+// and a boolean to check if the value has been set.
+func (o *IndexInfoResponseModel) GetStoragePrecisionOk() (*string, bool) {
+	if o == nil {
+		return nil, false
+	}
+	return &o.StoragePrecision, true
+}
+
+// SetStoragePrecision sets field value
+func (o *IndexInfoResponseModel) SetStoragePrecision(v string) {
+	o.StoragePrecision = v
 }
 
 // GetDimension returns the Dimension field value
@@ -260,6 +381,12 @@ func (o IndexInfoResponseModel) ToMap() (map[string]interface{}, error) {
 	toSerialize := map[string]interface{}{}
 	toSerialize["index_name"] = o.IndexName
 	toSerialize["is_trained"] = o.IsTrained
+	toSerialize["index_type"] = o.IndexType
+	toSerialize["training_state"] = o.TrainingState
+	if o.EmbeddingModel.IsSet() {
+		toSerialize["embedding_model"] = o.EmbeddingModel.Get()
+	}
+	toSerialize["storage_precision"] = o.StoragePrecision
 	toSerialize["dimension"] = o.Dimension
 	toSerialize["metric"] = o.Metric
 	toSerialize["n_lists"] = o.NLists
@@ -279,6 +406,9 @@ func (o *IndexInfoResponseModel) UnmarshalJSON(data []byte) (err error) {
 	requiredProperties := []string{
 		"index_name",
 		"is_trained",
+		"index_type",
+		"training_state",
+		"storage_precision",
 		"dimension",
 		"metric",
 		"n_lists",

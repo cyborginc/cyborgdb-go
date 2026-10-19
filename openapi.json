@@ -934,7 +934,7 @@
             "content": {
               "application/json": {
                 "schema": {
-                  "$ref": "#/components/schemas/cyborgdb_service__api__schemas__vectors__SuccessResponseModel"
+                  "$ref": "#/components/schemas/NumVectorsResponseModel"
                 }
               }
             }
@@ -2285,6 +2285,42 @@
             "type": "boolean",
             "title": "Is Trained"
           },
+          "index_type": {
+            "type": "string",
+            "title": "Index Type"
+          },
+          "training_state": {
+            "type": "string",
+            "enum": [
+              "untrained",
+              "training",
+              "trained"
+            ],
+            "title": "Training State"
+          },
+          "embedding_model": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Embedding Model"
+          },
+          "storage_precision": {
+            "type": "string",
+            "enum": [
+              "float32",
+              "float16",
+              "tq12",
+              "tq8",
+              "tq6",
+              "tq4"
+            ],
+            "title": "Storage Precision"
+          },
           "dimension": {
             "type": "integer",
             "title": "Dimension"
@@ -2320,12 +2356,15 @@
         "required": [
           "index_name",
           "is_trained",
+          "index_type",
+          "training_state",
+          "storage_precision",
           "dimension",
           "metric",
           "n_lists"
         ],
         "title": "IndexInfoResponseModel",
-        "description": "Response model for retrieving information about an index.\n\nAttributes:\n    index_name (str): The name of the index.\n    is_trained (bool): Indicates whether the index has been trained.\n    dimension (int): Dimensionality of the vectors. `0` before the\n        first upsert when create_index was called without an explicit\n        dimension (auto-detect).\n    metric (str): Distance metric (`euclidean`, `cosine`, or\n        `squared_euclidean`).\n    n_lists (int): Number of inverted lists in the IVF index. `1`\n        for untrained indexes.\n    metadata_schema (Dict[str, MetadataFieldPolicy]): Per-field metadata\n        indexing overrides recorded at create time. Empty when the\n        index uses the default index-everything posture.\n    bm25 (Optional[BM25Config]): BM25 scoring config when the index has\n        at least one full_text field; `None` otherwise."
+        "description": "Response model for retrieving information about an index.\n\nAttributes:\n    index_name (str): The name of the index.\n    is_trained (bool): Indicates whether the index has been trained.\n    dimension (int): Dimensionality of the vectors. `0` before the\n        first upsert when create_index was called without an explicit\n        dimension (auto-detect).\n    metric (str): Distance metric (`euclidean`, `cosine`, or\n        `squared_euclidean`).\n    n_lists (int): Number of inverted lists in the IVF index. `1`\n        for untrained indexes.\n    metadata_schema (Dict[str, MetadataFieldPolicy]): Per-field metadata\n        indexing overrides recorded at create time. Empty when the\n        index uses the default index-everything posture.\n    bm25 (Optional[BM25Config]): BM25 scoring config when the index has\n        at least one full_text field; `None` otherwise.\n    index_type (str): Index type, for example `disk_ivf`.\n    training_state (Literal[\"untrained\", \"training\", \"trained\"]): Index\n        lifecycle state as reported by the core. `training` means a train\n        is running now; an index waiting in the service's training queue\n        still reports its current state (`untrained` or `trained`).\n    embedding_model (Optional[str]): Name of the embedding model the\n        index was created with; `None` when it has none.\n    storage_precision (StoragePrecision): On-disk rerank-vector format\n        the index was created with (`float32` when create_index didn't\n        set one)."
       },
       "IndexListResponseModel": {
         "properties": {
@@ -2534,6 +2573,20 @@
         ],
         "title": "MetadataResult",
         "description": "One row of a ``query_metadata`` result: the item id, plus a BM25 score when there is one.\n\n``score`` is present only on the text path. A filter-only query has nothing to score, so the\nkey is absent rather than ``None`` \u2014 the same rule ``query()`` follows for ``distance`` and\n``score``. Callers do not branch in practice: whoever passed ``text`` knows the key is there.\n\nSplit across two TypedDicts because that is how a per-key optional is expressed before\n``typing.NotRequired`` (3.11); the package supports 3.10, and inheriting with ``total=False``\nkeeps ``id`` required while making ``score`` optional \u2014 one result type, no union.\n``typing_extensions``' TypedDict is preferred when installed (see the import above) so that\npydantic consumers can use this type in models on Python < 3.12, but it is not a dependency.\n\nNote the package ships no ``py.typed`` marker, so this reaches editors reading the source but\nnot a consumer's mypy/pyright \u2014 see the plan's v2 note."
+      },
+      "NumVectorsResponseModel": {
+        "properties": {
+          "result": {
+            "type": "integer",
+            "title": "Result"
+          }
+        },
+        "type": "object",
+        "required": [
+          "result"
+        ],
+        "title": "NumVectorsResponseModel",
+        "description": "Response model for counting the vectors in an index.\n\nAttributes:\n    result (int): Number of vectors stored in the index."
       },
       "QueryMetadataRequest": {
         "properties": {

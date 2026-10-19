@@ -1040,7 +1040,7 @@ func (r ApiGetIndexSizeV1VectorsNumVectorsPostRequest) IndexOperationRequest(ind
 	return r
 }
 
-func (r ApiGetIndexSizeV1VectorsNumVectorsPostRequest) Execute() (*CyborgdbServiceApiSchemasVectorsSuccessResponseModel, *http.Response, error) {
+func (r ApiGetIndexSizeV1VectorsNumVectorsPostRequest) Execute() (*NumVectorsResponseModel, *http.Response, error) {
 	return r.ApiService.GetIndexSizeV1VectorsNumVectorsPostExecute(r)
 }
 
@@ -1060,13 +1060,13 @@ func (a *DefaultAPIService) GetIndexSizeV1VectorsNumVectorsPost(ctx context.Cont
 }
 
 // Execute executes the request
-//  @return CyborgdbServiceApiSchemasVectorsSuccessResponseModel
-func (a *DefaultAPIService) GetIndexSizeV1VectorsNumVectorsPostExecute(r ApiGetIndexSizeV1VectorsNumVectorsPostRequest) (*CyborgdbServiceApiSchemasVectorsSuccessResponseModel, *http.Response, error) {
+//  @return NumVectorsResponseModel
+func (a *DefaultAPIService) GetIndexSizeV1VectorsNumVectorsPostExecute(r ApiGetIndexSizeV1VectorsNumVectorsPostRequest) (*NumVectorsResponseModel, *http.Response, error) {
 	var (
 		localVarHTTPMethod   = http.MethodPost
 		localVarPostBody     interface{}
 		formFiles            []formFile
-		localVarReturnValue  *CyborgdbServiceApiSchemasVectorsSuccessResponseModel
+		localVarReturnValue  *NumVectorsResponseModel
 	)
 
 	localBasePath, err := a.client.cfg.ServerURLWithContext(r.ctx, "DefaultAPIService.GetIndexSizeV1VectorsNumVectorsPost")
