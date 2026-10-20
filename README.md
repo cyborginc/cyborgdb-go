@@ -13,14 +13,14 @@
 ![License](https://img.shields.io/github/license/cyborginc/cyborgdb-go)
 ![Go Version](https://img.shields.io/github/go-mod/go-version/cyborginc/cyborgdb-go)
 
-The **CyborgDB Go SDK** is the Go client for [CyborgDB](https://www.cyborg.co) — the vector database that stays encrypted even while it's searching. Run similarity search directly on encrypted data with client-side keys; only the result of a query is ever decrypted, never the index. Built with Go's type system and `context` support for services and microservices.
+The **CyborgDB Go SDK** is the Go client for [CyborgDB](https://www.cyborg.co), an encrypted vector database from Cyborg Inc. CyborgDB performs vector search on encrypted data (encryption-in-use) and is self-hosted in your environment: Cyborg Inc. never receives your keys, vectors, or queries. The backing store holds only ciphertext, and only the final top-k candidates are decrypted, transiently, to rerank. Built with Go's type system and `context` support for services and microservices.
 
 This SDK talks to `cyborgdb-service`, which you self-host alongside your app. The [Quickstart](https://docs.cyborg.co/quickstart) starts the service and reaches a first query in a few minutes.
 
 ## Key Features
 
-- **Encryption-in-use**: Search runs directly on ciphertext — only the query result is decrypted, never the index or stored vectors
-- **Encrypted ANN**: Disk-backed encrypted DiskIVF index with recall within 2% of a plaintext baseline ([read the benchmarks](https://www.cyborg.co/performance))
+- **Encryption-in-use**: Search runs over ciphertext; only the final top-k candidates are decrypted, transiently, in the service to rerank
+- **Encrypted ANN**: Disk-backed encrypted DiskIVF index ([benchmarks](https://www.cyborg.co/performance))
 - **Filters on encrypted metadata**: Combine vector similarity with equality and range predicates in a single request
 - **BYOK / HYOK**: Wrap per-index keys with AWS KMS or AWS Secrets Manager, or hold the key client-side — you control the key material
 - **Per-tenant key isolation**: Per-index, per-user keys with cryptographic RBAC; revoke a user and their keys are erased
