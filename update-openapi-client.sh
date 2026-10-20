@@ -2,11 +2,13 @@
 
 set -e
 
-echo "Generating Go client from openapi.json..."
+# The spec's source of truth is cyborgdb-tests; pass a path to override.
+SPEC="${1:-../cyborgdb-tests/openapi.json}"
 
-# Check if OpenAPI spec exists
-if [ ! -f "openapi.json" ]; then
-    echo "Error: openapi.json not found!"
+echo "Generating Go client from $SPEC..."
+
+if [ ! -f "$SPEC" ]; then
+    echo "Error: $SPEC not found! Usage: $0 [path/to/openapi.json]"
     exit 1
 fi
 
@@ -27,7 +29,7 @@ rm -f internal/*.go
 # Generate the Go client
 echo "Generating Go client..."
 openapi-generator-cli generate \
-    -i openapi.json \
+    -i "$SPEC" \
     -g go \
     -o ./internal \
     --package-name internal \
