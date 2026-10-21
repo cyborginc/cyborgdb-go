@@ -2,13 +2,18 @@
 
 set -e
 
-# The spec's source of truth is cyborgdb-service; pass a path to override.
-SPEC="${1:-../cyborgdb-service/openapi.json}"
+# The spec's source of truth is cyborgdb-service. By default it's read from a
+# sibling checkout; set CYBORGDB_SERVICE_DIR to point elsewhere, or pass the
+# spec's path directly.
+SERVICE_DIR="${CYBORGDB_SERVICE_DIR:-../cyborgdb-service}"
+SPEC="${1:-$SERVICE_DIR/openapi.json}"
 
 echo "Generating Go client from $SPEC..."
 
 if [ ! -f "$SPEC" ]; then
-    echo "Error: $SPEC not found! Usage: $0 [path/to/openapi.json]"
+    echo "Error: $SPEC not found!"
+    echo "Usage: $0 [path/to/openapi.json]"
+    echo "  or:  CYBORGDB_SERVICE_DIR=path/to/cyborgdb-service $0"
     exit 1
 fi
 
