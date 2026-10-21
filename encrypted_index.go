@@ -67,7 +67,7 @@ var (
 //
 //   - Vector operations: Upsert, Query, Get, Delete
 //   - Index management: Train, DeleteIndex, ListIDs
-//   - Metadata access: GetIndexName, IsTrained
+//   - Metadata access: GetIndexName, Describe, GetNumVectors, IsTrained
 //
 // All vector data is encrypted end-to-end using the provided encryption key
 // (or, for KMS-backed indexes, resolved server-side from the index's KMSBlob).
@@ -108,6 +108,24 @@ func describeIndex(ctx context.Context, client *internal.Client, indexName strin
 		IndexOperationRequest(req).
 		Execute()
 	return resp, translateHTTPError(httpResp, err)
+}
+
+// getTrainingStatus calls the training-status endpoint and keeps only the two
+// documented fields; the service's worker and queue internals stay out of the
+// public API. Callers add their own error context.
+func getTrainingStatus(ctx context.Context, client *internal.Client) (*TrainingStatus, error) {
+	resp, httpResp, err := client.APIClient.DefaultAPI.GetTrainingStatusV1IndexesTrainingStatusGet(ctx).Execute()
+	if err != nil {
+		return nil, translateHTTPError(httpResp, err)
+	}
+	trainingIndexes := resp.GetTrainingIndexes()
+	if trainingIndexes == nil {
+		trainingIndexes = []string{}
+	}
+	return &TrainingStatus{
+		TrainingIndexes:  trainingIndexes,
+		RetrainThreshold: resp.GetRetrainThreshold(),
+	}, nil
 }
 
 // nullableQueryOpts converts the optional TopK/NProbes/Greedy query knobs into
@@ -218,12 +236,12 @@ func (e *EncryptedIndex) IsTrained(ctx context.Context) (bool, error) {
 //   - bool: true if the index is currently being trained, false otherwise
 //   - error: Any error encountered during the status check
 func (e *EncryptedIndex) IsTraining(ctx context.Context) (bool, error) {
-	result, httpResp, err := e.client.APIClient.DefaultAPI.GetTrainingStatusV1IndexesTrainingStatusGet(ctx).Execute()
+	status, err := getTrainingStatus(ctx, e.client)
 	if err != nil {
-		return false, fmt.Errorf("failed to get training status: %w", translateHTTPError(httpResp, err))
+		return false, fmt.Errorf("failed to get training status: %w", err)
 	}
 
-	for _, idx := range result.TrainingIndexes {
+	for _, idx := range status.TrainingIndexes {
 		if idx == e.indexName {
 			return true, nil
 		}
@@ -327,6 +345,75 @@ func (e *EncryptedIndex) BM25(ctx context.Context) (*BM25Config, error) {
 		return nil, nil
 	}
 	return config, nil
+}
+
+// Describe returns this index's configuration and state in one call: name,
+// type, dimension, metric, storage precision, n_lists, training state,
+// metadata schema, BM25 config, and embedding model. Mirrors the Python SDK's
+// describe.
+//
+// The result has no IsTrained field; TrainingState carries that and more. Use
+// IsTrained for the boolean.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//
+// Returns:
+//   - *IndexDescription: The index's description; EmbeddingModel and BM25 are
+//     nil when the index has none, and MetadataSchema is never nil
+//   - error: Any error encountered during the lookup
+func (e *EncryptedIndex) Describe(ctx context.Context) (*IndexDescription, error) {
+	resp, err := describeIndex(ctx, e.client, e.indexName, e.indexKeyField())
+	if err != nil {
+		return nil, fmt.Errorf("failed to describe index: %w", err)
+	}
+	return describeResponse(resp), nil
+}
+
+// describeResponse converts the describe endpoint's response into the public
+// IndexDescription, so generated models never leak out of the wrapper.
+func describeResponse(resp *internal.IndexInfoResponseModel) *IndexDescription {
+	schema := resp.GetMetadataSchema()
+	if schema == nil {
+		schema = map[string]MetadataFieldPolicy{}
+	}
+	described := &IndexDescription{
+		IndexName:        resp.GetIndexName(),
+		IndexType:        resp.GetIndexType(),
+		Dimension:        resp.GetDimension(),
+		Metric:           resp.GetMetric(),
+		StoragePrecision: resp.GetStoragePrecision(),
+		NLists:           resp.GetNLists(),
+		TrainingState:    resp.GetTrainingState(),
+		MetadataSchema:   schema,
+	}
+	if config, ok := resp.GetBm25Ok(); ok && config != nil {
+		described.BM25 = config
+	}
+	if model := resp.GetEmbeddingModel(); model != "" {
+		described.EmbeddingModel = &model
+	}
+	return described
+}
+
+// GetNumVectors returns the number of vectors stored in this index. Mirrors the
+// Python SDK's get_num_vectors.
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//
+// Returns:
+//   - int32: The vector count
+//   - error: Any error encountered during the lookup
+func (e *EncryptedIndex) GetNumVectors(ctx context.Context) (int32, error) {
+	req := internal.IndexOperationRequest{IndexName: e.indexName, IndexKey: e.indexKeyField()}
+	resp, httpResp, err := e.client.APIClient.DefaultAPI.GetIndexSizeV1VectorsNumVectorsPost(ctx).
+		IndexOperationRequest(req).
+		Execute()
+	if err != nil {
+		return 0, fmt.Errorf("failed to get number of vectors: %w", translateHTTPError(httpResp, err))
+	}
+	return resp.GetResult(), nil
 }
 
 // CreateUser mints a user API key scoped to this index.

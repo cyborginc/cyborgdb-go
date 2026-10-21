@@ -461,3 +461,69 @@ type UserInfo struct {
 	// truth), not a stored field.
 	Permissions []string `json:"permissions"`
 }
+
+// IndexDescription is an index's configuration and state, as returned by
+// EncryptedIndex.Describe.
+type IndexDescription struct {
+	// IndexName is the index's unique name.
+	IndexName string `json:"index_name"`
+
+	// IndexType is the index type, for example "disk_ivf".
+	IndexType string `json:"index_type"`
+
+	// Dimension is the vector dimensionality; 0 before the first upsert when
+	// the index was created without an explicit dimension.
+	Dimension int32 `json:"dimension"`
+
+	// Metric is the distance metric ("euclidean", "cosine", or
+	// "squared_euclidean").
+	Metric string `json:"metric"`
+
+	// StoragePrecision is the on-disk rerank-vector format the index was
+	// created with (StoragePrecisionFloat32 when none was set).
+	StoragePrecision string `json:"storage_precision"`
+
+	// NLists is the number of inverted lists: 1 for untrained indexes, the
+	// trained cluster count after Train.
+	NLists int32 `json:"n_lists"`
+
+	// TrainingState is "untrained", "training", or "trained". An index waiting
+	// in the service's training queue still reports its current state.
+	TrainingState string `json:"training_state"`
+
+	// MetadataSchema is the per-field metadata indexing policy recorded at
+	// create time; empty, never nil, under the default index-everything posture.
+	MetadataSchema map[string]MetadataFieldPolicy `json:"metadata_schema"`
+
+	// BM25 is the BM25 scorer config, or nil when the index has no full-text
+	// field.
+	BM25 *BM25Config `json:"bm25"`
+
+	// EmbeddingModel is the embedding model the index was created with, or nil
+	// when it has none.
+	EmbeddingModel *string `json:"embedding_model,omitempty"`
+}
+
+// TrainingStatus reports which indexes the service is training, as returned by
+// Client.GetTrainingStatus.
+type TrainingStatus struct {
+	// TrainingIndexes names the indexes currently being trained or queued.
+	TrainingIndexes []string `json:"training_indexes"`
+
+	// RetrainThreshold is the vector count an index must reach before its
+	// first automatic training.
+	RetrainThreshold int32 `json:"retrain_threshold"`
+}
+
+// EmbeddingModel describes an embedding model the service can use for
+// auto-embedding, as returned by Client.ListEmbeddingModels.
+type EmbeddingModel struct {
+	// Name is the model name to pass as CreateIndexParams.EmbeddingModel.
+	Name string `json:"name"`
+
+	// Dimension is the dimensionality of the vectors the model produces.
+	Dimension int32 `json:"dimension"`
+
+	// MaxSeqLength is the longest input, in tokens, the model accepts.
+	MaxSeqLength int32 `json:"max_seq_length"`
+}
