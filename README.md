@@ -199,13 +199,23 @@ if described.EmbeddingModel != nil { // nil when the index has no embedding mode
 
 // How many vectors the index holds
 count, err := index.GetNumVectors(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println("vectors:", count)
 
 // Which indexes the service is training, and the vector count that triggers training
 status, err := client.GetTrainingStatus(ctx)
+if err != nil {
+    log.Fatal(err)
+}
 fmt.Println(status.TrainingIndexes, status.RetrainThreshold)
 
 // Embedding models available for auto-embedding
 models, err := client.ListEmbeddingModels(ctx)
+if err != nil {
+    log.Fatal(err)
+}
 for _, m := range models {
     fmt.Println(m.Name, m.Dimension, m.MaxSeqLength)
 }
