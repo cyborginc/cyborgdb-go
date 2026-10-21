@@ -499,7 +499,7 @@ func TestEncryptedIndexDescribe(t *testing.T) {
 
 	t.Run("DescribeNoArguments", func(t *testing.T) {
 		// Describe should only take context (compile-time check)
-		var _ func(context.Context) (*cyborgdb.IndexDescription, error) = testIndex.Describe
+		var _ func(context.Context) (*cyborgdb.IndexDescription, error) = testIndex.Describe //nolint:staticcheck // QF1011: explicit type is the compile-time signature check
 	})
 
 	t.Run("ReturnExactDocumentedFields", func(t *testing.T) {
@@ -621,7 +621,7 @@ func TestClientGetTrainingStatus(t *testing.T) {
 
 	t.Run("GetTrainingStatusNoArguments", func(t *testing.T) {
 		// GetTrainingStatus should only take context (compile-time check)
-		var _ func(context.Context) (*cyborgdb.TrainingStatus, error) = testClient.GetTrainingStatus
+		var _ func(context.Context) (*cyborgdb.TrainingStatus, error) = testClient.GetTrainingStatus //nolint:staticcheck // QF1011: explicit type is the compile-time signature check
 	})
 
 	t.Run("ReturnExactDocumentedFields", func(t *testing.T) {
@@ -657,7 +657,7 @@ func TestClientListEmbeddingModels(t *testing.T) {
 
 	t.Run("ListEmbeddingModelsNoArguments", func(t *testing.T) {
 		// ListEmbeddingModels should only take context (compile-time check)
-		var _ func(context.Context) ([]cyborgdb.EmbeddingModel, error) = testClient.ListEmbeddingModels
+		var _ func(context.Context) ([]cyborgdb.EmbeddingModel, error) = testClient.ListEmbeddingModels //nolint:staticcheck // QF1011: explicit type is the compile-time signature check
 	})
 
 	t.Run("ReturnModelsWithExactFields", func(t *testing.T) {
@@ -970,7 +970,7 @@ func TestEncryptedIndexGetNumVectors(t *testing.T) {
 
 	t.Run("GetNumVectorsNoArguments", func(t *testing.T) {
 		// GetNumVectors should only take context (compile-time check)
-		var _ func(context.Context) (int32, error) = testIndex.GetNumVectors
+		var _ func(context.Context) (int32, error) = testIndex.GetNumVectors //nolint:staticcheck // QF1011: explicit type is the compile-time signature check
 	})
 
 	t.Run("CountUpsertedVectors", func(t *testing.T) {
