@@ -182,6 +182,45 @@ queryParams := cyborgdb.QueryParams{
 results, err := index.Query(context.Background(), queryParams)
 ```
 
+#### Inspecting Indexes and the Service
+
+```go
+ctx := context.Background()
+
+// An index's configuration and state in one call
+described, err := index.Describe(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(described.IndexName, described.Dimension, described.Metric, described.TrainingState)
+if described.EmbeddingModel != nil { // nil when the index has no embedding model
+    fmt.Println("embedding model:", *described.EmbeddingModel)
+}
+
+// How many vectors the index holds
+count, err := index.GetNumVectors(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println("vectors:", count)
+
+// Which indexes the service is training, and the vector count that triggers training
+status, err := client.GetTrainingStatus(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+fmt.Println(status.TrainingIndexes, status.RetrainThreshold)
+
+// Embedding models available for auto-embedding
+models, err := client.ListEmbeddingModels(ctx)
+if err != nil {
+    log.Fatal(err)
+}
+for _, m := range models {
+    fmt.Println(m.Name, m.Dimension, m.MaxSeqLength)
+}
+```
+
 #### Bring Your Own Key (BYOK) via KMS
 
 When the service is configured with a `kms.registry` entry, the SDK can
