@@ -2,8 +2,8 @@
 
 set -e
 
-# The spec's source of truth is cyborgdb-tests; pass a path to override.
-SPEC="${1:-../cyborgdb-tests/openapi.json}"
+# The spec's source of truth is cyborgdb-service; pass a path to override.
+SPEC="${1:-../cyborgdb-service/openapi.json}"
 
 echo "Generating Go client from $SPEC..."
 
