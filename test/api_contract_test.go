@@ -554,8 +554,11 @@ func TestEncryptedIndexDescribe(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Describe failed: %v", err)
 		}
-		if described.EmbeddingModel == nil || *described.EmbeddingModel != "all-MiniLM-L6-v2" {
-			t.Errorf("EmbeddingModel = %v, want all-MiniLM-L6-v2", described.EmbeddingModel)
+		// The index is created with the bare name; the service reports the full one.
+		if described.EmbeddingModel == nil {
+			t.Errorf("EmbeddingModel = nil, want %s", embedModel)
+		} else if *described.EmbeddingModel != embedModel {
+			t.Errorf("EmbeddingModel = %q, want %s", *described.EmbeddingModel, embedModel)
 		}
 		if described.Dimension != 384 {
 			t.Errorf("Dimension = %d, want 384", described.Dimension)
@@ -679,15 +682,15 @@ func TestClientListEmbeddingModels(t *testing.T) {
 				t.Errorf("model = %+v, want a name and positive dimension and max_seq_length", m)
 			}
 			// The embedding-model index in TestClientCreateIndex uses this one.
-			if m.Name == "all-MiniLM-L6-v2" {
+			if m.Name == embedModel {
 				found = true
-				if m.Dimension != 384 {
-					t.Errorf("all-MiniLM-L6-v2 dimension = %d, want 384", m.Dimension)
+				if m.Dimension != embedModelDim {
+					t.Errorf("%s dimension = %d, want %d", embedModel, m.Dimension, embedModelDim)
 				}
 			}
 		}
 		if !found {
-			t.Error("all-MiniLM-L6-v2 should be listed")
+			t.Errorf("%s should be listed", embedModel)
 		}
 	})
 }
