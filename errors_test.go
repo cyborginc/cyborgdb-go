@@ -56,6 +56,12 @@ func TestStatusMapping(t *testing.T) {
 // test server returning the given status, and returns the resulting error.
 func errFromStatus(t *testing.T, code int) error {
 	t.Helper()
+	return errFromResponse(t, code, `{"detail":"synthetic failure"}`)
+}
+
+// errFromResponse is errFromStatus with the response body under test control.
+func errFromResponse(t *testing.T, code int, body string) error {
+	t.Helper()
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		w.Header().Set("X-Request-Id", "req-abc123")
@@ -63,7 +69,7 @@ func errFromStatus(t *testing.T, code int) error {
 			w.Header().Set("Retry-After", "2.5")
 		}
 		w.WriteHeader(code)
-		_, _ = w.Write([]byte(`{"detail":"synthetic failure"}`))
+		_, _ = w.Write([]byte(body))
 	}))
 	t.Cleanup(srv.Close)
 
@@ -189,6 +195,135 @@ func TestValidBaseURLsAreAccepted(t *testing.T) {
 		if _, err := NewClient(url, "key"); err != nil {
 			t.Errorf("NewClient(%q) = %v, want no error", url, err)
 		}
+	}
+}
+
+// TestServiceKindIsCarried: a kind named in the response body is returned
+// verbatim, including kinds this SDK does not name yet.
+func TestServiceKindIsCarried(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		kind   string
+	}{
+		{401, KindWrongKey},
+		{401, KindUnauthenticated},
+		{403, KindQuotaExceeded},
+		{403, KindPermissionDenied},
+		{400, KindFailedPrecondition},
+		{500, KindDataLoss},
+		{400, "some_new_kind"},
+	} {
+		t.Run(tc.kind, func(t *testing.T) {
+			err := errFromResponse(t, tc.status, `{"detail":"synthetic failure","kind":"`+tc.kind+`"}`)
+			var cerr Error
+			if !errors.As(err, &cerr) {
+				t.Fatalf("errors.As to cyborgdb.Error failed for %T", err)
+			}
+			if got := cerr.Kind(); got != tc.kind {
+				t.Errorf("Kind() = %q, want %q", got, tc.kind)
+			}
+			if got := cerr.Detail(); got != "synthetic failure" {
+				t.Errorf("Detail() = %q, want \"synthetic failure\"", got)
+			}
+		})
+	}
+}
+
+func TestKindFallsBackToStatus(t *testing.T) {
+	for _, tc := range []struct {
+		status int
+		kind   string
+	}{
+		{400, KindInvalidArgument},
+		{401, KindUnauthenticated},
+		{403, KindPermissionDenied},
+		{404, KindNotFound},
+		{405, KindInvalidArgument},
+		{409, KindAlreadyExists},
+		{422, KindInvalidArgument},
+		{429, KindRateLimited},
+		{500, KindInternal},
+		{503, KindUnavailable},
+	} {
+		t.Run(http.StatusText(tc.status), func(t *testing.T) {
+			err := errFromStatus(t, tc.status)
+			var cerr Error
+			if !errors.As(err, &cerr) {
+				t.Fatalf("errors.As to cyborgdb.Error failed for %T", err)
+			}
+			if got := cerr.Kind(); got != tc.kind {
+				t.Errorf("HTTP %d: Kind() = %q, want %q", tc.status, got, tc.kind)
+			}
+		})
+	}
+}
+
+func TestKindWithoutJSONBody(t *testing.T) {
+	err := errFromResponse(t, 503, "Service Unavailable")
+	var cerr Error
+	if !errors.As(err, &cerr) {
+		t.Fatalf("errors.As to cyborgdb.Error failed for %T", err)
+	}
+	if got := cerr.Kind(); got != KindUnavailable {
+		t.Errorf("Kind() = %q, want %q", got, KindUnavailable)
+	}
+	if got := cerr.Detail(); got != "Service Unavailable" {
+		t.Errorf("Detail() = %q, want \"Service Unavailable\"", got)
+	}
+}
+
+func TestFieldErrorsAreCarried(t *testing.T) {
+	err := errFromResponse(t, 422, `{"detail":"synthetic failure","kind":"invalid_argument",`+
+		`"errors":[{"field":"body.items.0.vector","message":"Field required","type":"missing"}]}`)
+	var cerr Error
+	if !errors.As(err, &cerr) {
+		t.Fatalf("errors.As to cyborgdb.Error failed for %T", err)
+	}
+	want := []FieldError{{Field: "body.items.0.vector", Message: "Field required", Type: "missing"}}
+	if got := cerr.FieldErrors(); !reflect.DeepEqual(got, want) {
+		t.Errorf("FieldErrors() = %+v, want %+v", got, want)
+	}
+}
+
+func TestFieldErrorsAbsentByDefault(t *testing.T) {
+	err := errFromResponse(t, 404, `{"detail":"synthetic failure","kind":"not_found"}`)
+	var cerr Error
+	if !errors.As(err, &cerr) {
+		t.Fatalf("errors.As to cyborgdb.Error failed for %T", err)
+	}
+	if got := cerr.FieldErrors(); got != nil {
+		t.Errorf("FieldErrors() = %+v, want nil", got)
+	}
+}
+
+// TestClientSideKinds: errors raised without any response still carry a kind.
+func TestClientSideKinds(t *testing.T) {
+	_, err := NewClient("not-a-url", "key")
+	var validation *ValidationError
+	if !errors.As(err, &validation) {
+		t.Fatalf("NewClient: got %T, want *ValidationError", err)
+	}
+	if got := validation.Kind(); got != KindInvalidArgument {
+		t.Errorf("pre-flight Kind() = %q, want %q", got, KindInvalidArgument)
+	}
+	if got := validation.FieldErrors(); got != nil {
+		t.Errorf("pre-flight FieldErrors() = %+v, want nil", got)
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {}))
+	url := srv.URL
+	srv.Close()
+	client, err := NewClient(url, "test-key")
+	if err != nil {
+		t.Fatalf("NewClient: %v", err)
+	}
+	_, err = client.ListIndexes(context.Background())
+	var transport *TransportError
+	if !errors.As(err, &transport) {
+		t.Fatalf("got %T, want *TransportError", err)
+	}
+	if got := transport.Kind(); got != KindTransport {
+		t.Errorf("transport Kind() = %q, want %q", got, KindTransport)
 	}
 }
 
