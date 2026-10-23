@@ -10,8 +10,8 @@ import (
 
 func TestListEmbeddingModelsMapsEveryFieldInOrder(t *testing.T) {
 	srv, rec := recordServer(t, 200, `{"models": [
-		{"name": "all-MiniLM-L6-v2", "dimension": 384, "max_seq_length": 256},
-		{"name": "bge-base-en-v1.5", "dimension": 768, "max_seq_length": 512}
+		{"name": "all-MiniLM-L6-v2", "revision": "abc123", "dimension": 384, "max_seq_length": 256, "normalize": true},
+		{"name": "bge-base-en-v1.5", "revision": "def456", "dimension": 768, "max_seq_length": 512, "normalize": true}
 	]}`)
 	client, err := NewClient(srv.URL, "test-key")
 	if err != nil {
