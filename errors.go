@@ -36,24 +36,57 @@ type Error interface {
 	// fixed per error type — retry loops branch on this rather than
 	// re-deriving a status table.
 	Retryable() bool
+	// Kind says what went wrong, for branching where a status is shared. One
+	// of the Kind constants below; treat an unknown one like KindInternal.
+	Kind() string
+	// FieldErrors is the service's per-field rejections, or nil when the
+	// request didn't fail field validation.
+	FieldErrors() []FieldError
 	// Unwrap exposes the originating error, so errors.Is and errors.As reach
 	// the generated client's types and the package's sentinel errors.
 	Unwrap() error
 }
 
+// The kinds a CyborgDB error can carry: the service's error taxonomy plus the
+// client-only KindRateLimited and KindTransport.
+const (
+	KindInvalidArgument    = "invalid_argument"
+	KindNotFound           = "not_found"
+	KindAlreadyExists      = "already_exists"
+	KindPermissionDenied   = "permission_denied"
+	KindWrongKey           = "wrong_key"
+	KindUnauthenticated    = "unauthenticated"
+	KindUnavailable        = "unavailable"
+	KindQuotaExceeded      = "quota_exceeded"
+	KindFailedPrecondition = "failed_precondition"
+	KindDataLoss           = "data_loss"
+	KindInternal           = "internal"
+	KindRateLimited        = "rate_limited"
+	KindTransport          = "transport"
+)
+
+// FieldError is one request field the service rejected.
+type FieldError struct {
+	Field   string `json:"field"`   // dotted path, e.g. "body.items.0.vector"
+	Message string `json:"message"` // what is wrong with it
+	Type    string `json:"type"`    // machine-readable slug, e.g. "missing"
+}
+
 // baseError carries the fields shared by every typed error. Concrete types
 // embed it and add Retryable.
 type baseError struct {
-	kind       string
-	statusCode int
-	requestID  string
-	detail     string
-	retryAfter float64
-	err        error
+	label       string
+	kind        string
+	statusCode  int
+	requestID   string
+	detail      string
+	retryAfter  float64
+	fieldErrors []FieldError
+	err         error
 }
 
 func (e *baseError) Error() string {
-	msg := e.kind
+	msg := e.label
 	if e.statusCode != 0 {
 		msg = fmt.Sprintf("%s (HTTP %d)", msg, e.statusCode)
 	}
@@ -69,11 +102,13 @@ func (e *baseError) Error() string {
 	return msg
 }
 
-func (e *baseError) Unwrap() error       { return e.err }
-func (e *baseError) StatusCode() int     { return e.statusCode }
-func (e *baseError) RequestID() string   { return e.requestID }
-func (e *baseError) Detail() string      { return e.detail }
-func (e *baseError) RetryAfter() float64 { return e.retryAfter }
+func (e *baseError) Unwrap() error             { return e.err }
+func (e *baseError) StatusCode() int           { return e.statusCode }
+func (e *baseError) RequestID() string         { return e.requestID }
+func (e *baseError) Detail() string            { return e.detail }
+func (e *baseError) RetryAfter() float64       { return e.retryAfter }
+func (e *baseError) Kind() string              { return e.kind }
+func (e *baseError) FieldErrors() []FieldError { return e.fieldErrors }
 
 // ValidationError is returned for HTTP 400 and 422, and for arguments this SDK
 // rejects before sending the request. The package's client-side sentinels
@@ -84,8 +119,10 @@ type ValidationError struct{ baseError }
 // Retryable reports false: the request is malformed, so resending it fails again.
 func (e *ValidationError) Retryable() bool { return false }
 
-// AuthenticationError is returned for HTTP 401 and 403. Check the API key and
-// its permissions; inspect StatusCode to tell the two apart.
+// AuthenticationError is returned for HTTP 401 and 403. Check the API key,
+// the index key and permissions. Inspect Kind to tell the cases apart:
+// KindUnauthenticated (API key missing or rejected), KindWrongKey (the index
+// key doesn't decrypt the index), KindPermissionDenied or KindQuotaExceeded.
 type AuthenticationError struct{ baseError }
 
 // Retryable reports false: credentials do not fix themselves.
@@ -158,7 +195,7 @@ var (
 // package's sentinel errors, so callers can match with either errors.Is on the
 // sentinel or errors.As on the type.
 func newValidationError(err error) *ValidationError {
-	return &ValidationError{baseError{kind: "validation error", err: err}}
+	return &ValidationError{baseError{label: "validation error", kind: KindInvalidArgument, err: err}}
 }
 
 // translateHTTPError converts a generated-client error into a typed error.
@@ -174,38 +211,45 @@ func translateHTTPError(resp *http.Response, err error) error {
 	}
 	// No response reached us: DNS, connection refused, TLS, timeout.
 	if resp == nil {
-		return &TransportError{baseError{kind: "transport error", err: err}}
+		return &TransportError{baseError{label: "transport error", kind: KindTransport, err: err}}
 	}
 
+	body := errorBodyFrom(err)
+	kind := body.Kind
+	if kind == "" {
+		kind = kindForStatus(resp.StatusCode)
+	}
 	base := baseError{
-		statusCode: resp.StatusCode,
-		requestID:  resp.Header.Get("X-Request-Id"),
-		detail:     detailFrom(err),
-		retryAfter: retryAfterFrom(resp),
-		err:        err,
+		kind:        kind,
+		statusCode:  resp.StatusCode,
+		requestID:   resp.Header.Get("X-Request-Id"),
+		detail:      body.Detail,
+		retryAfter:  retryAfterFrom(resp),
+		fieldErrors: body.Errors,
+		err:         err,
 	}
 
 	switch code := resp.StatusCode; {
 	case code == http.StatusUnauthorized || code == http.StatusForbidden:
-		base.kind = "authentication error"
+		base.label = "authentication error"
 		return &AuthenticationError{base}
 	case code == http.StatusNotFound:
-		base.kind = "not found"
+		base.label = "not found"
 		return &NotFoundError{base}
 	case code == http.StatusConflict:
-		base.kind = "conflict"
+		base.label = "conflict"
 		return &ConflictError{base}
 	case code == http.StatusTooManyRequests:
-		base.kind = "rate limited"
+		base.label = "rate limited"
 		return &RateLimitError{base}
 	case code == http.StatusBadRequest || code == http.StatusUnprocessableEntity:
-		base.kind = "validation error"
+		base.label = "validation error"
 		return &ValidationError{base}
 	case code >= http.StatusInternalServerError:
-		base.kind = "service error"
+		base.label = "service error"
 		return &ServiceError{base}
 	case code >= http.StatusMultipleChoices:
-		base.kind = "api error"
+		base.label = "api error"
 		return &APIError{base}
 	default:
 		// A 2xx whose body failed to decode: not an HTTP failure, so hand the
@@ -214,28 +258,69 @@ func translateHTTPError(resp *http.Response, err error) error {
 	}
 }
 
-// detailFrom pulls the service's own message out of the generated client's
-// error body. The service currently returns FastAPI's {"detail": ...} shape.
-func detailFrom(err error) string {
+// statusKinds derives a kind for services that predate kinds.
+var statusKinds = map[int]string{
+	http.StatusBadRequest:          KindInvalidArgument,
+	http.StatusUnauthorized:        KindUnauthenticated,
+	http.StatusForbidden:           KindPermissionDenied,
+	http.StatusNotFound:            KindNotFound,
+	http.StatusConflict:            KindAlreadyExists,
+	http.StatusUnprocessableEntity: KindInvalidArgument,
+	http.StatusTooManyRequests:     KindRateLimited,
+	http.StatusBadGateway:          KindUnavailable,
+	http.StatusServiceUnavailable:  KindUnavailable,
+	http.StatusGatewayTimeout:      KindUnavailable,
+}
+
+func kindForStatus(status int) string {
+	if kind, ok := statusKinds[status]; ok {
+		return kind
+	}
+	if status >= 400 && status < 500 {
+		return KindInvalidArgument
+	}
+	return KindInternal
+}
+
+// errorBody is the service's decoded error response.
+type errorBody struct {
+	Detail string
+	Kind   string
+	Errors []FieldError
+}
+
+// errorBodyFrom pulls {"detail", "kind", "errors"} out of the generated
+// client's error; a body that is not that shape becomes the Detail alone.
+func errorBodyFrom(err error) errorBody {
 	var apiErr *internal.GenericOpenAPIError
 	if !errors.As(err, &apiErr) {
-		return ""
+		return errorBody{}
 	}
 	body := apiErr.Body()
 	if len(body) == 0 {
-		return ""
+		return errorBody{}
 	}
 	var payload struct {
 		Detail json.RawMessage `json:"detail"`
+		Kind   string          `json:"kind"`
+		Errors []FieldError    `json:"errors"`
 	}
-	if json.Unmarshal(body, &payload) != nil || len(payload.Detail) == 0 {
-		return string(body)
+	if json.Unmarshal(body, &payload) != nil {
+		return errorBody{Detail: string(body)}
 	}
-	var s string
-	if json.Unmarshal(payload.Detail, &s) == nil {
-		return s
+	decoded := errorBody{Kind: payload.Kind, Errors: payload.Errors}
+	switch {
+	case len(payload.Detail) == 0:
+		decoded.Detail = string(body)
+	default:
+		var s string
+		if json.Unmarshal(payload.Detail, &s) == nil {
+			decoded.Detail = s
+		} else {
+			decoded.Detail = string(payload.Detail)
+		}
 	}
-	return string(payload.Detail)
+	return decoded
 }
 
 // retryAfterFrom reads the Retry-After header, seconds form only. The
