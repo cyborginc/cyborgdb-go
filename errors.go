@@ -309,10 +309,7 @@ func errorBodyFrom(err error) errorBody {
 		return errorBody{Detail: string(body)}
 	}
 	decoded := errorBody{Kind: payload.Kind, Errors: payload.Errors}
-	switch {
-	case len(payload.Detail) == 0:
-		decoded.Detail = string(body)
-	default:
+	if len(payload.Detail) != 0 {
 		var s string
 		if json.Unmarshal(payload.Detail, &s) == nil {
 			decoded.Detail = s

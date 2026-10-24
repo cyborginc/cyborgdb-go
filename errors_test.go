@@ -272,6 +272,22 @@ func TestKindWithoutJSONBody(t *testing.T) {
 	}
 }
 
+// TestJSONBodyWithoutDetail: a JSON error body with no detail leaves Detail
+// empty rather than echoing the raw body, and still carries the kind.
+func TestJSONBodyWithoutDetail(t *testing.T) {
+	err := errFromResponse(t, 401, `{"kind":"wrong_key"}`)
+	var cerr Error
+	if !errors.As(err, &cerr) {
+		t.Fatalf("errors.As to cyborgdb.Error failed for %T", err)
+	}
+	if got := cerr.Detail(); got != "" {
+		t.Errorf("Detail() = %q, want \"\"", got)
+	}
+	if got := cerr.Kind(); got != KindWrongKey {
+		t.Errorf("Kind() = %q, want %q", got, KindWrongKey)
+	}
+}
+
 func TestFieldErrorsAreCarried(t *testing.T) {
 	err := errFromResponse(t, 422, `{"detail":"synthetic failure","kind":"invalid_argument",`+
 		`"errors":[{"field":"body.items.0.vector","message":"Field required","type":"missing"}]}`)
