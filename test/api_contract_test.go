@@ -672,14 +672,14 @@ func TestClientListEmbeddingModels(t *testing.T) {
 			t.Fatal("ListEmbeddingModels should return at least one model")
 		}
 
-		want := []string{"dimension", "max_seq_length", "name"}
+		want := []string{"dimension", "max_seq_length", "name", "normalize", "revision"}
 		found := false
 		for _, m := range models {
 			if got := jsonKeys(t, m); !reflect.DeepEqual(got, want) {
 				t.Errorf("model keys = %v, want %v", got, want)
 			}
-			if m.Name == "" || m.Dimension <= 0 || m.MaxSeqLength <= 0 {
-				t.Errorf("model = %+v, want a name and positive dimension and max_seq_length", m)
+			if m.Name == "" || m.Revision == "" || m.Dimension <= 0 || m.MaxSeqLength <= 0 {
+				t.Errorf("model = %+v, want a name, revision, and positive dimension and max_seq_length", m)
 			}
 			// The embedding-model index in TestClientCreateIndex uses this one.
 			if m.Name == embedModel {
