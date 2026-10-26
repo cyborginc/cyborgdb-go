@@ -301,6 +301,63 @@ func TestFieldErrorsAreCarried(t *testing.T) {
 	}
 }
 
+// TestMalformedFieldDoesNotDiscardOthers: one field in an unexpected shape is
+// dropped alone — the rest of the body still decodes, instead of the whole
+// payload collapsing into a status-derived kind.
+func TestMalformedFieldDoesNotDiscardOthers(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		body       string
+		wantDetail string
+		wantKind   string
+		wantErrors []FieldError
+	}{
+		{
+			name:       "kind is a number",
+			body:       `{"detail":"synthetic failure","kind":7}`,
+			wantDetail: "synthetic failure",
+			wantKind:   KindNotFound, // falls back to the 404 status
+		},
+		{
+			name:       "errors is not a list",
+			body:       `{"detail":"synthetic failure","kind":"not_found","errors":"oops"}`,
+			wantDetail: "synthetic failure",
+			wantKind:   KindNotFound,
+		},
+		{
+			name:       "detail is an object",
+			body:       `{"detail":{"msg":"boom"},"kind":"not_found"}`,
+			wantDetail: `{"msg":"boom"}`,
+			wantKind:   KindNotFound,
+		},
+		{
+			name:     "kind malformed but errors intact",
+			body:     `{"kind":[],"errors":[{"field":"body.k","message":"bad","type":"invalid"}]}`,
+			wantKind: KindNotFound,
+			wantErrors: []FieldError{
+				{Field: "body.k", Message: "bad", Type: "invalid"},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := errFromResponse(t, 404, tc.body)
+			var cerr Error
+			if !errors.As(err, &cerr) {
+				t.Fatalf("errors.As to cyborgdb.Error failed for %T", err)
+			}
+			if got := cerr.Detail(); got != tc.wantDetail {
+				t.Errorf("Detail() = %q, want %q", got, tc.wantDetail)
+			}
+			if got := cerr.Kind(); got != tc.wantKind {
+				t.Errorf("Kind() = %q, want %q", got, tc.wantKind)
+			}
+			if got := cerr.FieldErrors(); !reflect.DeepEqual(got, tc.wantErrors) {
+				t.Errorf("FieldErrors() = %+v, want %+v", got, tc.wantErrors)
+			}
+		})
+	}
+}
+
 func TestFieldErrorsAbsentByDefault(t *testing.T) {
 	err := errFromResponse(t, 404, `{"detail":"synthetic failure","kind":"not_found"}`)
 	var cerr Error

@@ -290,7 +290,9 @@ type errorBody struct {
 }
 
 // errorBodyFrom pulls {"detail", "kind", "errors"} out of the generated
-// client's error; a body that is not that shape becomes the Detail alone.
+// client's error. The fields are decoded independently, so one field in an
+// unexpected shape doesn't discard the others; a body that is not a JSON
+// object becomes the Detail alone.
 func errorBodyFrom(err error) errorBody {
 	var apiErr *internal.GenericOpenAPIError
 	if !errors.As(err, &apiErr) {
@@ -300,21 +302,29 @@ func errorBodyFrom(err error) errorBody {
 	if len(body) == 0 {
 		return errorBody{}
 	}
-	var payload struct {
-		Detail json.RawMessage `json:"detail"`
-		Kind   string          `json:"kind"`
-		Errors []FieldError    `json:"errors"`
-	}
-	if json.Unmarshal(body, &payload) != nil {
+	var fields map[string]json.RawMessage
+	if json.Unmarshal(body, &fields) != nil {
 		return errorBody{Detail: string(body)}
 	}
-	decoded := errorBody{Kind: payload.Kind, Errors: payload.Errors}
-	if len(payload.Detail) != 0 {
+	var decoded errorBody
+	if raw := fields["detail"]; len(raw) != 0 {
 		var s string
-		if json.Unmarshal(payload.Detail, &s) == nil {
+		if json.Unmarshal(raw, &s) == nil {
 			decoded.Detail = s
 		} else {
-			decoded.Detail = string(payload.Detail)
+			decoded.Detail = string(raw)
+		}
+	}
+	if raw := fields["kind"]; len(raw) != 0 {
+		var s string
+		if json.Unmarshal(raw, &s) == nil {
+			decoded.Kind = s
+		}
+	}
+	if raw := fields["errors"]; len(raw) != 0 {
+		var fe []FieldError
+		if json.Unmarshal(raw, &fe) == nil {
+			decoded.Errors = fe
 		}
 	}
 	return decoded
