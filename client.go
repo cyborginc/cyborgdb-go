@@ -349,8 +349,10 @@ func (c *Client) ListEmbeddingModels(ctx context.Context) ([]EmbeddingModel, err
 	for _, m := range resp.GetModels() {
 		models = append(models, EmbeddingModel{
 			Name:         m.GetName(),
+			Revision:     m.GetRevision(),
 			Dimension:    m.GetDimension(),
 			MaxSeqLength: m.GetMaxSeqLength(),
+			Normalize:    m.GetNormalize(),
 		})
 	}
 	return models, nil

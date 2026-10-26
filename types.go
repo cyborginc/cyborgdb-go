@@ -521,9 +521,16 @@ type EmbeddingModel struct {
 	// Name is the model name to pass as CreateIndexParams.EmbeddingModel.
 	Name string `json:"name"`
 
+	// Revision is the pinned upstream revision of the model's weights.
+	Revision string `json:"revision"`
+
 	// Dimension is the dimensionality of the vectors the model produces.
 	Dimension int32 `json:"dimension"`
 
 	// MaxSeqLength is the longest input, in tokens, the model accepts.
 	MaxSeqLength int32 `json:"max_seq_length"`
+
+	// Normalize reports whether the model's vectors are unit length, so
+	// cosine and inner product rank alike.
+	Normalize bool `json:"normalize"`
 }
