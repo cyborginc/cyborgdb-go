@@ -2,11 +2,18 @@
 
 set -e
 
-echo "Generating Go client from openapi.json..."
+# The spec's source of truth is cyborgdb-service. By default it's read from a
+# sibling checkout; set CYBORGDB_SERVICE_DIR to point elsewhere, or pass the
+# spec's path directly.
+SERVICE_DIR="${CYBORGDB_SERVICE_DIR:-../cyborgdb-service}"
+SPEC="${1:-$SERVICE_DIR/openapi.json}"
 
-# Check if OpenAPI spec exists
-if [ ! -f "openapi.json" ]; then
-    echo "Error: openapi.json not found!"
+echo "Generating Go client from $SPEC..."
+
+if [ ! -f "$SPEC" ]; then
+    echo "Error: $SPEC not found!"
+    echo "Usage: $0 [path/to/openapi.json]"
+    echo "  or:  CYBORGDB_SERVICE_DIR=path/to/cyborgdb-service $0"
     exit 1
 fi
 
@@ -27,7 +34,7 @@ rm -f internal/*.go
 # Generate the Go client
 echo "Generating Go client..."
 openapi-generator-cli generate \
-    -i openapi.json \
+    -i "$SPEC" \
     -g go \
     -o ./internal \
     --package-name internal \

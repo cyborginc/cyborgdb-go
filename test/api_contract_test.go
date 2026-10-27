@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"reflect"
+	"sort"
 	"testing"
 	"time"
 
@@ -472,6 +473,99 @@ func TestEncryptedIndexProperties(t *testing.T) {
 	})
 }
 
+// jsonKeys returns the sorted top-level keys v serializes to.
+func jsonKeys(t *testing.T, v interface{}) []string {
+	t.Helper()
+	raw, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	var payload map[string]interface{}
+	if err := json.Unmarshal(raw, &payload); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	keys := make([]string, 0, len(payload))
+	for k := range payload {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
+// Test 08a: EncryptedIndex.Describe()
+func TestEncryptedIndexDescribe(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	t.Run("DescribeNoArguments", func(t *testing.T) {
+		// Describe should only take context (compile-time check)
+		var _ func(context.Context) (*cyborgdb.IndexDescription, error) = testIndex.Describe //nolint:staticcheck // QF1011: explicit type is the compile-time signature check
+	})
+
+	t.Run("ReturnExactDocumentedFields", func(t *testing.T) {
+		described, err := testIndex.Describe(ctx)
+		if err != nil {
+			t.Fatalf("Describe failed: %v", err)
+		}
+
+		// embedding_model is left out because testIndex has none; the
+		// embedding-model index below reports it.
+		want := []string{"bm25", "dimension", "index_name", "index_type", "metadata_schema", "metric", "n_lists", "storage_precision", "training_state"}
+		if got := jsonKeys(t, described); !reflect.DeepEqual(got, want) {
+			t.Errorf("Describe keys = %v, want %v", got, want)
+		}
+
+		if described.IndexName != testIndexName {
+			t.Errorf("IndexName = %q, want %q", described.IndexName, testIndexName)
+		}
+		if described.IndexType == "" {
+			t.Error("IndexType should not be empty")
+		}
+		if described.Dimension != int32(dimension) {
+			t.Errorf("Dimension = %d, want %d", described.Dimension, dimension)
+		}
+		if described.Metric != "cosine" {
+			t.Errorf("Metric = %q, want cosine", described.Metric)
+		}
+		if described.StoragePrecision != cyborgdb.StoragePrecisionFloat32 {
+			t.Errorf("StoragePrecision = %q, want float32", described.StoragePrecision)
+		}
+		if described.NLists < 1 {
+			t.Errorf("NLists = %d, want >= 1", described.NLists)
+		}
+		switch described.TrainingState {
+		case "untrained", "training", "trained":
+		default:
+			t.Errorf("TrainingState = %q, want untrained, training or trained", described.TrainingState)
+		}
+		if described.MetadataSchema == nil {
+			t.Error("MetadataSchema should not be nil")
+		}
+		if described.BM25 != nil {
+			t.Errorf("BM25 = %+v, want nil", described.BM25)
+		}
+		if described.EmbeddingModel != nil {
+			t.Errorf("EmbeddingModel = %q, want nil", *described.EmbeddingModel)
+		}
+	})
+
+	t.Run("ReportEmbeddingModel", func(t *testing.T) {
+		described, err := embeddingIndex.Describe(ctx)
+		if err != nil {
+			t.Fatalf("Describe failed: %v", err)
+		}
+		// The index is created with the bare name; the service reports the full one.
+		if described.EmbeddingModel == nil {
+			t.Errorf("EmbeddingModel = nil, want %s", embedModel)
+		} else if *described.EmbeddingModel != embedModel {
+			t.Errorf("EmbeddingModel = %q, want %s", *described.EmbeddingModel, embedModel)
+		}
+		if described.Dimension != 384 {
+			t.Errorf("Dimension = %d, want 384", described.Dimension)
+		}
+	})
+}
+
 // Test 09: EncryptedIndex.IsTrained()
 func TestEncryptedIndexIsTrained(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
@@ -519,6 +613,84 @@ func TestClientIsTraining(t *testing.T) {
 
 		if reflect.TypeOf(isTraining).Kind() != reflect.Bool {
 			t.Error("Training status should be bool")
+		}
+	})
+}
+
+// Test 10a: Client.GetTrainingStatus()
+func TestClientGetTrainingStatus(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	t.Run("GetTrainingStatusNoArguments", func(t *testing.T) {
+		// GetTrainingStatus should only take context (compile-time check)
+		var _ func(context.Context) (*cyborgdb.TrainingStatus, error) = testClient.GetTrainingStatus //nolint:staticcheck // QF1011: explicit type is the compile-time signature check
+	})
+
+	t.Run("ReturnExactDocumentedFields", func(t *testing.T) {
+		status, err := testClient.GetTrainingStatus(ctx)
+		if err != nil {
+			t.Fatalf("GetTrainingStatus failed: %v", err)
+		}
+
+		// Only the two documented fields; the service's worker and queue
+		// internals stay out.
+		want := []string{"retrain_threshold", "training_indexes"}
+		if got := jsonKeys(t, status); !reflect.DeepEqual(got, want) {
+			t.Errorf("GetTrainingStatus keys = %v, want %v", got, want)
+		}
+		if status.TrainingIndexes == nil {
+			t.Error("TrainingIndexes should not be nil")
+		}
+		for _, name := range status.TrainingIndexes {
+			if name == "" {
+				t.Error("Training index name should not be empty")
+			}
+		}
+		if status.RetrainThreshold < 0 {
+			t.Errorf("RetrainThreshold = %d, want >= 0", status.RetrainThreshold)
+		}
+	})
+}
+
+// Test 10b: Client.ListEmbeddingModels()
+func TestClientListEmbeddingModels(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	t.Run("ListEmbeddingModelsNoArguments", func(t *testing.T) {
+		// ListEmbeddingModels should only take context (compile-time check)
+		var _ func(context.Context) ([]cyborgdb.EmbeddingModel, error) = testClient.ListEmbeddingModels //nolint:staticcheck // QF1011: explicit type is the compile-time signature check
+	})
+
+	t.Run("ReturnModelsWithExactFields", func(t *testing.T) {
+		models, err := testClient.ListEmbeddingModels(ctx)
+		if err != nil {
+			t.Fatalf("ListEmbeddingModels failed: %v", err)
+		}
+		if len(models) == 0 {
+			t.Fatal("ListEmbeddingModels should return at least one model")
+		}
+
+		want := []string{"dimension", "max_seq_length", "name", "normalize", "revision"}
+		found := false
+		for _, m := range models {
+			if got := jsonKeys(t, m); !reflect.DeepEqual(got, want) {
+				t.Errorf("model keys = %v, want %v", got, want)
+			}
+			if m.Name == "" || m.Revision == "" || m.Dimension <= 0 || m.MaxSeqLength <= 0 {
+				t.Errorf("model = %+v, want a name, revision, and positive dimension and max_seq_length", m)
+			}
+			// The embedding-model index in TestClientCreateIndex uses this one.
+			if m.Name == embedModel {
+				found = true
+				if m.Dimension != embedModelDim {
+					t.Errorf("%s dimension = %d, want %d", embedModel, m.Dimension, embedModelDim)
+				}
+			}
+		}
+		if !found {
+			t.Errorf("%s should be listed", embedModel)
 		}
 	})
 }
@@ -790,6 +962,28 @@ func TestEncryptedIndexListIDs(t *testing.T) {
 		}
 		if result == nil {
 			t.Error("Result should not be nil")
+		}
+	})
+}
+
+// Test 12a: EncryptedIndex.GetNumVectors()
+func TestEncryptedIndexGetNumVectors(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), testTimeout)
+	defer cancel()
+
+	t.Run("GetNumVectorsNoArguments", func(t *testing.T) {
+		// GetNumVectors should only take context (compile-time check)
+		var _ func(context.Context) (int32, error) = testIndex.GetNumVectors //nolint:staticcheck // QF1011: explicit type is the compile-time signature check
+	})
+
+	t.Run("CountUpsertedVectors", func(t *testing.T) {
+		count, err := testIndex.GetNumVectors(ctx)
+		if err != nil {
+			t.Fatalf("GetNumVectors failed: %v", err)
+		}
+		// We upserted IDs 0-14 (15 total)
+		if count != 15 {
+			t.Errorf("GetNumVectors = %d, want 15", count)
 		}
 	})
 }

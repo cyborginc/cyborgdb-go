@@ -311,3 +311,49 @@ func (c *Client) GetHealth(ctx context.Context) (map[string]string, error) {
 	}
 	return health, nil
 }
+
+// GetTrainingStatus reports which indexes the service is training or has
+// queued for training, and the vector count that triggers an index's first
+// automatic training. Mirrors the Python SDK's get_training_status.
+//
+// Parameters:
+//   - ctx: Context for cancellation/timeouts
+//
+// Returns:
+//   - *TrainingStatus: The indexes in training and the retrain threshold
+//   - error: Any error encountered
+func (c *Client) GetTrainingStatus(ctx context.Context) (*TrainingStatus, error) {
+	status, err := getTrainingStatus(ctx, c.internal)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get training status: %w", err)
+	}
+	return status, nil
+}
+
+// ListEmbeddingModels lists the embedding models the service can use for
+// auto-embedding, in the order the service reports them. Mirrors the Python
+// SDK's list_embedding_models.
+//
+// Parameters:
+//   - ctx: Context for cancellation/timeouts
+//
+// Returns:
+//   - []EmbeddingModel: The available models (empty slice if none)
+//   - error: Any error encountered
+func (c *Client) ListEmbeddingModels(ctx context.Context) ([]EmbeddingModel, error) {
+	resp, apiResp, err := c.internal.APIClient.DefaultAPI.ListEmbeddingModelsV1EmbeddingModelsGet(ctx).Execute()
+	if err != nil {
+		return nil, fmt.Errorf("failed to list embedding models: %w", translateHTTPError(apiResp, err))
+	}
+	models := make([]EmbeddingModel, 0, len(resp.GetModels()))
+	for _, m := range resp.GetModels() {
+		models = append(models, EmbeddingModel{
+			Name:         m.GetName(),
+			Revision:     m.GetRevision(),
+			Dimension:    m.GetDimension(),
+			MaxSeqLength: m.GetMaxSeqLength(),
+			Normalize:    m.GetNormalize(),
+		})
+	}
+	return models, nil
+}
