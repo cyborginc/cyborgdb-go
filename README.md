@@ -13,13 +13,13 @@
 ![License](https://img.shields.io/github/license/cyborginc/cyborgdb-go)
 ![Go Version](https://img.shields.io/github/go-mod/go-version/cyborginc/cyborgdb-go)
 
-The **CyborgDB Go SDK** is the Go client for [CyborgDB](https://www.cyborg.co), an encrypted vector database from Cyborg Inc. CyborgDB performs vector search on encrypted data (encryption-in-use) and is self-hosted in your environment: Cyborg Inc. never receives your keys, vectors, or queries. The backing store holds only ciphertext, and only the final top-k candidates are decrypted, transiently, to rerank. Built with Go's type system and `context` support for services and microservices.
+The **CyborgDB Go SDK** is the Go client for [CyborgDB](https://www.cyborg.co), an encrypted vector database from Cyborg Inc. CyborgDB performs vector search on encrypted data (encryption-in-use) and is self-hosted in your environment: Cyborg Inc. never receives your keys, vectors, or queries. The backing store holds only ciphertext; queries execute over ciphertext and only decrypt the candidates they score, transiently, in the service. Built with Go's type system and `context` support for services and microservices.
 
 This SDK talks to `cyborgdb-service`, which you self-host alongside your app. The [Quickstart](https://docs.cyborg.co/quickstart) starts the service and reaches a first query in a few minutes.
 
 ## Key Features
 
-- **Encryption-in-use**: Search runs over ciphertext; only the final top-k candidates are decrypted, transiently, in the service to rerank
+- **Encryption-in-use**: Search runs over ciphertext; only the candidates being scored are decrypted, transiently, in the service
 - **Encrypted ANN**: Disk-backed encrypted DiskIVF index ([benchmarks](https://www.cyborg.co/performance))
 - **Filters on encrypted metadata**: Combine vector similarity with equality and range predicates in a single request
 - **BYOK / HYOK**: Wrap per-index keys with AWS KMS or AWS Secrets Manager, or hold the key client-side — you control the key material
