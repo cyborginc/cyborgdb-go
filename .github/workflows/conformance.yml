@@ -1,0 +1,259 @@
+name: Conformance (shared test suite)
+permissions:
+  contents: read
+
+# Nightly run of the shared CyborgDB test suite against the SDK, once per SDK
+# code path (json, binary), through tests/conformance (the adapter). Alert-only,
+# not a required check.
+#
+# This repo's logs are public and the suite is internal, so the log shows only
+# pass/fail counts and everything else is uploaded encrypted. Don't add steps
+# that print suite output.
+on:
+  schedule:
+    - cron: '0 7 * * *'
+  workflow_dispatch:
+  # TEMP: run on pushes to this branch until the workflow is on main.
+  push:
+    branches: [go-adapter]
+
+concurrency:
+  group: conformance-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  conformance:
+    name: conformance (${{ matrix.variant }} ${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [json, binary]
+        shard: [1, 2, 3]
+
+    steps:
+      - name: Checkout SDK code
+        uses: actions/checkout@v7
+
+      - name: cyborgdb-tests ref
+        id: tests-ref
+        run: echo "ref=$(tr -d '[:space:]' < .cyborgdb-tests-ref)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout cyborgdb-tests
+        uses: actions/checkout@v7
+        with:
+          repository: cyborginc/cyborgdb-tests
+          ref: ${{ steps.tests-ref.outputs.ref }}
+          token: ${{ secrets.CYBORGDB_TESTS_TOKEN }}
+          path: cyborgdb-tests
+
+      # Builds the adapter, and the driver when no prebuilt one matches the checked-out
+      # suite commit. No caches here or for the datasets: this repo's Actions caches are
+      # readable by fork PR workflows, and both would hold internal cyborgdb-tests content.
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: cyborgdb-tests/go.mod
+          cache: false
+
+      - name: Set up Python for the service
+        uses: actions/setup-python@v7
+        with:
+          python-version: '3.13'
+
+      - name: Load secrets from 1Password
+        uses: 1password/load-secrets-action@v5
+        with:
+          export-env: true
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_TOKEN }}
+          CYBORGDB_API_KEY: "op://CyborgDB/CyborgDB Dev/CYBORGDB_API_KEY"
+          CA_AWS_ACCOUNT_ID: "op://CyborgDB/CyborgDB Dev/CA_AWS_ACCOUNT_ID"
+
+      # Not exported: the log key and the BYOK credentials reach only the run step.
+      - name: Load run secrets from 1Password
+        id: run-secrets
+        uses: 1password/load-secrets-action@v5
+        with:
+          export-env: false
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_TOKEN }}
+          CONFORMANCE_LOG_KEY: "op://CyborgDB/CyborgDB Dev/CONFORMANCE_LOG_KEY"
+          BYOK_AWS_ACCESS_KEY_ID: "op://CyborgDB/CyborgDB Dev/BYOK_AWS_ACCESS_KEY_ID"
+          BYOK_AWS_SECRET_ACCESS_KEY: "op://CyborgDB/CyborgDB Dev/BYOK_AWS_SECRET_ACCESS_KEY"
+          CYBORGDB_BYOK_ROLE_ARN: "op://CyborgDB/CyborgDB Dev/CYBORGDB_BYOK_ROLE_ARN"
+          CYBORGDB_BYOK_EXTERNAL_ID: "op://CyborgDB/CyborgDB Dev/CYBORGDB_BYOK_EXTERNAL_ID"
+
+      - name: Get CodeArtifact pip index URL
+        id: ca-url
+        uses: ./.github/workflows/actions/codeartifact-pip-url
+        with:
+          aws-account-id: ${{ env.CA_AWS_ACCOUNT_ID }}
+          role-to-assume: arn:aws:iam::${{ env.CA_AWS_ACCOUNT_ID }}:role/CyborgGitHubActionsS3Role
+          codeartifact-repository: cyborg-dev
+
+      - name: Export PIP_INDEX_URL
+        run: echo "PIP_INDEX_URL=${{ steps.ca-url.outputs.pip-index-url }}" >> "$GITHUB_ENV"
+
+      # Same registry as test.yml's "Write KMS registry config"; every sensitive
+      # value is a ${VAR} placeholder the service expands at startup.
+      - name: Write KMS registry config
+        run: |
+          set -euo pipefail
+          cat > "${{ runner.temp }}/cyborgdb.yaml" <<'YAML'
+          kms:
+            registry:
+              aws-secrets-self-test:
+                provider:    aws
+                key_id:      ${CYBORGDB_SECRETS_KEY_ID:-CYBORGDB_SERVICE_KEY1}
+                region:      ${CYBORGDB_AWS_REGION:-us-east-1}
+                role_arn:    ${CYBORGDB_BYOK_ROLE_ARN}
+                external_id: ${CYBORGDB_BYOK_EXTERNAL_ID}
+                role_session_name: cyborgdb-secrets-self-test
+              aws-kms-self-test:
+                provider:    aws-kms
+                key_id:      ${CYBORGDB_KMS_KEY_ID:-alias/CYBORGDB_SERVICE_KEY}
+                region:      ${CYBORGDB_AWS_REGION:-us-east-1}
+                role_arn:    ${CYBORGDB_BYOK_ROLE_ARN}
+                external_id: ${CYBORGDB_BYOK_EXTERNAL_ID}
+                role_session_name: cyborgdb-kms-self-test
+          YAML
+
+      - name: Install the service
+        run: |
+          pip install torch --index-url https://download.pytorch.org/whl/cpu
+          pip install "cyborgdb-service[embeddings,kms-aws]" --pre
+
+      # The adapter is its own module and builds against this checkout of the SDK.
+      - name: Test and build the adapter
+        working-directory: tests/conformance
+        run: |
+          go test ./...
+          go build -ldflags "-X main.sdkVersion=$(git rev-parse --short HEAD)" -o "$RUNNER_TEMP/adapter-go-sdk" .
+
+      # The runner starts and stops the service itself (--service); the service inherits
+      # this step's env, so the KMS registry and BYOK credentials reach it.
+      # Each child gets only the secrets it needs (the runner splits these commands on
+      # spaces): the adapter and the SDK under test get none, since the runner hands
+      # them the service URL and key as params; the service keeps the license key and
+      # BYOK credentials, and the runner sets its root key itself. Nothing but the
+      # script needs the log key, GH_TOKEN, or PIP_INDEX_URL (it embeds a CodeArtifact
+      # token).
+      - name: Run the suite
+        env:
+          ADAPTER: >-
+            env -u CONFORMANCE_LOG_KEY -u GH_TOKEN -u CYBORGDB_TESTS_SERVICE_API_KEY
+            -u CYBORGDB_API_KEY -u PIP_INDEX_URL -u AWS_ACCESS_KEY_ID
+            -u AWS_SECRET_ACCESS_KEY -u CYBORGDB_BYOK_ROLE_ARN -u CYBORGDB_BYOK_EXTERNAL_ID
+            ${{ runner.temp }}/adapter-go-sdk
+          SERVICE: >-
+            env -u CONFORMANCE_LOG_KEY -u GH_TOKEN -u CYBORGDB_TESTS_SERVICE_API_KEY
+            -u PIP_INDEX_URL
+            cyborgdb-service
+          VARIANTS: ${{ matrix.variant }}
+          SHARD: ${{ matrix.shard }}/3
+          IMPL: cyborgdb-go
+          # TEMP: first run writes the expected-failures draft into the encrypted logs.
+          DRAFT: 1
+          OUT_DIR: ${{ runner.temp }}/conformance-out
+          GH_TOKEN: ${{ secrets.CYBORGDB_TESTS_TOKEN }}
+          CONFORMANCE_LOG_KEY: ${{ steps.run-secrets.outputs.CONFORMANCE_LOG_KEY }}
+          CYBORGDB_TESTS_SERVICE_API_KEY: ${{ env.CYBORGDB_API_KEY }}
+          CYBORGDB_KMS_NAME_REAL: aws-kms-self-test
+          CYBORGDB_KMS_NAME_SM: aws-secrets-self-test
+          CYBORGDB_CONFIG_FILE: ${{ runner.temp }}/cyborgdb.yaml
+          AWS_ACCESS_KEY_ID: ${{ steps.run-secrets.outputs.BYOK_AWS_ACCESS_KEY_ID }}
+          AWS_SECRET_ACCESS_KEY: ${{ steps.run-secrets.outputs.BYOK_AWS_SECRET_ACCESS_KEY }}
+          CYBORGDB_BYOK_ROLE_ARN: ${{ steps.run-secrets.outputs.CYBORGDB_BYOK_ROLE_ARN }}
+          CYBORGDB_BYOK_EXTERNAL_ID: ${{ steps.run-secrets.outputs.CYBORGDB_BYOK_EXTERNAL_ID }}
+        run: |
+          # The static BYOK key must not be combined with the OIDC session token
+          # left in the env by the CodeArtifact step.
+          unset AWS_SESSION_TOKEN
+          cyborgdb-tests/tools/ci/sdk-conformance.sh
+
+      # Only the encrypted bundle (conformance-logs.tar.gz.enc) is in OUT_DIR.
+      - name: Upload encrypted logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: conformance-${{ matrix.variant }}-${{ matrix.shard }}
+          path: ${{ runner.temp }}/conformance-out
+          if-no-files-found: warn
+          retention-days: 30
+
+  # One per variant, after all its shards: decrypts their reports, merges them, and
+  # prints the variant's one summary line. No service, SDK or AWS needed.
+  merge:
+    name: conformance (${{ matrix.variant }})
+    needs: conformance
+    if: ${{ !cancelled() }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        variant: [json, binary]
+
+    steps:
+      - name: Checkout SDK code
+        uses: actions/checkout@v7
+
+      - name: cyborgdb-tests ref
+        id: tests-ref
+        run: echo "ref=$(tr -d '[:space:]' < .cyborgdb-tests-ref)" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout cyborgdb-tests
+        uses: actions/checkout@v7
+        with:
+          repository: cyborginc/cyborgdb-tests
+          ref: ${{ steps.tests-ref.outputs.ref }}
+          token: ${{ secrets.CYBORGDB_TESTS_TOKEN }}
+          path: cyborgdb-tests
+
+      # Only used when no prebuilt driver matches the checked-out suite commit.
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: cyborgdb-tests/go.mod
+          cache: false
+
+      - name: Load the log key from 1Password
+        id: run-secrets
+        uses: 1password/load-secrets-action@v5
+        with:
+          export-env: false
+        env:
+          OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_TOKEN }}
+          CONFORMANCE_LOG_KEY: "op://CyborgDB/CyborgDB Dev/CONFORMANCE_LOG_KEY"
+
+      - name: Download the shards' encrypted logs
+        uses: actions/download-artifact@v7
+        with:
+          pattern: conformance-${{ matrix.variant }}-*
+          path: ${{ runner.temp }}/shards
+
+      - name: Merge the shards
+        env:
+          VARIANTS: ${{ matrix.variant }}
+          IMPL: cyborgdb-go
+          MERGE_FROM: ${{ runner.temp }}/shards
+          OUT_DIR: ${{ runner.temp }}/conformance-out
+          GH_TOKEN: ${{ secrets.CYBORGDB_TESTS_TOKEN }}
+          CONFORMANCE_LOG_KEY: ${{ steps.run-secrets.outputs.CONFORMANCE_LOG_KEY }}
+        run: cyborgdb-tests/tools/ci/sdk-conformance.sh
+
+      - name: Upload the merged encrypted logs
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: conformance-${{ matrix.variant }}
+          path: ${{ runner.temp }}/conformance-out
+          if-no-files-found: warn
+          retention-days: 30
