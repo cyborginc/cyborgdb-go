@@ -157,8 +157,6 @@ jobs:
           VARIANTS: ${{ matrix.variant }}
           SHARD: ${{ matrix.shard }}/3
           IMPL: cyborgdb-go
-          # TEMP: first run writes the expected-failures draft into the encrypted logs.
-          DRAFT: 1
           OUT_DIR: ${{ runner.temp }}/conformance-out
           GH_TOKEN: ${{ secrets.CYBORGDB_TESTS_TOKEN }}
           CONFORMANCE_LOG_KEY: ${{ steps.run-secrets.outputs.CONFORMANCE_LOG_KEY }}
