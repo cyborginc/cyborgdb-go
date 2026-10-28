@@ -78,6 +78,8 @@ jobs:
       - name: Test and build the adapter
         working-directory: tests/conformance
         run: |
+          # The job can request an AWS token (id-token: write); install and build scripts don't need that ability.
+          unset ACTIONS_ID_TOKEN_REQUEST_TOKEN ACTIONS_ID_TOKEN_REQUEST_URL
           go test ./...
           go build -ldflags "-X main.sdkVersion=$(git rev-parse --short HEAD)" -o "$RUNNER_TEMP/adapter-go-sdk" .
 
