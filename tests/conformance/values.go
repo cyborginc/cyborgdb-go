@@ -22,7 +22,7 @@ func (p params) opt(k string) (json.RawMessage, bool) {
 func (p params) need(k string) json.RawMessage {
 	v, ok := p[k]
 	if !ok {
-		fail(codeBadParams, "missing %s", k)
+		failf(codeBadParams, "missing %s", k)
 	}
 	return v
 }
@@ -42,7 +42,7 @@ func tagged(v json.RawMessage, tag string) (json.RawMessage, bool) {
 func str(v json.RawMessage, what string) string {
 	var s string
 	if json.Unmarshal(v, &s) != nil {
-		fail(codeUnsupported, "%s must be a string to be expressible", what)
+		failf(codeUnsupported, "%s must be a string to be expressible", what)
 	}
 	return s
 }
@@ -50,7 +50,7 @@ func str(v json.RawMessage, what string) string {
 func flag(v json.RawMessage, what string) bool {
 	var b bool
 	if json.Unmarshal(v, &b) != nil {
-		fail(codeUnsupported, "%s must be a bool to be expressible", what)
+		failf(codeUnsupported, "%s must be a bool to be expressible", what)
 	}
 	return b
 }
@@ -59,7 +59,7 @@ func flag(v json.RawMessage, what string) bool {
 func count(v json.RawMessage, what string) int {
 	var n uint64
 	if json.Unmarshal(v, &n) != nil || n > math.MaxInt {
-		fail(codeUnsupported, "%s must be a non-negative integer to be expressible", what)
+		failf(codeUnsupported, "%s must be a non-negative integer to be expressible", what)
 	}
 	return int(n)
 }
@@ -72,11 +72,11 @@ func intOf(v json.RawMessage, what string) int64 {
 	if x, ok := tagged(v, "$i64"); ok {
 		n, err := strconv.ParseInt(str(x, "$i64"), 10, 64)
 		if err != nil {
-			fail(codeBadParams, "invalid $i64 for %s", what)
+			failf(codeBadParams, "invalid $i64 for %s", what)
 		}
 		return n
 	}
-	fail(codeUnsupported, "%s must be an integer to be expressible", what)
+	failf(codeUnsupported, "%s must be an integer to be expressible", what)
 	return 0
 }
 
@@ -84,7 +84,7 @@ func intOf(v json.RawMessage, what string) int64 {
 func int32Of(v json.RawMessage, what string) int32 {
 	n := intOf(v, what)
 	if n < math.MinInt32 || n > math.MaxInt32 {
-		fail(codeUnsupported, "%s %d doesn't fit the SDK's int32", what, n)
+		failf(codeUnsupported, "%s %d doesn't fit the SDK's int32", what, n)
 	}
 	return int32(n)
 }
@@ -105,20 +105,20 @@ func num(v json.RawMessage, what string) float64 {
 		case "-inf":
 			return math.Inf(-1)
 		}
-		fail(codeBadParams, "invalid $float for %s", what)
+		failf(codeBadParams, "invalid $float for %s", what)
 	}
-	fail(codeUnsupported, "%s must be a number to be expressible", what)
+	failf(codeUnsupported, "%s must be a number to be expressible", what)
 	return 0
 }
 
 func bytesOf(v json.RawMessage, what string) []byte {
 	x, ok := tagged(v, "$bytes")
 	if !ok {
-		fail(codeBadParams, "%s: expected $bytes", what)
+		failf(codeBadParams, "%s: expected $bytes", what)
 	}
 	b, err := base64.StdEncoding.DecodeString(str(x, "$bytes"))
 	if err != nil {
-		fail(codeBadParams, "invalid base64 in $bytes")
+		failf(codeBadParams, "invalid base64 in $bytes")
 	}
 	return b
 }
@@ -128,7 +128,7 @@ func stringsOf(v json.RawMessage, what string) []string {
 	if r, ok := tagged(v, "$range"); ok {
 		var bounds []json.RawMessage
 		if json.Unmarshal(r, &bounds) != nil || len(bounds) != 2 {
-			fail(codeBadParams, "$range must be [lo, hi]")
+			failf(codeBadParams, "$range must be [lo, hi]")
 		}
 		lo, hi := intOf(bounds[0], "$range"), intOf(bounds[1], "$range")
 		out := []string{}
@@ -139,7 +139,7 @@ func stringsOf(v json.RawMessage, what string) []string {
 	}
 	var items []json.RawMessage
 	if json.Unmarshal(v, &items) != nil {
-		fail(codeUnsupported, "%s must be a list of strings", what)
+		failf(codeUnsupported, "%s must be a list of strings", what)
 	}
 	out := make([]string, len(items))
 	for i, e := range items {
@@ -152,7 +152,7 @@ func stringsOf(v json.RawMessage, what string) []string {
 func floats(v json.RawMessage, what string) []float32 {
 	var items []json.RawMessage
 	if json.Unmarshal(v, &items) != nil {
-		fail(codeUnsupported, "%s must be a list of numbers", what)
+		failf(codeUnsupported, "%s must be a list of numbers", what)
 	}
 	out := make([]float32, len(items))
 	for i, e := range items {
@@ -161,6 +161,9 @@ func floats(v json.RawMessage, what string) []float32 {
 	return out
 }
 
+// matrixRank is a $tensor shape's length when it holds rows.
+const matrixRank = 2
+
 // vectorsOf decodes a $f32 vector or rows, or a $tensor file reference. nested reports whether
 // the spec sent rows (a list of vectors, or a 2-D tensor): the SDK has a separate field for each.
 // Rows of different lengths stay as sent; the SDK's [][]float32 can carry them.
@@ -168,7 +171,7 @@ func vectorsOf(v json.RawMessage) (rows [][]float32, nested bool) {
 	if x, ok := tagged(v, "$f32"); ok {
 		var items []json.RawMessage
 		if json.Unmarshal(x, &items) != nil {
-			fail(codeBadParams, "$f32 must be a list")
+			failf(codeBadParams, "$f32 must be a list")
 		}
 		if len(items) > 0 && bytes.HasPrefix(bytes.TrimSpace(items[0]), []byte("[")) {
 			rows = make([][]float32, len(items))
@@ -186,24 +189,24 @@ func vectorsOf(v json.RawMessage) (rows [][]float32, nested bool) {
 			Shape  []json.RawMessage `json:"shape"`
 			Offset uint64            `json:"offset"`
 		}
-		if json.Unmarshal(x, &t) != nil || len(t.Shape) == 0 || len(t.Shape) > 2 {
-			fail(codeBadParams, "malformed $tensor")
+		if json.Unmarshal(x, &t) != nil || len(t.Shape) == 0 || len(t.Shape) > matrixRank {
+			failf(codeBadParams, "malformed $tensor")
 		}
 		if t.Dtype != "f32" {
-			fail(codeUnsupported, "the adapter reads f32 tensors only")
+			failf(codeUnsupported, "the adapter reads f32 tensors only")
 		}
 		n, cols := 1, count(t.Shape[len(t.Shape)-1], "shape")
-		if len(t.Shape) == 2 {
+		if len(t.Shape) == matrixRank {
 			n = count(t.Shape[0], "shape")
 		}
 		f, err := os.Open(t.Path)
 		if err != nil {
-			fail(codeBadParams, "cannot open tensor file")
+			failf(codeBadParams, "cannot open tensor file")
 		}
 		defer f.Close()
 		raw := make([]byte, 4*n*cols)
 		if _, err := f.ReadAt(raw, int64(t.Offset)); err != nil {
-			fail(codeBadParams, "short tensor file")
+			failf(codeBadParams, "short tensor file")
 		}
 		rows = make([][]float32, n)
 		for r := range rows {
@@ -212,9 +215,9 @@ func vectorsOf(v json.RawMessage) (rows [][]float32, nested bool) {
 				rows[r][c] = math.Float32frombits(binary.LittleEndian.Uint32(raw[4*(r*cols+c):]))
 			}
 		}
-		return rows, len(t.Shape) == 2
+		return rows, len(t.Shape) == matrixRank
 	}
-	fail(codeUnsupported, "vectors must be $f32 or $tensor")
+	failf(codeUnsupported, "vectors must be $f32 or $tensor")
 	return nil, false
 }
 
@@ -222,7 +225,7 @@ func vectorsOf(v json.RawMessage) (rows [][]float32, nested bool) {
 func vectorOf(v json.RawMessage) []float32 {
 	rows, nested := vectorsOf(v)
 	if nested {
-		fail(codeUnsupported, "an item's vector must be one vector, not rows")
+		failf(codeUnsupported, "an item's vector must be one vector, not rows")
 	}
 	return rows[0]
 }
@@ -235,7 +238,7 @@ func document(v json.RawMessage) any {
 	dec.UseNumber()
 	var raw any
 	if dec.Decode(&raw) != nil {
-		fail(codeBadParams, "malformed JSON document")
+		failf(codeBadParams, "malformed JSON document")
 	}
 	return plain(raw)
 }
@@ -254,25 +257,31 @@ func plain(v any) any {
 				case "$literal":
 					b, err := json.Marshal(x)
 					if err != nil {
-						fail(codeAdapter, "re-encode $literal: %v", err)
+						failf(codeAdapter, "re-encode $literal: %v", err)
 					}
 					return json.RawMessage(b)
 				case "$datetime":
-					s, _ := x.(string)
+					s, ok := x.(string)
+					if !ok {
+						failf(codeBadParams, "$datetime must be a string")
+					}
 					at, err := time.Parse(time.RFC3339Nano, s)
 					if err != nil {
-						fail(codeBadParams, "$datetime must be RFC 3339")
+						failf(codeBadParams, "$datetime must be RFC 3339")
 					}
 					return at
 				case "$i64":
-					s, _ := x.(string)
+					s, ok := x.(string)
+					if !ok {
+						failf(codeBadParams, "$i64 must be a string")
+					}
 					n, err := strconv.ParseInt(s, 10, 64)
 					if err != nil {
-						fail(codeBadParams, "invalid $i64")
+						failf(codeBadParams, "invalid $i64")
 					}
 					return n
 				case "$bytes", "$f32", "$float", "$tensor":
-					fail(codeUnsupported, "typed value not expressible inside a JSON document")
+					failf(codeUnsupported, "typed value not expressible inside a JSON document")
 				}
 			}
 		}

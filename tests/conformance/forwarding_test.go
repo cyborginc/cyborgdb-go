@@ -57,13 +57,13 @@ func (c fakeClient) CreateIndex(_ context.Context, p *cyborgdb.CreateIndexParams
 	if err := c.f.record("CreateIndex", *p); err != nil {
 		return nil, err
 	}
-	return fakeIndex{c.f}, nil
+	return fakeIndex(c), nil
 }
 func (c fakeClient) LoadIndex(_ context.Context, name string, key []byte) (index, error) {
 	if err := c.f.record("LoadIndex", name, key); err != nil {
 		return nil, err
 	}
-	return fakeIndex{c.f}, nil
+	return fakeIndex(c), nil
 }
 func (c fakeClient) GetHealth(context.Context) (map[string]string, error) {
 	return map[string]string{}, c.f.record("GetHealth")
@@ -130,6 +130,8 @@ func (e kindError) Retryable() bool                    { return false }
 func (e kindError) Kind() string                       { return e.kind }
 func (e kindError) FieldErrors() []cyborgdb.FieldError { return nil }
 func (e kindError) Unwrap() error                      { return nil }
+
+var errUntyped = errors.New("untyped")
 
 // Harness
 
@@ -374,7 +376,7 @@ func TestNativeErrorsKeepTheirKind(t *testing.T) {
 	if err == nil || err.Code != codeOpFailed || err.Data.Kind != "wrong_key" || err.Data.Native != "main.kindError 401" {
 		t.Errorf("typed: got %+v", err)
 	}
-	f.fail["Delete"] = errors.New("untyped")
+	f.fail["Delete"] = errUntyped
 	_, err = call1(t, h, "index.delete", `{"index":"i0","ids":["a"]}`)
 	if err == nil || err.Code != codeOpFailed || err.Data.Kind != "internal" {
 		t.Errorf("untyped: got %+v", err)

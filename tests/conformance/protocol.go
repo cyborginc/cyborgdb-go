@@ -33,10 +33,24 @@ type errData struct {
 
 func (e *rpcError) Error() string { return e.Message }
 
-// fail aborts the current op; dispatch turns the panic back into the response's error.
-func fail(code int, format string, args ...any) {
+// failf aborts the current op; dispatch turns the panic back into the response's error.
+func failf(code int, format string, args ...any) {
 	panic(&rpcError{Code: code, Message: fmt.Sprintf(format, args...)})
 }
+
+// The driver's pipes: requests in on fd 3, responses out on fd 4.
+const (
+	fdRequests  = 3
+	fdResponses = 4
+)
+
+// A request line starts in a 1 MiB buffer and may grow to 64 MiB; bulk data travels as $tensor files.
+const (
+	lineBuffer  = 1 << 20
+	maxLineSize = 64 << 20
+)
+
+var errNoDriver = errors.New("fd 3/4 not open; run under the cyborgdb-tests driver")
 
 type request struct {
 	JSONRPC string          `json:"jsonrpc"`
@@ -54,9 +68,9 @@ type response struct {
 
 // serveFDs reads requests from fd 3 and writes responses to fd 4, one per line, until fd 3 closes.
 func serveFDs(h *handler) error {
-	in, out := os.NewFile(3, "protocol-in"), os.NewFile(4, "protocol-out")
+	in, out := os.NewFile(fdRequests, "protocol-in"), os.NewFile(fdResponses, "protocol-out")
 	if in == nil || out == nil {
-		return errors.New("fd 3/4 not open; run under the cyborgdb-tests driver")
+		return errNoDriver
 	}
 	defer out.Close()
 	return serve(in, out, h)
@@ -64,7 +78,7 @@ func serveFDs(h *handler) error {
 
 func serve(r io.Reader, w io.Writer, h *handler) error {
 	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 1<<20), 64<<20) // bulk data travels as $tensor files
+	sc.Buffer(make([]byte, 0, lineBuffer), maxLineSize)
 	for sc.Scan() {
 		line := bytes.TrimSpace(sc.Bytes())
 		if len(line) == 0 {
@@ -72,8 +86,11 @@ func serve(r io.Reader, w io.Writer, h *handler) error {
 		}
 		b, err := json.Marshal(h.respond(line))
 		if err != nil {
-			b, _ = json.Marshal(response{JSONRPC: "2.0", ID: json.RawMessage("null"),
+			b, err = json.Marshal(response{JSONRPC: "2.0", ID: json.RawMessage("null"),
 				Error: &rpcError{Code: codeAdapter, Message: "encode response: " + err.Error()}})
+			if err != nil {
+				return fmt.Errorf("encode error response: %w", err)
+			}
 		}
 		if _, err := w.Write(append(b, '\n')); err != nil {
 			return err

@@ -19,12 +19,18 @@ import (
 // sdkVersion is the SDK commit, set at build time (-ldflags "-X main.sdkVersion=...").
 var sdkVersion = "dev"
 
+// The SDK paths the adapter can take, chosen by CYBORGDB_TESTS_VARIANT.
+const (
+	variantJSON   = "json"
+	variantBinary = "binary"
+)
+
 func main() {
 	variant := os.Getenv("CYBORGDB_TESTS_VARIANT")
 	if variant == "" {
-		variant = "json"
+		variant = variantJSON
 	}
-	if variant != "json" && variant != "binary" {
+	if variant != variantJSON && variant != variantBinary {
 		fmt.Fprintf(os.Stderr, "adapter: CYBORGDB_TESTS_VARIANT=%s, want json or binary\n", variant)
 		os.Exit(1)
 	}

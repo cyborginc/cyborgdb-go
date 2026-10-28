@@ -51,7 +51,7 @@ func (h *handler) clientOf(p params) client {
 	name := str(p.need("client"), "client")
 	c, ok := h.clients[name]
 	if !ok {
-		fail(codeBadParams, "unknown client handle %s", name)
+		failf(codeBadParams, "unknown client handle %s", name)
 	}
 	return c
 }
@@ -63,7 +63,7 @@ func (h *handler) indexOf(p params, overrides ...string) index {
 	name := str(p.need("index"), "index")
 	ix, ok := h.indexes[name]
 	if !ok {
-		fail(codeBadParams, "unknown index handle %s", name)
+		failf(codeBadParams, "unknown index handle %s", name)
 	}
 	return ix
 }
@@ -72,7 +72,7 @@ func (h *handler) indexOf(p params, overrides ...string) index {
 func reject(p params, names ...string) {
 	for _, n := range names {
 		if _, ok := p.opt(n); ok {
-			fail(codeUnsupported, "the Go SDK can't express %s", n)
+			failf(codeUnsupported, "the Go SDK can't express %s", n)
 		}
 	}
 }
@@ -110,7 +110,7 @@ func (h *handler) hello() any {
 		"training", "storage_precision", "rbac", "embedding", "health", "training_status", "service_auth",
 		// The data lives in the service, so it outlives an adapter restart.
 		"durable_storage"}
-	if h.variant == "json" {
+	if h.variant == variantJSON {
 		caps = append(caps, "ragged_batches") // JSON items carry each vector on its own
 	} else {
 		caps = append(caps, "parallel_metadata") // BinaryUpsertParams takes the metadata list as sent
@@ -167,7 +167,7 @@ func (h *handler) trainingStatus(p params) any {
 func schemaOf(v json.RawMessage) map[string]cyborgdb.MetadataFieldPolicy {
 	var fields map[string]params
 	if json.Unmarshal(v, &fields) != nil || fields == nil {
-		fail(codeUnsupported, "metadata_schema must be an object of objects")
+		failf(codeUnsupported, "metadata_schema must be an object of objects")
 	}
 	schema := make(map[string]cyborgdb.MetadataFieldPolicy, len(fields))
 	for name, policy := range fields {
@@ -182,7 +182,7 @@ func schemaOf(v json.RawMessage) map[string]cyborgdb.MetadataFieldPolicy {
 			case "full_text":
 				fp.FullText = &b
 			default:
-				fail(codeUnsupported, "MetadataFieldPolicy has no %s", k)
+				failf(codeUnsupported, "MetadataFieldPolicy has no %s", k)
 			}
 		}
 		schema[name] = fp
@@ -252,11 +252,11 @@ func (h *handler) describe(p params) any {
 	native(err)
 	b, err := json.Marshal(d)
 	if err != nil {
-		fail(codeAdapter, "encode IndexDescription: %v", err)
+		failf(codeAdapter, "encode IndexDescription: %v", err)
 	}
 	var out map[string]json.RawMessage
 	if err := json.Unmarshal(b, &out); err != nil {
-		fail(codeAdapter, "decode IndexDescription: %v", err)
+		failf(codeAdapter, "decode IndexDescription: %v", err)
 	}
 	out["name"] = out["index_name"] // the contract calls it `name`
 	delete(out, "index_name")
@@ -278,7 +278,7 @@ func (h *handler) deleteIndex(p params) any {
 func metadataOf(v json.RawMessage) map[string]any {
 	m, ok := document(v).(map[string]any)
 	if !ok {
-		fail(codeUnsupported, "the SDK takes metadata as an object")
+		failf(codeUnsupported, "the SDK takes metadata as an object")
 	}
 	return m
 }
@@ -287,9 +287,9 @@ func (h *handler) upsert(p params) any {
 	ix := h.indexOf(p, "key", "user_id")
 	var input cyborgdb.UpsertInput
 	switch _, items := p.opt("items"); {
-	case h.variant == "binary" && items:
+	case h.variant == variantBinary && items:
 		input = binaryColumns(itemsOf(p.need("items")))
-	case h.variant == "binary":
+	case h.variant == variantBinary:
 		input = binaryParallel(p)
 	case items:
 		input = jsonItems(itemsOf(p.need("items")))
@@ -303,7 +303,7 @@ func (h *handler) upsert(p params) any {
 func itemsOf(v json.RawMessage) []params {
 	var items []params
 	if json.Unmarshal(v, &items) != nil {
-		fail(codeUnsupported, "items must be a list of objects")
+		failf(codeUnsupported, "items must be a list of objects")
 	}
 	return items
 }
@@ -337,12 +337,12 @@ func jsonItems(items []params) cyborgdb.VectorItems {
 					out[i].Metadata = metadataOf(x)
 				}
 			default:
-				fail(codeUnsupported, "VectorItem has no %s", k)
+				failf(codeUnsupported, "VectorItem has no %s", k)
 			}
 		}
 		// VectorItem always sends its id, so an item without one can't be expressed.
 		if _, ok := it.opt("id"); !ok {
-			fail(codeUnsupported, "a VectorItem always carries an id")
+			failf(codeUnsupported, "a VectorItem always carries an id")
 		}
 	}
 	return out
@@ -355,15 +355,15 @@ func jsonFromParallel(p params) cyborgdb.VectorItems {
 	ids := stringsOf(p.need("ids"), "ids")
 	rows, _ := vectorsOf(p.need("vectors"))
 	if len(rows) != len(ids) {
-		fail(codeUnsupported, "%d ids and %d vectors can't be paired into items", len(ids), len(rows))
+		failf(codeUnsupported, "%d ids and %d vectors can't be paired into items", len(ids), len(rows))
 	}
 	var metadata []json.RawMessage
 	if v, ok := p.opt("metadata"); ok {
 		if json.Unmarshal(v, &metadata) != nil {
-			fail(codeUnsupported, "metadata must be a list")
+			failf(codeUnsupported, "metadata must be a list")
 		}
 		if len(metadata) != len(ids) {
-			fail(codeUnsupported, "%d ids and %d metadata entries can't be paired into items", len(ids), len(metadata))
+			failf(codeUnsupported, "%d ids and %d metadata entries can't be paired into items", len(ids), len(metadata))
 		}
 	}
 	out := make(cyborgdb.VectorItems, len(ids))
@@ -383,7 +383,7 @@ func binaryParallel(p params) cyborgdb.BinaryUpsertParams {
 	if v, ok := p.opt("metadata"); ok {
 		var entries []json.RawMessage
 		if json.Unmarshal(v, &entries) != nil {
-			fail(codeUnsupported, "metadata must be a list")
+			failf(codeUnsupported, "metadata must be a list")
 		}
 		b.Metadata = make([]map[string]any, len(entries))
 		for i, e := range entries {
@@ -408,13 +408,13 @@ func binaryColumns(items []params) cyborgdb.BinaryUpsertParams {
 	for _, it := range items {
 		for k := range it {
 			if k != "id" && k != "vector" && k != "contents" && k != "metadata" {
-				fail(codeUnsupported, "the binary upsert can't carry %s", k)
+				failf(codeUnsupported, "the binary upsert can't carry %s", k)
 			}
 		}
 		id, okID := it.opt("id")
 		vec, okVec := it.opt("vector")
 		if !okID || !okVec || isNull(vec) {
-			fail(codeUnsupported, "the binary upsert needs an id and a vector for every item")
+			failf(codeUnsupported, "the binary upsert needs an id and a vector for every item")
 		}
 		b.IDs = append(b.IDs, str(id, "id"))
 		b.Vectors = append(b.Vectors, vectorOf(vec))
@@ -429,10 +429,10 @@ func binaryColumns(items []params) cyborgdb.BinaryUpsertParams {
 			s := ""
 			if x, ok := it.opt("contents"); ok && !isNull(x) {
 				if json.Unmarshal(x, &s) != nil {
-					fail(codeUnsupported, "the binary upsert takes contents as strings, not bytes")
+					failf(codeUnsupported, "the binary upsert takes contents as strings, not bytes")
 				}
 				if s == "" {
-					fail(codeUnsupported, "the binary upsert can't tell empty contents from none")
+					failf(codeUnsupported, "the binary upsert can't tell empty contents from none")
 				}
 			}
 			b.Contents = append(b.Contents, s)
@@ -502,7 +502,7 @@ func (h *handler) train(p params) any {
 func filterOf(v json.RawMessage) map[string]any {
 	m, ok := document(v).(map[string]any)
 	if !ok {
-		fail(codeUnsupported, "the SDK takes filters as an object")
+		failf(codeUnsupported, "the SDK takes filters as an object")
 	}
 	return m
 }
@@ -562,11 +562,11 @@ func (h *handler) query(p params) any {
 	ix := h.indexOf(p, "key", "user_id")
 	q := knobsOf(p)
 	var input cyborgdb.QueryInput
-	if h.variant == "binary" {
+	if h.variant == variantBinary {
 		reject(p, "contents")
 		v, ok := p.opt("vectors")
 		if !ok {
-			fail(codeUnsupported, "the binary query needs vectors")
+			failf(codeUnsupported, "the binary query needs vectors")
 		}
 		rows, _ := vectorsOf(v)
 		input = cyborgdb.BinaryQueryParams{
@@ -593,7 +593,7 @@ func (h *handler) query(p params) any {
 		if v, ok := p.opt("contents"); ok {
 			var s string
 			if json.Unmarshal(v, &s) != nil {
-				fail(codeUnsupported, "QueryContents takes one string")
+				failf(codeUnsupported, "QueryContents takes one string")
 			}
 			qp.QueryContents = &s
 		}
@@ -609,7 +609,7 @@ func (h *handler) query(p params) any {
 	case r.ArrayOfQueryResultItem != nil:
 		rows = [][]cyborgdb.QueryResultItem{*r.ArrayOfQueryResultItem}
 	default:
-		fail(codeAdapter, "query response has no results")
+		failf(codeAdapter, "query response has no results")
 	}
 	out := make([][]map[string]any, len(rows))
 	for r, hits := range rows {
@@ -656,7 +656,7 @@ func (h *handler) queryMetadata(p params) any {
 	if v, ok := p.opt("order_by"); ok {
 		var field string
 		if json.Unmarshal(v, &field) != nil {
-			fail(codeUnsupported, "QueryMetadataParams.OrderBy takes a field name; the {field: 1|-1} form isn't expressible")
+			failf(codeUnsupported, "QueryMetadataParams.OrderBy takes a field name; the {field: 1|-1} form isn't expressible")
 		}
 		o.OrderBy = field
 	}
