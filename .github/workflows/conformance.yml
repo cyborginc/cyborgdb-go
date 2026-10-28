@@ -38,6 +38,8 @@ jobs:
     steps:
       - name: Checkout SDK code
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: cyborgdb-tests ref
         id: tests-ref
@@ -50,6 +52,7 @@ jobs:
           ref: ${{ steps.tests-ref.outputs.ref }}
           token: ${{ secrets.CYBORGDB_TESTS_TOKEN }}
           path: cyborgdb-tests
+          persist-credentials: false
 
       # Builds the adapter, and the driver when no prebuilt one matches the checked-out
       # suite commit. No caches here or for the datasets: this repo's Actions caches are
@@ -65,16 +68,24 @@ jobs:
         with:
           python-version: '3.13'
 
+      # The adapter is its own module and builds against this checkout of the SDK. Built
+      # before any secret or AWS credential is loaded, so module downloads see none.
+      - name: Test and build the adapter
+        working-directory: tests/conformance
+        run: |
+          go test ./...
+          go build -ldflags "-X main.sdkVersion=$(git rev-parse --short HEAD)" -o "$RUNNER_TEMP/adapter-go-sdk" .
+
       - name: Load secrets from 1Password
         uses: 1password/load-secrets-action@v5
         with:
           export-env: true
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_TOKEN }}
-          CYBORGDB_API_KEY: "op://CyborgDB/CyborgDB Dev/CYBORGDB_API_KEY"
           CA_AWS_ACCOUNT_ID: "op://CyborgDB/CyborgDB Dev/CA_AWS_ACCOUNT_ID"
 
-      # Not exported: the log key and the BYOK credentials reach only the run step.
+      # Not exported: the license key, the log key and the BYOK credentials reach
+      # only the run step.
       - name: Load run secrets from 1Password
         id: run-secrets
         uses: 1password/load-secrets-action@v5
@@ -82,6 +93,7 @@ jobs:
           export-env: false
         env:
           OP_SERVICE_ACCOUNT_TOKEN: ${{ secrets.OP_TOKEN }}
+          CYBORGDB_API_KEY: "op://CyborgDB/CyborgDB Dev/CYBORGDB_API_KEY"
           CONFORMANCE_LOG_KEY: "op://CyborgDB/CyborgDB Dev/CONFORMANCE_LOG_KEY"
           BYOK_AWS_ACCESS_KEY_ID: "op://CyborgDB/CyborgDB Dev/BYOK_AWS_ACCESS_KEY_ID"
           BYOK_AWS_SECRET_ACCESS_KEY: "op://CyborgDB/CyborgDB Dev/BYOK_AWS_SECRET_ACCESS_KEY"
@@ -95,9 +107,6 @@ jobs:
           aws-account-id: ${{ env.CA_AWS_ACCOUNT_ID }}
           role-to-assume: arn:aws:iam::${{ env.CA_AWS_ACCOUNT_ID }}:role/CyborgGitHubActionsS3Role
           codeartifact-repository: cyborg-dev
-
-      - name: Export PIP_INDEX_URL
-        run: echo "PIP_INDEX_URL=${{ steps.ca-url.outputs.pip-index-url }}" >> "$GITHUB_ENV"
 
       # Same registry as test.yml's "Write KMS registry config"; every sensitive
       # value is a ${VAR} placeholder the service expands at startup.
@@ -123,17 +132,13 @@ jobs:
                 role_session_name: cyborgdb-kms-self-test
           YAML
 
+      # PIP_INDEX_URL embeds a CodeArtifact token, so only this step gets it.
       - name: Install the service
+        env:
+          PIP_INDEX_URL: ${{ steps.ca-url.outputs.pip-index-url }}
         run: |
           pip install torch --index-url https://download.pytorch.org/whl/cpu
           pip install "cyborgdb-service[embeddings,kms-aws]" --pre
-
-      # The adapter is its own module and builds against this checkout of the SDK.
-      - name: Test and build the adapter
-        working-directory: tests/conformance
-        run: |
-          go test ./...
-          go build -ldflags "-X main.sdkVersion=$(git rev-parse --short HEAD)" -o "$RUNNER_TEMP/adapter-go-sdk" .
 
       # The runner starts and stops the service itself (--service); the service inherits
       # this step's env, so the KMS registry and BYOK credentials reach it.
@@ -141,18 +146,21 @@ jobs:
       # spaces): the adapter and the SDK under test get none, since the runner hands
       # them the service URL and key as params; the service keeps the license key and
       # BYOK credentials, and the runner sets its root key itself. Nothing but the
-      # script needs the log key, GH_TOKEN, or PIP_INDEX_URL (it embeds a CodeArtifact
-      # token).
+      # script needs the log key or GH_TOKEN. Neither child gets the OIDC request
+      # variables, which could mint a token for the job's AWS role.
       - name: Run the suite
         env:
           ADAPTER: >-
             env -u CONFORMANCE_LOG_KEY -u GH_TOKEN -u CYBORGDB_TESTS_SERVICE_API_KEY
-            -u CYBORGDB_API_KEY -u PIP_INDEX_URL -u AWS_ACCESS_KEY_ID
+            -u CYBORGDB_API_KEY -u AWS_ACCESS_KEY_ID
             -u AWS_SECRET_ACCESS_KEY -u CYBORGDB_BYOK_ROLE_ARN -u CYBORGDB_BYOK_EXTERNAL_ID
+            -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL
+            -u ACTIONS_RUNTIME_TOKEN
             ${{ runner.temp }}/adapter-go-sdk
           SERVICE: >-
             env -u CONFORMANCE_LOG_KEY -u GH_TOKEN -u CYBORGDB_TESTS_SERVICE_API_KEY
-            -u PIP_INDEX_URL
+            -u ACTIONS_ID_TOKEN_REQUEST_TOKEN -u ACTIONS_ID_TOKEN_REQUEST_URL
+            -u ACTIONS_RUNTIME_TOKEN
             cyborgdb-service
           VARIANTS: ${{ matrix.variant }}
           SHARD: ${{ matrix.shard }}/3
@@ -160,7 +168,8 @@ jobs:
           OUT_DIR: ${{ runner.temp }}/conformance-out
           GH_TOKEN: ${{ secrets.CYBORGDB_TESTS_TOKEN }}
           CONFORMANCE_LOG_KEY: ${{ steps.run-secrets.outputs.CONFORMANCE_LOG_KEY }}
-          CYBORGDB_TESTS_SERVICE_API_KEY: ${{ env.CYBORGDB_API_KEY }}
+          CYBORGDB_API_KEY: ${{ steps.run-secrets.outputs.CYBORGDB_API_KEY }}
+          CYBORGDB_TESTS_SERVICE_API_KEY: ${{ steps.run-secrets.outputs.CYBORGDB_API_KEY }}
           CYBORGDB_KMS_NAME_REAL: aws-kms-self-test
           CYBORGDB_KMS_NAME_SM: aws-secrets-self-test
           CYBORGDB_CONFIG_FILE: ${{ runner.temp }}/cyborgdb.yaml
@@ -202,6 +211,8 @@ jobs:
     steps:
       - name: Checkout SDK code
         uses: actions/checkout@v7
+        with:
+          persist-credentials: false
 
       - name: cyborgdb-tests ref
         id: tests-ref
@@ -214,6 +225,7 @@ jobs:
           ref: ${{ steps.tests-ref.outputs.ref }}
           token: ${{ secrets.CYBORGDB_TESTS_TOKEN }}
           path: cyborgdb-tests
+          persist-credentials: false
 
       # Only used when no prebuilt driver matches the checked-out suite commit.
       - name: Set up Go
