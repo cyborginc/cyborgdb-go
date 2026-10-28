@@ -4,8 +4,9 @@ permissions:
 
 # Runs the shared CyborgDB test suite against the SDK, once per SDK code path
 # (json, binary), through tests/conformance (the adapter): on pull requests, nightly and on demand.
-# Not a required check. A pull request from a fork gets no secrets, so it skips
-# the suite rather than fail.
+# Not a required check. Pull requests from a fork, and runs Dependabot
+# starts, get no secrets, so they skip the suite rather than fail; a pull request
+# that only changes Markdown or docs/ doesn't run it.
 #
 # This repo's logs are public and the suite is internal, so the log shows only
 # pass/fail counts and everything else is uploaded encrypted. Don't add steps
@@ -15,6 +16,10 @@ on:
     - cron: '0 7 * * *'
   workflow_dispatch:
   pull_request:
+    # A pull request that only changes Markdown or docs/ doesn't need the suite.
+    paths-ignore:
+      - '**/*.md'
+      - 'docs/**'
 
 concurrency:
   group: conformance-${{ github.ref }}
@@ -22,7 +27,7 @@ concurrency:
 
 jobs:
   conformance:
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    if: github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')
     name: conformance (${{ matrix.variant }} ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
     timeout-minutes: 150
@@ -198,7 +203,7 @@ jobs:
   merge:
     name: conformance (${{ matrix.variant }})
     needs: conformance
-    if: ${{ !cancelled() && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) }}
+    if: ${{ !cancelled() && (github.event_name != 'pull_request' || (github.event.pull_request.head.repo.full_name == github.repository && github.actor != 'dependabot[bot]')) }}
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
