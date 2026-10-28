@@ -83,10 +83,11 @@ func intOf(v json.RawMessage, what string) int64 {
 // int32Of is any integer an int32 holds; negative ones too, so the SDK's handling of them is under test.
 func int32Of(v json.RawMessage, what string) int32 {
 	n := intOf(v, what)
-	if n < math.MinInt32 || n > math.MaxInt32 {
-		failf(codeUnsupported, "%s %d doesn't fit the SDK's int32", what, n)
+	if n >= math.MinInt32 && n <= math.MaxInt32 {
+		return int32(n)
 	}
-	return int32(n)
+	failf(codeUnsupported, "%s %d doesn't fit the SDK's int32", what, n)
+	return 0
 }
 
 func ptr[T any](v T) *T { return &v }
