@@ -13,9 +13,6 @@ on:
   schedule:
     - cron: '0 7 * * *'
   workflow_dispatch:
-  # TEMP: run on pushes to this branch until the workflow is on main.
-  push:
-    branches: [go-adapter]
 
 concurrency:
   group: conformance-${{ github.ref }}
