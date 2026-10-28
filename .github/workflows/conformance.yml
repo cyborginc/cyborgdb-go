@@ -267,24 +267,3 @@ jobs:
           path: ${{ runner.temp }}/conformance-out
           if-no-files-found: warn
           retention-days: 30
-  # Says where to read this run's logs: cyborgdb-tests' Read conformance logs workflow decrypts them there, in the
-  # internal repo, given this run's link. Only cyborginc members can open it.
-  logs-link:
-    name: where to read the logs
-    needs: merge
-    if: ${{ !cancelled() }}
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    permissions: {}
-    steps:
-      - name: Link to the decrypted logs
-        env:
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        run: |
-          {
-            echo "### Reading this run's logs"
-            echo ""
-            echo "This repo is public, so the logs are encrypted. To see the failed cases and the decrypted logs, open"
-            echo "[Read conformance logs](https://github.com/cyborginc/cyborgdb-tests/actions/workflows/read-conformance-logs.yml) (cyborginc members only),"
-            echo "click **Run workflow**, and paste this run's link: ${RUN_URL}"
-          } >> "$GITHUB_STEP_SUMMARY"
