@@ -165,6 +165,9 @@ func floats(v json.RawMessage, what string) []float32 {
 // matrixRank is a $tensor shape's length when it holds rows.
 const matrixRank = 2
 
+// f32Size is the bytes per value in an f32 $tensor file (little-endian IEEE 754).
+const f32Size = 4
+
 // vectorsOf decodes a $f32 vector or rows, or a $tensor file reference. nested reports whether
 // the spec sent rows (a list of vectors, or a 2-D tensor): the SDK has a separate field for each.
 // Rows of different lengths stay as sent; the SDK's [][]float32 can carry them.
@@ -205,15 +208,29 @@ func vectorsOf(v json.RawMessage) (rows [][]float32, nested bool) {
 			failf(codeBadParams, "cannot open tensor file")
 		}
 		defer f.Close()
-		raw := make([]byte, 4*n*cols)
-		if _, err := f.ReadAt(raw, int64(t.Offset)); err != nil {
+		info, err := f.Stat()
+		if err != nil {
+			failf(codeBadParams, "cannot stat tensor file")
+		}
+		// The tensor must fit in its file before anything is allocated: a wrong or huge shape is a bad request, not a
+		// crash. Checked without overflowing: the byte count, then the offset, then what's left after it.
+		size := uint64(info.Size())
+		if cols > 0 && n > math.MaxInt/f32Size/cols {
+			failf(codeBadParams, "$tensor shape %d x %d is too large", n, cols)
+		}
+		need := uint64(f32Size * n * cols)
+		if t.Offset > size || need > size-t.Offset {
+			failf(codeBadParams, "$tensor of %d x %d float32 at offset %d doesn't fit its %d-byte file", n, cols, t.Offset, size)
+		}
+		raw := make([]byte, need)
+		if _, err := f.ReadAt(raw, int64(t.Offset)); err != nil && need > 0 {
 			failf(codeBadParams, "short tensor file")
 		}
 		rows = make([][]float32, n)
 		for r := range rows {
 			rows[r] = make([]float32, cols)
 			for c := range rows[r] {
-				rows[r][c] = math.Float32frombits(binary.LittleEndian.Uint32(raw[4*(r*cols+c):]))
+				rows[r][c] = math.Float32frombits(binary.LittleEndian.Uint32(raw[f32Size*(r*cols+c):]))
 			}
 		}
 		return rows, len(t.Shape) == matrixRank

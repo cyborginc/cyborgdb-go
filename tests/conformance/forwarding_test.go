@@ -2,8 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/binary"
 	"encoding/json"
 	"errors"
+	"math"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -437,4 +441,73 @@ func TestHelloCapabilitiesFollowTheVariant(t *testing.T) {
 	j, b := caps("json", nil), caps("binary", map[string]string{"CYBORGDB_KMS_NAME_REAL": "slot"})
 	eq(t, "json", []bool{has(j, "ragged_batches"), has(j, "parallel_metadata"), has(j, "kms_provider")}, []bool{true, false, false})
 	eq(t, "binary", []bool{has(b, "ragged_batches"), has(b, "parallel_metadata"), has(b, "kms_provider")}, []bool{false, true, true})
+}
+
+// writeTensor writes junk then values as little-endian float32, and returns the file and where the values start.
+func writeTensor(t *testing.T, values []float32) (path string, offset int) {
+	t.Helper()
+	junk := []byte{0xde, 0xad, 0xbe, 0xef, 0, 0, 0, 0} // so a wrong offset reads the wrong numbers
+	buf := append([]byte(nil), junk...)
+	for _, v := range values {
+		buf = binary.LittleEndian.AppendUint32(buf, math.Float32bits(v))
+	}
+	path = filepath.Join(t.TempDir(), "tensor.f32")
+	if err := os.WriteFile(path, buf, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return path, len(junk)
+}
+
+func tensorJSON(path string, offset int, dtype string, shape ...int) string {
+	b, _ := json.Marshal(map[string]any{"$tensor": map[string]any{"path": path, "dtype": dtype, "offset": offset, "shape": shape}})
+	return string(b)
+}
+
+// Datasets send vectors as $tensor files and ids as $range; a bug in either would break every dataset-backed spec.
+func TestTensorsAndRangesDecode(t *testing.T) {
+	values := []float32{1.5, -2, 0, 3.25, float32(math.Inf(1)), -0.5}
+	path, off := writeTensor(t, values)
+
+	h, f := start(t, "json")
+	f.reply["Query"] = `{"results":[[],[]]}`
+	mustCall(t, h, "index.query", `{"index":"i0","vectors":`+tensorJSON(path, off, "f32", 2, 3)+`}`)
+	eq(t, "2-D tensor is rows, so a batch query", only(t, f, "Query")[0], cyborgdb.QueryParams{
+		BatchQueryVectors: [][]float32{{1.5, -2, 0}, {3.25, float32(math.Inf(1)), -0.5}},
+	})
+
+	f.calls = nil
+	f.reply["Query"] = `{"results":[]}`
+	mustCall(t, h, "index.query", `{"index":"i0","vectors":`+tensorJSON(path, off+4*3, "f32", 3)+`}`)
+	eq(t, "1-D tensor at an offset is one vector", only(t, f, "Query")[0], cyborgdb.QueryParams{
+		QueryVector: []float32{3.25, float32(math.Inf(1)), -0.5},
+	})
+
+	h, f = start(t, "binary")
+	mustCall(t, h, "index.upsert", `{"index":"i0","ids":{"$range":[7,9]},"vectors":`+tensorJSON(path, off, "f32", 2, 3)+`}`)
+	eq(t, "$range ids with tensor rows", only(t, f, "Upsert")[0], cyborgdb.BinaryUpsertParams{
+		IDs: []string{"7", "8"}, Vectors: [][]float32{{1.5, -2, 0}, {3.25, float32(math.Inf(1)), -0.5}},
+	})
+	eq(t, "an empty $range is no ids", stringsOf(json.RawMessage(`{"$range":[5,5]}`), "ids"), []string{})
+}
+
+// A $tensor that doesn't fit its file, or isn't f32, is refused before any memory is set aside for it.
+func TestBadTensorsAreRefusedNotRead(t *testing.T) {
+	path, off := writeTensor(t, []float32{1, 2, 3, 4})
+	for name, c := range map[string]struct {
+		vectors string
+		code    int
+	}{
+		"rows past the end":     {tensorJSON(path, off, "f32", 2, 3), codeBadParams},
+		"offset past the end":   {tensorJSON(path, off+1000, "f32", 1), codeBadParams},
+		"a huge shape":          {tensorJSON(path, off, "f32", 1<<40, 1<<30), codeBadParams},
+		"not f32":               {tensorJSON(path, off, "f16", 4), codeUnsupported},
+		"a shape of rank three": {tensorJSON(path, off, "f32", 1, 2, 2), codeBadParams},
+	} {
+		h, f := start(t, "json")
+		_, err := call1(t, h, "index.query", `{"index":"i0","vectors":`+c.vectors+`}`)
+		if err == nil || err.Code != c.code {
+			t.Errorf("%s: got %+v, want code %d", name, err, c.code)
+		}
+		eq(t, name+": no SDK calls", len(f.calls), 0)
+	}
 }
