@@ -500,6 +500,7 @@ func TestBadTensorsAreRefusedNotRead(t *testing.T) {
 		"rows past the end":     {tensorJSON(path, off, "f32", 2, 3), codeBadParams},
 		"offset past the end":   {tensorJSON(path, off+1000, "f32", 1), codeBadParams},
 		"a huge shape":          {tensorJSON(path, off, "f32", 1<<40, 1<<30), codeBadParams},
+		"a billion empty rows":  {tensorJSON(path, off, "f32", 1_000_000_000, 0), codeBadParams},
 		"not f32":               {tensorJSON(path, off, "f16", 4), codeUnsupported},
 		"a shape of rank three": {tensorJSON(path, off, "f32", 1, 2, 2), codeBadParams},
 	} {

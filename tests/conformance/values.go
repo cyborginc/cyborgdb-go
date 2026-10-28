@@ -203,6 +203,10 @@ func vectorsOf(v json.RawMessage) (rows [][]float32, nested bool) {
 		if len(t.Shape) == matrixRank {
 			n = count(t.Shape[0], "shape")
 		}
+		// No columns means no data, so any row count would "fit" an empty file and the rows alone could exhaust memory.
+		if cols == 0 {
+			failf(codeBadParams, "a $tensor needs at least one column")
+		}
 		f, err := os.Open(t.Path)
 		if err != nil {
 			failf(codeBadParams, "cannot open tensor file")
@@ -215,7 +219,7 @@ func vectorsOf(v json.RawMessage) (rows [][]float32, nested bool) {
 		// The tensor must fit in its file before anything is allocated: a wrong or huge shape is a bad request, not a
 		// crash. Checked without overflowing: the byte count, then the offset, then what's left after it.
 		size := uint64(info.Size())
-		if cols > 0 && n > math.MaxInt/f32Size/cols {
+		if n > math.MaxInt/f32Size/cols {
 			failf(codeBadParams, "$tensor shape %d x %d is too large", n, cols)
 		}
 		need := uint64(f32Size * n * cols)
