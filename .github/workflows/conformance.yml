@@ -251,7 +251,7 @@ jobs:
           CONFORMANCE_LOG_KEY: "op://CyborgDB/CyborgDB Dev/CONFORMANCE_LOG_KEY"
 
       - name: Download the shards' encrypted logs
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           pattern: conformance-${{ matrix.variant }}-*
           path: ${{ runner.temp }}/shards
