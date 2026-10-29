@@ -121,7 +121,7 @@ func (h *handler) hello() any {
 			break
 		}
 	}
-	return map[string]any{"protocol": protocolVersion, "impl": "cyborgdb-go", "version": sdkVersion, "capabilities": caps}
+	return map[string]any{"protocol": protocolVersion, "impl": "sdk-go", "version": sdkVersion, "capabilities": caps}
 }
 
 // Client ops

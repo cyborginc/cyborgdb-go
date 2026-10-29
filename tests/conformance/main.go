@@ -6,9 +6,9 @@
 //
 // Run under the driver, from a cyborgdb-tests checkout:
 //
-//	(cd ../cyborgdb-go/tests/conformance && go build -o /tmp/adapter-go-sdk .)
+//	(cd ../cyborgdb-go/tests/conformance && go build -o /tmp/adapter-sdk-go .)
 //	CYBORG_TEST_SDK_BASE_URL=http://localhost:8000 bin/cyborgdb-tests run \
-//	  --adapter /tmp/adapter-go-sdk --env sdk --variant json
+//	  --adapter /tmp/adapter-sdk-go --env sdk --variant json
 package main
 
 import (

@@ -171,7 +171,7 @@ jobs:
             cyborgdb-service
           VARIANTS: ${{ matrix.variant }}
           SHARD: ${{ matrix.shard }}/3
-          IMPL: cyborgdb-go
+          IMPL: sdk-go
           OUT_DIR: ${{ runner.temp }}/conformance-out
           GH_TOKEN: ${{ secrets.CYBORGDB_TESTS_TOKEN }}
           CONFORMANCE_LOG_KEY: ${{ steps.run-secrets.outputs.CONFORMANCE_LOG_KEY }}
@@ -259,7 +259,7 @@ jobs:
       - name: Merge the shards
         env:
           VARIANTS: ${{ matrix.variant }}
-          IMPL: cyborgdb-go
+          IMPL: sdk-go
           MERGE_FROM: ${{ runner.temp }}/shards
           OUT_DIR: ${{ runner.temp }}/conformance-out
           GH_TOKEN: ${{ secrets.CYBORGDB_TESTS_TOKEN }}

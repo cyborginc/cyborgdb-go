@@ -137,7 +137,7 @@ func (h *handler) handle(method string, raw json.RawMessage) (result any, rerr *
 	}
 	op, ok := ops[method]
 	if !ok {
-		return nil, &rpcError{Code: codeUnsupported, Message: "cyborgdb-go does not implement " + method}
+		return nil, &rpcError{Code: codeUnsupported, Message: "sdk-go does not implement " + method}
 	}
 	p := params{}
 	if len(raw) > 0 && string(raw) != "null" {
