@@ -63,7 +63,7 @@ jobs:
       # suite commit. No caches here or for the datasets: this repo's Actions caches are
       # readable by fork PR workflows, and both would hold internal cyborgdb-tests content.
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: cyborgdb-tests/go.mod
           cache: false
@@ -236,7 +236,7 @@ jobs:
 
       # Only used when no prebuilt driver matches the checked-out suite commit.
       - name: Set up Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version-file: cyborgdb-tests/go.mod
           cache: false
