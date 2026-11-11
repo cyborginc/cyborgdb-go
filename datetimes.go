@@ -40,5 +40,9 @@ func coerceMapDatetimes(m map[string]interface{}) map[string]interface{} {
 	if m == nil {
 		return nil
 	}
-	return coerceDatetimes(m).(map[string]interface{})
+	out := make(map[string]interface{}, len(m))
+	for k, val := range m {
+		out[k] = coerceDatetimes(val)
+	}
+	return out
 }
