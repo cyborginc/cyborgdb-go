@@ -409,7 +409,7 @@ func datetimeIndex(t *testing.T) *cyborgdb.EncryptedIndex {
 }
 
 func TestDatetimeEqualityMatches(t *testing.T) {
-	// Survives because it degenerates to string comparison.
+	// Both sides coerce to epoch milliseconds, so this is numeric equality.
 	index := datetimeIndex(t)
 	got := queryMeta(t, index, cyborgdb.QueryMetadataParams{
 		Filters: map[string]interface{}{"created": datetimeBase},
@@ -418,24 +418,15 @@ func TestDatetimeEqualityMatches(t *testing.T) {
 }
 
 func TestDatetimeRangeWorks(t *testing.T) {
+	// Works since the SDK coerces time.Time to epoch milliseconds in both
+	// metadata and filters (previously skipped as cyborgdb-core#2396).
 	index := datetimeIndex(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-
-	expectFailure(t, "cyborgdb-core#2396", func() string {
-		resp, err := index.QueryMetadata(ctx, cyborgdb.QueryMetadataParams{
-			Filters: map[string]interface{}{
-				"created": map[string]interface{}{"$gte": datetimePlusDays(5)},
-			},
-		})
-		if err != nil {
-			return fmt.Sprintf("range filter on a datetime was rejected: %v", err)
-		}
-		if got := metaIDs(resp.Results); !sameIDs(got, []string{"t1", "t2"}) {
-			return fmt.Sprintf("range on a datetime: got %v, want [t1 t2]", got)
-		}
-		return ""
+	got := queryMeta(t, index, cyborgdb.QueryMetadataParams{
+		Filters: map[string]interface{}{
+			"created": map[string]interface{}{"$gte": datetimePlusDays(5)},
+		},
 	})
+	assertSameIDs(t, got, []string{"t1", "t2"}, "range on a datetime")
 }
 
 func TestDatetimeEpochMillisSupportsRanges(t *testing.T) {
