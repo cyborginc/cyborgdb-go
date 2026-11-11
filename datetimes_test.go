@@ -27,6 +27,12 @@ func TestCoerceDatetimes(t *testing.T) {
 		{"string passes through", "2024-05-01T12:00:00Z", "2024-05-01T12:00:00Z"},
 		{"int passes through", 42, 42},
 		{"nil passes through", nil, nil},
+		{"nil map stays null", map[string]interface{}(nil), map[string]interface{}(nil)},
+		{"nil slice stays null", []interface{}(nil), []interface{}(nil)},
+		{"nested nil map stays null", map[string]interface{}{"a": map[string]interface{}(nil)},
+			map[string]interface{}{"a": nil}},
+		{"nested nil slice stays null", map[string]interface{}{"a": []interface{}(nil)},
+			map[string]interface{}{"a": nil}},
 		{"nested map", map[string]interface{}{"a": map[string]interface{}{"b": testTime}},
 			map[string]interface{}{"a": map[string]interface{}{"b": testTimeMs}}},
 		{"array", []interface{}{testTime, "x", 1},
@@ -35,6 +41,22 @@ func TestCoerceDatetimes(t *testing.T) {
 			map[string]interface{}{"created": map[string]interface{}{"$gt": testTimeMs}}},
 		{"$in operands", map[string]interface{}{"created": map[string]interface{}{"$in": []interface{}{testTime, testTime}}},
 			map[string]interface{}{"created": map[string]interface{}{"$in": []interface{}{testTimeMs, testTimeMs}}}},
+		{"typed time slice", []time.Time{testTime, testTime},
+			[]interface{}{testTimeMs, testTimeMs}},
+		{"typed time pointer slice", []*time.Time{&testTime, nil},
+			[]interface{}{testTimeMs, nil}},
+		{"typed $in operands", map[string]interface{}{"created": map[string]interface{}{"$in": []time.Time{testTime}}},
+			map[string]interface{}{"created": map[string]interface{}{"$in": []interface{}{testTimeMs}}}},
+		{"typed logical filter slice", map[string]interface{}{"$and": []map[string]interface{}{
+			{"created": map[string]interface{}{"$gt": testTime}},
+			{"status": "active"},
+		}}, map[string]interface{}{"$and": []interface{}{
+			map[string]interface{}{"created": map[string]interface{}{"$gt": testTimeMs}},
+			map[string]interface{}{"status": "active"},
+		}}},
+		{"typed time map", map[string]time.Time{"created": testTime},
+			map[string]interface{}{"created": testTimeMs}},
+		{"nil typed time slice stays null", []time.Time(nil), nil},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := coerceDatetimes(tc.in)
@@ -44,6 +66,20 @@ func TestCoerceDatetimes(t *testing.T) {
 				t.Errorf("coerceDatetimes(%v) = %s, want %s", tc.in, gotJSON, wantJSON)
 			}
 		})
+	}
+}
+
+// Containers that cannot hold a time.Time must come back untouched — the
+// original typed value, not a rebuilt []interface{}/map[string]interface{}.
+func TestCoerceDatetimesLeavesTimeFreeContainersAlone(t *testing.T) {
+	if _, ok := coerceDatetimes([]float32{0.1, 0.2}).([]float32); !ok {
+		t.Error("[]float32 was rebuilt; want passthrough")
+	}
+	if _, ok := coerceDatetimes([]string{"a"}).([]string); !ok {
+		t.Error("[]string was rebuilt; want passthrough")
+	}
+	if _, ok := coerceDatetimes(map[string]int{"n": 1}).(map[string]int); !ok {
+		t.Error("map[string]int was rebuilt; want passthrough")
 	}
 }
 
