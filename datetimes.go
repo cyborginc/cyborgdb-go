@@ -3,6 +3,8 @@
 package cyborgdb
 
 import (
+	"encoding"
+	"encoding/json"
 	"reflect"
 	"time"
 )
@@ -44,8 +46,14 @@ func coerceDatetimes(value interface{}) interface{} {
 
 // coerceTypedContainer rebuilds typed containers the type switch misses
 // ([]time.Time, []map[string]interface{}, …). Containers that cannot hold a
-// time.Time pass through unchanged, as do typed nils.
+// time.Time pass through unchanged, as do typed nils and values with custom
+// serialization (json.Marshaler / encoding.TextMarshaler), whose MarshalJSON
+// or MarshalText output a rebuild would discard.
 func coerceTypedContainer(value interface{}) interface{} {
+	switch value.(type) {
+	case json.Marshaler, encoding.TextMarshaler:
+		return value
+	}
 	rv := reflect.ValueOf(value)
 	switch rv.Kind() {
 	case reflect.Slice:

@@ -12,6 +12,20 @@ import (
 // 2024-05-01T12:00:00.123Z
 var testTime = time.Date(2024, 5, 1, 12, 0, 0, 123_000_000, time.UTC)
 
+// Named containers with custom serialization: coercion must pass these
+// through so their MarshalJSON / MarshalText output survives.
+type marshalerMap map[string]interface{}
+
+func (marshalerMap) MarshalJSON() ([]byte, error) { return []byte(`{"status":"active"}`), nil }
+
+type marshalerSlice []interface{}
+
+func (marshalerSlice) MarshalJSON() ([]byte, error) { return []byte(`["active"]`), nil }
+
+type textMarshalerSlice []interface{}
+
+func (textMarshalerSlice) MarshalText() ([]byte, error) { return []byte("active"), nil }
+
 const testTimeMs = int64(1714564800123)
 
 func TestCoerceDatetimes(t *testing.T) {
@@ -57,6 +71,12 @@ func TestCoerceDatetimes(t *testing.T) {
 		{"typed time map", map[string]time.Time{"created": testTime},
 			map[string]interface{}{"created": testTimeMs}},
 		{"nil typed time slice stays null", []time.Time(nil), nil},
+		{"json.Marshaler map preserved", map[string]interface{}{"m": marshalerMap{"ignored": 1}},
+			map[string]interface{}{"m": json.RawMessage(`{"status":"active"}`)}},
+		{"json.Marshaler slice preserved", map[string]interface{}{"s": marshalerSlice{"ignored"}},
+			map[string]interface{}{"s": json.RawMessage(`["active"]`)}},
+		{"encoding.TextMarshaler preserved", map[string]interface{}{"t": textMarshalerSlice{"ignored"}},
+			map[string]interface{}{"t": "active"}},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			got := coerceDatetimes(tc.in)
