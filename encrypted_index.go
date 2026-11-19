@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"unicode/utf8"
 
 	"github.com/cyborginc/cyborgdb-go/internal"
 )
@@ -52,6 +53,10 @@ var (
 
 	// ErrContentsLengthMismatch is returned when contents length doesn't match IDs length.
 	ErrContentsLengthMismatch = errors.New("contents length must match IDs length")
+
+	// ErrContentsNotUTF8 is returned when contents are not valid UTF-8. Contents
+	// are UTF-8 text over the service, so other bytes cannot round-trip.
+	ErrContentsNotUTF8 = errors.New("contents must be valid UTF-8")
 
 	// ErrUnsupportedUpsertType is returned when Upsert receives an unsupported input type.
 	ErrUnsupportedUpsertType = errors.New("unsupported upsert input type")
@@ -550,6 +555,15 @@ func (e *EncryptedIndex) Upsert(ctx context.Context, input UpsertInput) error {
 
 // upsertItems handles standard JSON format upserts.
 func (e *EncryptedIndex) upsertItems(ctx context.Context, items VectorItems) error {
+	for i, item := range items {
+		if !item.Contents.IsSet() || item.Contents.Get() == nil {
+			continue
+		}
+		c := item.Contents.Get()
+		if (c.Bytes != nil && !utf8.Valid(*c.Bytes)) || (c.String != nil && !utf8.ValidString(*c.String)) {
+			return newValidationError(fmt.Errorf("%w: item %d (id %q)", ErrContentsNotUTF8, i, item.Id))
+		}
+	}
 	req := internal.UpsertRequest{
 		IndexName: e.indexName,
 		IndexKey:  e.indexKeyField(),
@@ -1065,6 +1079,11 @@ func (e *EncryptedIndex) upsertBinary(ctx context.Context, params BinaryUpsertPa
 	}
 	if len(params.Contents) > 0 && len(params.Contents) != len(params.IDs) {
 		return newValidationError(fmt.Errorf("%w: got %d contents and %d IDs", ErrContentsLengthMismatch, len(params.Contents), len(params.IDs)))
+	}
+	for i, c := range params.Contents {
+		if !utf8.ValidString(c) {
+			return newValidationError(fmt.Errorf("%w: item %d (id %q)", ErrContentsNotUTF8, i, params.IDs[i]))
+		}
 	}
 
 	// Encode vectors and read the shared dimension (validates equal lengths)
