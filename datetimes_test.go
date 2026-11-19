@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"reflect"
 	"testing"
 	"time"
 )
@@ -59,6 +60,14 @@ func TestCoerceDatetimes(t *testing.T) {
 			[]interface{}{testTimeMs, testTimeMs}},
 		{"typed time pointer slice", []*time.Time{&testTime, nil},
 			[]interface{}{testTimeMs, nil}},
+		{"pointer to typed time slice", map[string]interface{}{"p": &[]time.Time{testTime}},
+			map[string]interface{}{"p": []interface{}{testTimeMs}}},
+		{"pointer to map", map[string]interface{}{"p": &map[string]interface{}{"created": testTime}},
+			map[string]interface{}{"p": map[string]interface{}{"created": testTimeMs}}},
+		{"pointer to pointer", map[string]interface{}{"p": func() **time.Time { p := &testTime; return &p }()},
+			map[string]interface{}{"p": testTimeMs}},
+		{"nil pointer to slice stays null", map[string]interface{}{"p": (*[]time.Time)(nil)},
+			map[string]interface{}{"p": nil}},
 		{"typed $in operands", map[string]interface{}{"created": map[string]interface{}{"$in": []time.Time{testTime}}},
 			map[string]interface{}{"created": map[string]interface{}{"$in": []interface{}{testTimeMs}}}},
 		{"typed logical filter slice", map[string]interface{}{"$and": []map[string]interface{}{
@@ -85,6 +94,12 @@ func TestCoerceDatetimes(t *testing.T) {
 			if string(gotJSON) != string(wantJSON) {
 				t.Errorf("coerceDatetimes(%v) = %s, want %s", tc.in, gotJSON, wantJSON)
 			}
+			// containsTime must agree with coerceDatetimes: it reports a time
+			// exactly when coercion changes what goes on the wire.
+			inJSON, _ := json.Marshal(tc.in)
+			if changed := string(inJSON) != string(wantJSON); containsTime(tc.in) != changed {
+				t.Errorf("containsTime(%v) = %v, but coercion changes the wire value: %v", tc.in, !changed, changed)
+			}
 		})
 	}
 }
@@ -100,6 +115,25 @@ func TestCoerceDatetimesLeavesTimeFreeContainersAlone(t *testing.T) {
 	}
 	if _, ok := coerceDatetimes(map[string]int{"n": 1}).(map[string]int); !ok {
 		t.Error("map[string]int was rebuilt; want passthrough")
+	}
+	if _, ok := coerceDatetimes(&[]string{"a"}).(*[]string); !ok {
+		t.Error("*[]string was dereferenced; want passthrough")
+	}
+}
+
+// A map with no time.Time anywhere inside is returned as-is, not copied.
+func TestCoerceMapDatetimesSkipsCopyWithoutTimes(t *testing.T) {
+	in := map[string]interface{}{
+		"status": "active",
+		"tags":   []interface{}{"a", map[string]interface{}{"n": 1}},
+		"scores": []float32{0.1},
+	}
+	if out := coerceMapDatetimes(in); reflect.ValueOf(out).Pointer() != reflect.ValueOf(in).Pointer() {
+		t.Error("time-free map was copied; want the same map back")
+	}
+	withTime := map[string]interface{}{"status": "active", "deep": []interface{}{map[string]interface{}{"t": testTime}}}
+	if out := coerceMapDatetimes(withTime); reflect.ValueOf(out).Pointer() == reflect.ValueOf(withTime).Pointer() {
+		t.Error("map with a nested time.Time was returned as-is; want a coerced copy")
 	}
 }
 
