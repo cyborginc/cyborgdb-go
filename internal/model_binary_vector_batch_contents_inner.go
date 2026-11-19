@@ -3,6 +3,7 @@ package internal
 import (
 	"encoding/json"
 	"fmt"
+	"unicode/utf8"
 )
 
 type BinaryVectorBatchContentsInner struct {
@@ -24,7 +25,11 @@ func (dst *BinaryVectorBatchContentsInner) UnmarshalJSON(data []byte) error {
 
 func (src BinaryVectorBatchContentsInner) MarshalJSON() ([]byte, error) {
 	if src.Bytes != nil {
-		return json.Marshal(src.Bytes)
+		// Contents are UTF-8 text over the service; base64 would be stored as-is.
+		if !utf8.Valid(*src.Bytes) {
+			return nil, fmt.Errorf("contents must be valid UTF-8")
+		}
+		return json.Marshal(string(*src.Bytes))
 	}
 	if src.String != nil {
 		return json.Marshal(src.String)
