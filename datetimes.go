@@ -128,7 +128,10 @@ func coerceMapDatetimes(m map[string]interface{}) map[string]interface{} {
 	if !containsTime(m) {
 		return m
 	}
-	out, _ := coerceDatetimes(m).(map[string]interface{})
+	out, ok := coerceDatetimes(m).(map[string]interface{})
+	if !ok {
+		return m
+	}
 	return out
 }
 
