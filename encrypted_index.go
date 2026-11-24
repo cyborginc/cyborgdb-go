@@ -564,10 +564,15 @@ func (e *EncryptedIndex) upsertItems(ctx context.Context, items VectorItems) err
 			return newValidationError(fmt.Errorf("%w: item %d (id %q)", ErrContentsNotUTF8, i, item.Id))
 		}
 	}
+	coerced := make(VectorItems, len(items))
+	for i, item := range items {
+		item.Metadata = coerceMapDatetimes(item.Metadata)
+		coerced[i] = item
+	}
 	req := internal.UpsertRequest{
 		IndexName: e.indexName,
 		IndexKey:  e.indexKeyField(),
-		Items:     items,
+		Items:     coerced,
 	}
 	_, httpResp, err := e.client.APIClient.DefaultAPI.UpsertVectorsV1VectorsUpsertPost(ctx).
 		UpsertRequest(req).
@@ -672,7 +677,7 @@ func (e *EncryptedIndex) queryParams(ctx context.Context, params QueryParams) (*
 			IndexName:    e.indexName,
 			IndexKey:     e.indexKeyField(),
 			QueryVectors: params.BatchQueryVectors,
-			Filters:      params.Filters,
+			Filters:      coerceMapDatetimes(params.Filters),
 			Include:      params.Include,
 		}
 
@@ -696,7 +701,7 @@ func (e *EncryptedIndex) queryParams(ctx context.Context, params QueryParams) (*
 	req := internal.QueryRequest{
 		IndexName: e.indexName,
 		IndexKey:  e.indexKeyField(),
-		Filters:   params.Filters,
+		Filters:   coerceMapDatetimes(params.Filters),
 		Include:   params.Include,
 	}
 
@@ -944,7 +949,7 @@ func (e *EncryptedIndex) DeleteIndex(ctx context.Context) error {
 //		TopK:      10,
 //	})
 func (e *EncryptedIndex) QueryMetadata(ctx context.Context, params QueryMetadataParams) (*QueryMetadataResponse, error) {
-	filters := params.Filters
+	filters := coerceMapDatetimes(params.Filters)
 	if filters == nil {
 		filters = map[string]interface{}{}
 	}
@@ -1099,14 +1104,13 @@ func (e *EncryptedIndex) upsertBinary(ctx context.Context, params BinaryUpsertPa
 		Dimension:  dimension,
 	}
 
-	// Add metadata if provided. Index the slice directly rather than taking the
-	// address of the range variable, which is shared across iterations under
-	// this module's go directive and would alias every entry to the last item.
+	// Add metadata if provided, coerced to epoch ms on per-entry copies.
 	if len(params.Metadata) > 0 {
 		metadata := make([]*map[string]interface{}, len(params.Metadata))
 		for i := range params.Metadata {
 			if params.Metadata[i] != nil {
-				metadata[i] = &params.Metadata[i]
+				m := coerceMapDatetimes(params.Metadata[i])
+				metadata[i] = &m
 			}
 		}
 		batch.Metadata = metadata
@@ -1178,7 +1182,7 @@ func (e *EncryptedIndex) queryBinary(ctx context.Context, params BinaryQueryPara
 		IndexName: e.indexName,
 		IndexKey:  e.indexKeyField(),
 		Batch:     batch,
-		Filters:   params.Filters,
+		Filters:   coerceMapDatetimes(params.Filters),
 		Include:   params.Include,
 	}
 

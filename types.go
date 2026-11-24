@@ -1,4 +1,26 @@
 // Package cyborgdb provides a Go client for CyborgDB, the confidential vector database.
+//
+// # Datetimes in metadata and filters
+//
+// CyborgDB stores datetimes as integer milliseconds since the Unix epoch (UTC).
+// Any time.Time (or non-nil *time.Time) in upsert metadata or in filter
+// operands is converted to that form before the request is sent, including
+// values nested in maps, slices, arrays, and pointers to them. This is what
+// makes range filters such as {"created": {"$gte": t}} work. The caller's maps
+// are not modified.
+//
+// Two consequences to be aware of:
+//   - The zero time.Time{} is converted like any other value, to
+//     -62135596800000 (0001-01-01T00:00:00Z). It is not treated as "unset": it
+//     sorts before every real date and matches $lt filters. Omit the field, or
+//     store nil, to leave a datetime unset.
+//   - Metadata read back (Get, Query, QueryMetadata) holds the stored number,
+//     decoded as float64, not a time.Time. Use time.UnixMilli(int64(v)) to
+//     convert it back.
+//
+// Struct fields and named types based on time.Time are not converted; they
+// serialize through encoding/json as before.
+//
 // This file defines public types used throughout the client API.
 package cyborgdb
 
@@ -13,6 +35,8 @@ import (
 type GetResponse = internal.GetResponseModel
 
 // VectorItem represents a single vector with ID, vector data, and optional metadata.
+// time.Time values in Metadata are sent as epoch milliseconds; see the package
+// documentation on datetimes.
 type VectorItem = internal.VectorItem
 
 // Contents is a VectorItem's text or byte contents; set exactly one of String
@@ -88,6 +112,8 @@ type BM25Config = internal.BM25Config
 // on at all. Both come back as an error; use Query with a vector instead.
 type QueryMetadataParams struct {
 	// Filters is a MongoDB-style filter; nil or empty matches everything.
+	// time.Time operands are sent as epoch milliseconds; see the package
+	// documentation on datetimes.
 	Filters map[string]interface{}
 	// TopK caps the IDs returned, applied AFTER OrderBy. Zero returns all.
 	TopK int32
@@ -279,6 +305,8 @@ type BinaryUpsertParams struct {
 	// Metadata contains optional metadata for each vector.
 	// If provided, length must match IDs length.
 	// Use nil for vectors without metadata.
+	// time.Time values are sent as epoch milliseconds; see the package
+	// documentation on datetimes.
 	Metadata []map[string]interface{}
 
 	// Contents contains optional content strings for each vector.
@@ -321,6 +349,8 @@ type BinaryQueryParams struct {
 	RerankMult *int32
 
 	// Filters applies metadata-based filtering to search results.
+	// time.Time operands are sent as epoch milliseconds; see the package
+	// documentation on datetimes.
 	Filters map[string]interface{}
 
 	// Include specifies which fields to return in results.
@@ -399,6 +429,8 @@ type QueryParams struct {
 	// Filters applies metadata-based filtering to search results.
 	// Map keys are metadata field names, values are filter criteria.
 	// Exact filter syntax depends on server implementation.
+	// time.Time operands are sent as epoch milliseconds; see the package
+	// documentation on datetimes.
 	Filters map[string]interface{} `json:"filters,omitempty"`
 
 	// Include specifies which fields to return in results.
