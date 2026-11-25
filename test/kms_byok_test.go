@@ -356,7 +356,12 @@ func TestKMSStrictMutexFiresBeforeSlotLookup(t *testing.T) {
 	if err := json.Unmarshal(body, &parsed); err != nil {
 		t.Fatalf("Unmarshal: %v (body=%q)", err, body)
 	}
-	if !strings.Contains(parsed.Detail, "index_key must not be supplied alongside") {
-		t.Errorf("detail does not match mutex message: %q", parsed.Detail)
+	// Match the mutex error semantically rather than by exact wording (which
+	// the service has reworded before): it must name both fields, and must
+	// not be an unknown-slot error (which would echo the bogus slot name).
+	isMutex := strings.Contains(parsed.Detail, "index_key") && strings.Contains(parsed.Detail, "kms_name")
+	mentionsSlot := strings.Contains(parsed.Detail, "definitely-not-a-registered-slot")
+	if !isMutex || mentionsSlot {
+		t.Errorf("expected the index_key/kms_name mutex error, got: %q", parsed.Detail)
 	}
 }
