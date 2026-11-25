@@ -40,7 +40,8 @@ type GetResponse = internal.GetResponseModel
 type VectorItem = internal.VectorItem
 
 // Contents is a VectorItem's text or byte contents; set exactly one of String
-// or Bytes. For text, item.SetContentsString(s) is the shorthand.
+// or Bytes. For text, item.SetContentsString(s) is the shorthand. Either way it
+// must be valid UTF-8: Bytes are sent as their text, not base64.
 type Contents = internal.Contents
 
 // VectorItems is a slice of VectorItem used for type-safe upsert operations.
